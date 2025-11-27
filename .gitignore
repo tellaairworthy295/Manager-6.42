@@ -4,9 +4,13 @@
 # Exclude all TXT files
 *.txt
 
-# Optional: Also exclude these common file types
 *.jpg
 *.jpeg
 *.gif
 *.pdf
 *.log
+
+# Python virtual environment
+venv/
+env/
+.venv/
