@@ -1,7 +1,0 @@
-celery -A celery_app.celery_app worker -E -Q alpha --pool=threads --concurrency=2 -l info --hostname=worker-alpha@%h
-
-celery -A celery_app.celery_app worker -E -Q news --pool=threads --concurrency=2 -l info --hostname=worker-news@%h
-
-curl.exe -X POST http://localhost:5000/api/scrape_alpha
-
-curl.exe -X POST http://localhost:5000/api/scrape_news -H "Content-Type: application/json" -d '{\"url\": \"https://www.google.com/search?q=site%3Abloomberg.com%2Fnews%2Farticles+China+OR+%22Hong+Kong%22+OR+AI&tbs=qdr%3Ah%2Csbd%3A1&tbm=nws\"}'

@@ -1,3 +1,0 @@
-{
-  "url": "https://www.google.com/search?q=site:bloomberg.com/news/articles+China+OR+Hong+Kong+OR+AI&tbs=qdr:h,sbd:1&tbm=nws"
-}
