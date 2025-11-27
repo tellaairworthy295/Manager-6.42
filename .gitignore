@@ -3,6 +3,8 @@
 
 # Exclude all TXT files
 *.txt
+# But keep requirements.txt
+!requirements.txt
 
 *.jpg
 *.jpeg
