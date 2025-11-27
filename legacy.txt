@@ -1,0 +1,209 @@
+# ================== Bloomberg Scraper ========================
+# @app.post("/api/scrape_news")
+# async def scrape_news(request: Request, background_tasks: BackgroundTasks):
+#     try:
+#         data = await request.json()
+#     except Exception:
+#         data = None
+
+#     url = (
+#         data.get("url")
+#         if isinstance(data, dict)
+#         else "https://www.google.com/search?q=site:bloomberg.com/news/articles&tbs=qdr:h,sbd:1&tbm=nws"
+#     )
+#     logger.info(f"Received scraping job for: {url}")
+
+#     # Run in background
+#     background_tasks.add_task(run_scrape_job, url)
+
+#     return JSONResponse(
+#         {"status": "accepted", "message": "Scraping started in background."}
+#     )
+
+# def run_scrape_job(url: str):
+#     """Runs the scraping job synchronously in a background thread."""
+#     urls = fetch_urls_from_page(url)
+#     for u in urls:
+#         try:
+#             scrape_article(u, 5)
+#             logger.info(f"✅ Finished scraping: {u}")
+#             # You could save results to DB here
+#         except Exception as e:
+#             logger.error(f"❌ Error scraping {u}: {e}")
+
+# ================== Bloomberg Saver ============================
+# @app.post("/api/rb_saver")
+# async def rb_saver(file: Optional[UploadFile] = File(None)):
+#     try:
+#         #await asyncio.to_thread(export_content_to_dify)
+
+#         if file:
+#             log_dir = "rb_logs"
+#             os.makedirs(log_dir, exist_ok=True)
+#             filename = file.filename or "workflow.log"
+#             save_path = os.path.join(log_dir, filename)
+
+#             file_bytes = await file.read()
+#             try:
+#                 content_str = file_bytes.decode("utf-8")
+#             except UnicodeDecodeError:
+#                 raise HTTPException(status_code=400, detail="Uploaded log file is not valid UTF-8 text.")
+
+#             with open(save_path, "wb") as f:
+#                 f.write(file_bytes)
+
+#             data = extract_json_from_content(content_str)
+#         else:
+#             raise HTTPException(status_code=415, detail="No file or JSON data provided.")
+
+#         await asyncio.to_thread(process_article_data, data)
+#         return JSONResponse({"status": "200", "message": "Data processed successfully"})
+#     except Exception as e:
+#         logger.error(f"Error in rb_saver: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
+
+# @app.post("/api/jiuyan_saver")
+# async def jiuyan_saver(file: Optional[UploadFile] = None, data: Optional[str] = Form(None)):
+#     if file:
+#         log_dir = "jiuyan_logs"
+#         os.makedirs(log_dir, exist_ok=True)
+#         save_path = os.path.join(log_dir, file.filename or "workflow.log")
+#         with open(save_path, "wb") as f:
+#             f.write(await file.read())
+#         with open(save_path, encoding="utf-8") as f:
+#             content = f.read()
+#         match = re.search(r"\{.*\"article_result\":.*\}", content, re.S)
+#         if not match:
+#             raise HTTPException(status_code=400, detail="No JSON found in log")
+#         data = json.loads(match.group(0))
+#     elif data:
+#         try:
+#             data = json.loads(data)
+#         except Exception:
+#             raise HTTPException(status_code=400, detail="Invalid JSON in form data")
+#     else:
+#         raise HTTPException(status_code=400, detail="No input provided")
+
+#     article_result = str(data.get("article_result", ""))
+#     date = data.get("date") or datetime.today().strftime("%Y-%m-%d")
+#     days = int(data.get("days", 5))
+#     await asyncio.to_thread(excel_flow, date, days)
+#     await asyncio.to_thread(update_jiuyan_results, date, article_result)
+#     return JSONResponse({"status": "200", "message": "Saved results successfully."})
+
+def scrape_alphapai(driver, bond_codes: str):
+    driver.get(LOGIN_URL)
+    logger.info("Page loaded, waiting for login...")
+    try:
+        while True:
+            try:
+                WebDriverWait(driver, 8).until(EC.invisibility_of_element_located((By.CSS_SELECTOR, "div.login-box")))
+                logger.info("Login dialog disappeared, successful login.")
+                break
+            except TimeoutException:
+                logger.warning("waiting for login")
+                _login(driver)
+        # 4️⃣ Handle post-login popups (“知道了” then “立即体验”)
+        _popups_click(driver, "div.search-switch-guide-close-btn")
+        _popups_click(driver, "div.img-box .btn-bottom")
+        #_popups_click(driver, "div[role='button']:contains('立即体验'),div:contains('立即体验')")
+        d_files = []
+        for bond_code in bond_codes:
+            # Click the "联网搜索" button (div with class "btn-item" and child span '联网搜索')
+            while True:
+                try:
+                    net_search_btn = WebDriverWait(driver, 8).until(
+                    EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'btn-item')]//span[text()='联网搜索']/.."))
+                    )
+                    safe_click(driver, net_search_btn)
+                    logger.info("Clicked '联网搜索' button before sending next prompt.")
+                    time.sleep(1)
+                    break
+                except (StaleElementReferenceException, TimeoutException):
+                    logger.warning("'新对话' button stale or not found, retrying...")
+                    time.sleep(0.5)
+            
+            # 为避免一次性输入过长内容导致自动提交不全，拆分 PROMPT 为多段逐步输入
+            PROMPT_PARTS = [
+                f"你是一位专业的股票研究员，同时兼具很强的批判性思维和对各种可能性的广泛接纳价值观，你目前的主要工作是深入挖掘上市公司{bond_code}最新的业务进展和可能的潜在的业务机会，以回答为什么近期该股票涨幅明显。你的任务包括：",
+                "1. 收集该股票的基本信息（公司名称、行业、主营业务、同类公司、创始人简介等）。",
+                "2. 挖掘现有业务中，近期可能公布或已公开的最新业务进展情况，请给出具体信息与来源。",
+                "3. 挖掘正在筹备或刚开始推进的业务，且有望在基础业务之外形成新的业绩增长点，请给出具体信息与来源。",
+                "4. 如果有新的业务订单，也请提供相关信息与来源。",
+                "5. 挖掘新闻网页、公众号、雪球论坛等各种网络信息中提到的该公司的某些新的业务潜力。",
+                "6. 总结以上业务进展和可能的业务增长点，与近期股票市场的投资热点作比对，回答近期股价上涨可能是跟哪些现有业务或潜在业务有关系。",
+                "以上每一条查找的信息能找到相关信息的发布日期的，在该信息后按以下格式注明（该信息发布日期为yyyymmdd）。",
+                "若现有公开渠道无法查询到相关信息，请明确说明“不清楚”，不要进行推测或凭空补充。",
+                "输出内容需有条理、逻辑清晰，用简洁易懂的语言呈现。",
+            ]
+
+            # Retry loop for textarea (handle stale elements)
+            while True:
+                try:
+                    ta = WebDriverWait(driver, 30).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "textarea.el-textarea__inner"))
+                    )
+                    ta = driver.find_element(By.CSS_SELECTOR, "textarea.el-textarea__inner")
+                    safe_click(driver, ta)
+                    ta.clear()
+                    for prompt in PROMPT_PARTS:
+                        ta.send_keys(prompt)
+                        time.sleep(1)
+                    ta.send_keys(Keys.ENTER)
+                    logger.info(f"Prompt sent: {bond_code}")
+                    break
+                except StaleElementReferenceException:
+                    logger.warning("Textarea went stale, retrying...")
+                    time.sleep(0.5)
+
+            # Wait for the answer to appear
+            _wait_for_answer(driver, timeout=600)
+            time.sleep(1)
+
+            # Wait for download
+            downloaded_file = _wait_for_download_complete(DOWNLOAD_DIR)
+            d_files.append(downloaded_file)
+
+            # Click "新对话" button before next prompt
+            while True:
+                try:
+                    new_chat_btn = WebDriverWait(driver, 10).until(
+                        EC.element_to_be_clickable((
+                            By.XPATH,
+                            "//div[contains(@class, 'btn-item') and (i[contains(@class, 'icon-xinduihua')] or span[text()='新对话'])]"
+                        ))
+                    )
+                    safe_click(driver, new_chat_btn)
+                    logger.info("Clicked '新对话' button before sending next prompt.")
+                    time.sleep(1)
+                    break
+                except (StaleElementReferenceException, TimeoutException):
+                    logger.warning("'新对话' button stale or not found, retrying...")
+                    time.sleep(0.5)
+
+            _popups_click(driver, "div.paipai-answer-range-select-guide-btn")
+            time.sleep(1)
+    finally:
+        driver.quit()
+
+    return d_files
+
+    def to_next(driver):
+    # Click "新对话" button before next prompt
+    while True:
+        try:
+            new_chat_btn = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((
+                    By.XPATH,
+                    "//div[contains(@class, 'btn-item') and (i[contains(@class, 'icon-xinduihua')] or span[text()='新对话'])]"
+                ))
+            )
+            safe_click(driver, new_chat_btn)
+            logger.info("Clicked '新对话' button before sending next prompt.")
+            time.sleep(1)
+            break
+        except (StaleElementReferenceException, TimeoutException):
+            logger.warning("'新对话' button stale or not found, retrying...")
+            time.sleep(0.5)
+
+    _popups_click(driver, "div.paipai-answer-range-select-guide-btn")
