@@ -1,8 +1,0 @@
-2025-12-08 22:29:43,408 [INFO] database: Database connection initialized: localhost:3306/scraped_data
-2025-12-08 22:29:43,532 [INFO] database: Database tables created/verified
-2025-12-08 22:29:43,872 [INFO] database: Database connection initialized: localhost:3306/scraped_data
-2025-12-08 22:29:43,924 [INFO] database: Database tables created/verified
-2025-12-08 23:30:27,957 [INFO] database: Saved article to database: https://www.bloomberg.com/news/articles/2025-12-07/asia-eye-cautious-start-heading-into-fed-week-markets-wrap
-2025-12-09 05:00:03,899 [INFO] database: Saved article to database: https://www.bloomberg.com/news/articles/2025-12-08/medical-supplies-manufacturer-medline-seeks-5-37-billion-in-ipo
-2025-12-09 05:30:20,295 [INFO] database: Saved article to database: https://www.bloomberg.com/news/articles/2025-12-07/asia-eye-cautious-start-heading-into-fed-week-markets-wrap
-2025-12-09 06:30:15,424 [INFO] database: Saved article to database: https://www.bloomberg.com/news/articles/2025-12-08/medical-supplies-manufacturer-medline-seeks-5-37-billion-in-ipo
