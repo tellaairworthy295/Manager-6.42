@@ -17,3 +17,11 @@
 venv/
 env/
 .venv/
+fonts/
+excel/
+chromedriver-linux64/
+_temp_profiles/
+chrome-linux64/
+logs/
+scraped_images/
+alphaStockAnalysis/
