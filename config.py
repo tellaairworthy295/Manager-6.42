@@ -12,54 +12,6 @@ from selenium.webdriver.chrome.options import Options
 import undetected_chromedriver as uc
 
 
-# ========================= Translation Configuration =========================
-class TranslationConfig:
-    ENABLE_TRANSLATION = True
-    USE_WEB_SCRAPING = True
-    MAX_CHUNK_SIZE = 4000
-    REQUEST_DELAY = 1.0  # seconds between requests
-
-    # If you're having proxy issues, try setting these:
-    DISABLE_PROXY = True
-    TIMEOUT_SECONDS = 15
-
-class EmailConfig:
-    """
-    Configuration holder for email sending with attachments.
-    """
-    # Default SMTP settings
-    SMTP_SERVER = "smtp.qq.com"
-    SMTP_PORT = 465
-
-    # Description of expected fields
-    SENDER_EMAIL = "dialego@qq.com"        # Set your own email here to send to yourself
-    SENDER_PASSWORD = "larvpvanryndbajf"      # App-specific password or SMTP auth key
-    RECEIVER_EMAIL = "dialego@qq.com"             # Send email to yourself
-
-    # Email content defaults
-    SUBJECT = "Report"
-    BODY = "Please find the attached files."
-
-    # Attachments as list of file paths
-    ATTACHMENTS = []
-
-    @staticmethod
-    def as_dict():
-        """
-        Return the configuration as a dictionary suitable for passing to send_email_with_attachments().
-        """
-        return {
-            "sender_email": EmailConfig.SENDER_EMAIL,
-            "sender_password": EmailConfig.SENDER_PASSWORD,
-            "receiver_email": EmailConfig.RECEIVER_EMAIL,
-            "subject": EmailConfig.SUBJECT,
-            "body": EmailConfig.BODY,
-            "attachments": EmailConfig.ATTACHMENTS,
-            "smtp_server": EmailConfig.SMTP_SERVER,
-            "smtp_port": EmailConfig.SMTP_PORT
-        }
-    
-
 # ========================= Logging Setup =========================
 def setup_logging(dir: str, name: str):
     import sys
@@ -154,7 +106,8 @@ def copy_extension_once(src_ext_path, dest_ext_path):
 
 def get_chrome_driver(
     download_dir: str = "",
-    base_bypass_ext_path: str = r"D:\dify1.8\bypass-paywalls-chrome-clean-master",
+    base_bypass_ext_path: str = "bypass-paywalls-chrome-clean-master",
+    browser_executable_path: str = "chrome-linux64/chrome",
     multi_instance: bool = False,
 ):
     ext_temp_path = None
@@ -191,7 +144,10 @@ def get_chrome_driver(
             chrome_options.add_argument(f"--load-extension={base_bypass_ext_path}")
             print(f"[INFO] Single-instance: extension loaded from {base_bypass_ext_path}")
     else:
-        print(f"[WARNING] Bypass extension not found at {base_bypass_ext_path}")
+        if base_bypass_ext_path:
+            print(f"[WARNING] Bypass extension not found at {base_bypass_ext_path}")
+        else:
+            print(f"[INFO] No bypass extension loaded")
 
     # ------------------------------------------------------------------
     # Profile setup (placed under safe_base as sibling)
@@ -220,15 +176,16 @@ def get_chrome_driver(
     # ------------------------------------------------------------------
     try:
         driver = uc.Chrome(
-            driver_executable_path="D:/chromedriver-win64/chromedriver.exe",
+            driver_executable_path="chromedriver-linux64/chromedriver",
+            browser_executable_path=browser_executable_path,
             options=chrome_options,
-            version_main=142,
+            version_main=142
         )
     except Exception:
         driver = uc.Chrome(
             version_main=142,
             options=chrome_options,
-            mirror="https://registry.npmmirror.com/-/binary/chromedriver/",
+            mirror="https://registry.npmmirror.com/-/binary/chromedriver/"
         )
 
     # ------------------------------------------------------------------
@@ -266,7 +223,7 @@ def get_chrome_driver(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/142.0.7444.59 Safari/537.36"
+                "Chrome/142.0.7444.175 Safari/537.36"
             ),
         )
     except Exception as e:

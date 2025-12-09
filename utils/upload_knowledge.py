@@ -1,14 +1,15 @@
+import re
 import requests
 import json
 import time
-import os
+from scraper.news_scraper import get_target_articles
 
 # ============================
 # Configuration
 # ============================
 BASE_URL = "http://localhost"   # Dify API backend (adjust if needed)
-API_KEY = "dataset-InMwuaX5ckVrkSFnJEKqYE8S"     # Replace with your real API key
-DATASET_ID = "954235c4-8108-4512-aa5e-c70bd07e882b"       # Replace with your Knowledge Base (dataset) ID
+API_KEY = "dataset-HtuwAUl1MsXZifu55RyhAzv2"     # Replace with your real API key
+DATASET_ID = "1ab1e0db-09ec-4ee5-b6e6-cf0115295e69"       # Replace with your Knowledge Base (dataset) ID
 
 # ============================
 # Helper functions
@@ -68,96 +69,164 @@ def delete_all_documents():
         time.sleep(1)
     print("✅ All existing documents removed.")
     
-def upload_new_document(FILE_PATH: str):
-    """Upload and index new document file."""
+def upload_new_document_by_file(FILE_PATH: str):
+    """Upload and index new document file to Dify KB."""
     url = f"http://localhost/v1/datasets/{DATASET_ID}/document/create-by-file"
     headers = api_headers()
 
-    form_data = {
-        "data": json.dumps({
-            "indexing_technique": "high_quality",
-            "process_rule": {
-                "rules": {
-                    "pre_processing_rules": [
-                        {"id": "remove_extra_spaces", "enabled": True},
-                        {"id": "remove_urls_emails", "enabled": True}
-                    ],
-                    "segmentation": {        # <--- MUST include this
-                        "separator": "\n\n",
-                        "max_tokens": 2568
-                    },
-                    "parent_mode": "full-doc",
-                    "subchunk_segmentation": {
-                        "separator": "\n\n",
-                        "max_tokens": 768
-                    }
+    # Metadata payload (same structure as text upload)
+    metadata = {
+        "indexing_technique": "high_quality",
+        "process_rule": {
+            "rules": {
+                "pre_processing_rules": [
+                    {"id": "remove_extra_spaces", "enabled": True},
+                    {"id": "remove_urls_emails", "enabled": True}
+                ],
+                "segmentation": {
+                    "separator": "\n\n",
+                    "max_tokens": 1536
                 },
-                "mode": "hierarchical"
+                "parent_mode": "paragraph",
+                "subchunk_segmentation": {
+                    "separator": "\n\n",
+                    "max_tokens": 512
+                }
             },
-            "doc_form": "hierarchical_model",
-            "doc_language": "English",
-            "retrieval_model": {
-                "search_method": "hybrid_search",
-                "reranking_enable": True,
-                "reranking_mode": "reranking_model",
-                "reranking_model": {
-                    "reranking_provider_name": "langgenius/siliconflow/siliconflow",
-                    "reranking_model_name": "BAAI/bge-reranker-v2-m3"
-                },
-                "weights": {
-                    "weight_type": None,
-                    "keyword_setting": {"keyword_weight": 0.3},
-                    "vector_setting": {
-                        "vector_weight": 0.7,
-                        "embedding_model_name": "BAAI/bge-large-en-v1.5",
-                        "embedding_provider_name": "langgenius/siliconflow/siliconflow"
-                    }
-                },
-                "top_k": 10,
-                "score_threshold_enabled": False,
-                "score_threshold": 0.5
+            "mode": "hierarchical"
+        },
+        "doc_form": "hierarchical_model",
+        "doc_language": "English",
+        "retrieval_model": {
+            "search_method": "hybrid_search",
+            "reranking_enable": True,
+            "reranking_mode": "reranking_model",
+            "reranking_model": {
+                "reranking_provider_name": "langgenius/siliconflow/siliconflow",
+                "reranking_model_name": "BAAI/bge-reranker-v2-m3"
             },
-            "embedding_model": "BAAI/bge-large-en-v1.5",
-            "embedding_model_provider": "langgenius/siliconflow/siliconflow"
-        })
+            "weights": {
+                "weight_type": None,
+                "keyword_setting": {"keyword_weight": 0.3},
+                "vector_setting": {
+                    "vector_weight": 0.7,
+                    "embedding_model_name": "BAAI/bge-m3",
+                    "embedding_provider_name": "langgenius/siliconflow/siliconflow"
+                }
+            },
+            "top_k": 4,
+            "score_threshold_enabled": False,
+            "score_threshold": 0.5
+        },
+        "embedding_model": "BAAI/bge-m3",
+        "embedding_model_provider": "langgenius/siliconflow/siliconflow"
     }
 
+    try:
+        with open(FILE_PATH, "rb") as f:
+            files = {"file": f}
+            data = {"data": json.dumps(metadata)}
 
-    with open(FILE_PATH, "rb") as f:
-        files = {"file": (os.path.basename(FILE_PATH), f)}
-        print(f"📤 Uploading {FILE_PATH}...")
-        resp = requests.post(url, headers=headers, data=form_data, files=files)
+            resp = requests.post(url, headers=headers, files=files, data=data)
+            resp.raise_for_status()
+            print(f"✅ Uploaded file document: {FILE_PATH}")
+            return resp.json()
+    except Exception as e:
+        print(f"❌ Failed to upload {FILE_PATH}: {e}")
+        return None
+
+
+def upload_new_document_by_text(name: str, text: str):
+    """Upload and index new document from raw text."""
+    url = f"http://localhost/v1/datasets/{DATASET_ID}/document/create-by-text"
+    headers = api_headers()
+
+    payload = {
+        "indexing_technique": "high_quality",
+        "process_rule": {
+            "rules": {
+                "pre_processing_rules": [
+                    {"id": "remove_extra_spaces", "enabled": True},
+                    {"id": "remove_urls_emails", "enabled": True}
+                ],
+                "segmentation": {
+                    "separator": "\n\n",
+                    "max_tokens": 1536
+                },
+                "parent_mode": "paragraph",
+                "subchunk_segmentation": {
+                    "separator": "\n\n",
+                    "max_tokens": 512
+                }
+            },
+            "mode": "hierarchical"
+        },
+        "doc_form": "hierarchical_model",
+        "doc_language": "English",
+        "retrieval_model": {
+            "search_method": "hybrid_search",
+            "reranking_enable": True,
+            "reranking_mode": "reranking_model",
+            "reranking_model": {
+                "reranking_provider_name": "langgenius/siliconflow/siliconflow",
+                "reranking_model_name": "BAAI/bge-reranker-v2-m3"
+            },
+            "weights": {
+                "weight_type": None,
+                "keyword_setting": {"keyword_weight": 0.3},
+                "vector_setting": {
+                    "vector_weight": 0.7,
+                    "embedding_model_name": "BAAI/bge-m3",
+                    "embedding_provider_name": "langgenius/siliconflow/siliconflow"
+                }
+            },
+            "top_k": 4,
+            "score_threshold_enabled": False,
+            "score_threshold": 0.5
+        },
+        "embedding_model": "BAAI/bge-m3",
+        "embedding_model_provider": "langgenius/siliconflow/siliconflow",
+        "name": name,
+        "text": text
+    }
 
     try:
-        resp_json = resp.json()
-    except Exception:
-        raise RuntimeError(f"Upload failed: {resp.status_code} {resp.text}")
-
-    if resp.status_code != 200 or "document" not in resp_json:
-        raise RuntimeError(f"Upload failed: {resp.status_code} {resp.text}")
-
-    doc = resp_json["document"]
-    doc_name = doc.get("name")
-    print(f"✅ Upload initiated for document: {doc_name}")
-    return doc_name
+        resp = requests.post(url, headers=headers, json=payload)
+        resp.raise_for_status()
+        print(f"✅ Uploaded text document: {name}")
+        return resp.json()
+    except Exception as e:
+        print(f"❌ Failed to upload {name}: {e}")
+        return None
 
 
-def upload_flow(path: str = "docx"):
+def update_dify_knowledge():
     print("Starting upload...")
-    exist_docs = []
+    titles = []
     docs = list_documents()
+    articles = get_target_articles()
+
+    for article in articles:
+        title = sanitize_filename(article.get("title"))
+        content = article.get("content")
+        if title and content:
+            doc_name = f"{title}.txt"
+            titles.append(doc_name)
+            if not any(doc["name"] == doc_name for doc in docs):
+                upload_new_document_by_text(name=doc_name, text=content)
+
     for doc in docs:
-        if any(doc["name"] == f for f in os.listdir(path)):
-            exist_docs.append(doc["name"])
-    for f in os.listdir(path):
-        if f.lower().endswith('.docx') and f not in exist_docs:
-            try:
-                upload_new_document(os.path.join(path, f))
-            except Exception as e:
-                print(f"Failed to upload {f}: {e}")
-                
+        if doc["name"] not in titles:
+            delete_document(doc["id"])
+
     print("✅ All done!")
 
+def sanitize_filename(name):
+        # Remove or replace characters not allowed in filenames
+        name = name.strip()
+        name = re.sub(r'[\\/*?:"<>|]', "_", name)
+        return name[:100]  # trim long names to avoid OS issues
 
 if __name__ == "__main__":
-    upload_flow()
+    #upload_flow()
+    list_bases()

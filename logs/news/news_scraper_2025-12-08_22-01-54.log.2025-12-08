@@ -1,0 +1,50 @@
+2025-12-08 22:29:37,531 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-08 22:29:43,564 [INFO] news_scraper: Found 0 site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai article links
+2025-12-08 22:59:37,105 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-08 22:59:40,893 [INFO] news_scraper: Found 0 site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai article links
+2025-12-08 23:29:37,746 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-08 23:29:40,353 [INFO] news_scraper: Found 1 site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai article links
+2025-12-08 23:29:41,422 [INFO] news_scraper: Driver launched
+2025-12-08 23:29:41,424 [INFO] news_scraper: Scraping URL: https://www.bloomberg.com/news/articles/2025-12-07/asia-eye-cautious-start-heading-into-fed-week-markets-wrap
+2025-12-08 23:30:14,083 [INFO] news_scraper: Page loaded
+2025-12-08 23:30:22,440 [INFO] news_scraper: content fully loaded: True
+2025-12-08 23:30:22,530 [INFO] news_scraper: Starting Chinese translation...
+2025-12-08 23:30:27,888 [INFO] news_scraper: Chinese translation completed
+2025-12-08 23:59:38,349 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-08 23:59:41,989 [INFO] news_scraper: Found 1 site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai article links
+2025-12-08 23:59:42,127 [INFO] news_scraper: Driver launched
+2025-12-08 23:59:42,127 [INFO] news_scraper: Scraping URL: https://www.bloomberg.com/news/articles/2025-12-08/wall-street-gets-a-3-second-head-start-over-retail-in-event-bets
+2025-12-09 00:59:36,976 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 01:29:37,594 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 01:59:36,750 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 02:29:36,770 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 03:59:35,700 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 04:29:36,575 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 04:59:38,246 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 04:59:41,300 [INFO] news_scraper: Found 1 site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai article links
+2025-12-09 04:59:42,366 [INFO] news_scraper: Driver launched
+2025-12-09 04:59:42,366 [INFO] news_scraper: Scraping URL: https://www.bloomberg.com/news/articles/2025-12-08/medical-supplies-manufacturer-medline-seeks-5-37-billion-in-ipo
+2025-12-09 04:59:53,462 [INFO] news_scraper: Page loaded
+2025-12-09 05:00:01,928 [INFO] news_scraper: content fully loaded: True
+2025-12-09 05:00:02,021 [INFO] news_scraper: Starting Chinese translation...
+2025-12-09 05:00:03,885 [INFO] news_scraper: Chinese translation completed
+2025-12-09 05:29:38,201 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 05:29:41,263 [INFO] news_scraper: Found 1 site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai article links
+2025-12-09 05:29:41,650 [INFO] news_scraper: Driver launched
+2025-12-09 05:29:41,651 [INFO] news_scraper: Scraping URL: https://www.bloomberg.com/news/articles/2025-12-07/asia-eye-cautious-start-heading-into-fed-week-markets-wrap
+2025-12-09 05:30:07,612 [INFO] news_scraper: Page loaded
+2025-12-09 05:30:14,269 [INFO] news_scraper: content fully loaded: True
+2025-12-09 05:30:14,347 [INFO] news_scraper: Starting Chinese translation...
+2025-12-09 05:30:20,276 [INFO] news_scraper: Chinese translation completed
+2025-12-09 05:59:37,940 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 05:59:41,002 [INFO] news_scraper: Found 0 site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai article links
+2025-12-09 06:29:36,621 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 06:29:39,687 [INFO] news_scraper: Found 1 site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai article links
+2025-12-09 06:29:39,140 [INFO] news_scraper: Driver launched
+2025-12-09 06:29:39,140 [INFO] news_scraper: Scraping URL: https://www.bloomberg.com/news/articles/2025-12-08/medical-supplies-manufacturer-medline-seeks-5-37-billion-in-ipo
+2025-12-09 06:30:03,977 [INFO] news_scraper: Page loaded
+2025-12-09 06:30:10,856 [INFO] news_scraper: content fully loaded: True
+2025-12-09 06:30:10,970 [INFO] news_scraper: Starting Chinese translation...
+2025-12-09 06:30:15,411 [INFO] news_scraper: Chinese translation completed
+2025-12-09 07:59:38,333 [INFO] news_scraper: https://www.google.com/search?q=site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai&tbs=qdr:h,sbd:1&tbm=nws
+2025-12-09 07:59:41,304 [INFO] news_scraper: Found 0 site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai article links

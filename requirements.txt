@@ -1,8 +1,8 @@
-python==3.12
+
 undetected-chromedriver
-selenium==4.10.0
-beautifulsoup4==4.12.2
-selenium-stealth==1.0.6
+selenium
+beautifulsoup4
+selenium-stealth
 requests
 googletrans
 urllib3
@@ -18,3 +18,8 @@ paddleocr
 numpy
 pandas
 python-docx
+loguru
+paddlepaddle-gpu
+openpyxl
+sqlalchemy
+mysql-connector-python

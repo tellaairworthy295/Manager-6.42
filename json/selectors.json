@@ -1,0 +1,55 @@
+{
+  "news": {
+      "bloomberg.com": {
+        "selector": "article p, div.body-content p",
+        "min_paragraphs": 5,
+        "unwanted_content": [
+          "Bloomberg may send me offers and promotions.",
+          "By submitting my information, I agree to the Privacy Policy and Terms of Service"
+        ]
+      },
+      "reuters.com": {
+        "selector": "div.article-body-module__content__bnXL1 div[data-testid*='paragraph']",
+        "min_paragraphs": 5,
+        "unwanted_content": []
+      }
+    },
+  "stocks": {
+      "https://www.jiuyangongshe.com/action": {
+        "name": "jiuyan",
+        "click_selector": "//div[text()='全部异动解析']",
+        "row_selector": "ul.td-box li.row",
+        "name_selector": ".fs15-bold",
+        "code_selector": ".fs12-bold-ash",
+        "analysis_selector": "pre",
+        "image": true,
+        "cookies": true
+      },
+      "https://xuangutong.com.cn/dingpan": {
+        "name": "xuangutong",
+        "click_selector": null,
+        "row_selector": "tbody.hit-pool__table-body tr",
+        "name_selector": ".stock-title-name",
+        "code_selector": ".stock-title a",
+        "analysis_selector": ".stock-reason span.line-clamp",
+        "image": false,
+        "cookies": true
+      }
+    },
+  "agent": {
+    "https://alphapai-web.rabyte.cn/reading/paipai/index": {
+      "name": "alphapai",
+      "click_locator": null,
+      "text_box_locator": { "by": "css", "value": "textarea.el-textarea__inner" },
+      "finish_locator": { "by": "css", "value": "div.btn-download-file" },
+      "content_locator": null
+    },
+    "https://open.gangtise.com/?ai/knowledge=%2Fknowledge%2F%3Ft%3D1765246113209%23%2Fknowledge#/ai/knowledge": {
+      "name": "gangtise",
+      "click_locator": { "by": "xpath", "value": "//div[contains(@class, 'menu-item') and .//div[@class='title-open'][text()='AI助手']]" },
+      "text_box_locator": { "by": "css", "value": "textarea.el-textarea__inner" },
+      "finish_locator": { "by": "css", "value": "div.agent-utils flex" },
+      "content_locator": { "by": "css", "value": "div.markdown-it markdown-box answer" }
+    }
+  }
+}

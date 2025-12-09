@@ -12,6 +12,7 @@ from matplotlib import font_manager
 from config import setup_logging
 
 logger = setup_logging("logs/jiuyan", "jiuyan_scraper")
+FONT_PATH = "fonts/NotoSansSC-VariableFont_wght.ttf"
 
 def _draw_boxes(img_path):
     """
@@ -293,90 +294,42 @@ def _process_trendings(date_str: str, summary_text: str, excel_path: str, days: 
     if len(df) > days:
         df = df.tail(days).reset_index(drop=True)
 
-    # 📈 Draw separate line charts for up, down, even, break_rate, but set a font that supports CJK to avoid missing glyph warnings
-    # Attempt to use a font that supports CJK to eliminate missing glyph warnings
-    def set_chinese_font():
-        font_names = [
-            "SimHei",             # Windows common Chinese font
-            "Microsoft YaHei",    # Another Windows Chinese font
-            "Noto Sans CJK SC",   # Google/Noto font, Linux/macOS
-            "Arial Unicode MS",   # macOS
-            "STHeiti",            # macOS
-        ]
-        found = False
-        for font_name in font_names:
-            try:
-                font_manager.FontProperties(fname=font_manager.findfont(font_name))
-                plt.rcParams['font.sans-serif'] = [font_name]
-                found = True
-                break
-            except Exception:
-                continue
-        if not found:
-            logger.warning("⚠️ Warning: No CJK font found, CJK characters may not render in charts.")
+    # 📈 Draw line charts for up, down, even, break_rate, and set font to support CJK to eliminate glyph warnings
 
-        # Always ensure proper minus sign rendering even if font fallback fails
-        plt.rcParams['axes.unicode_minus'] = False
-
-    set_chinese_font()
-
+    prop = font_manager.FontProperties(fname=FONT_PATH)
     df_plot = df.tail(days).copy()
     df_plot["date"] = pd.to_datetime(df_plot["date"]).dt.strftime("%m-%d")
 
-    # Chart 1: Up
-    plt.figure(figsize=(7, 3))
-    plt.plot(df_plot["date"], df_plot["up"], marker='o', color='tab:blue', label="Up")
-    plt.title(f"涨停数 (Up) - Recent {days} Days")
-    plt.xlabel("Date")
-    plt.ylabel("Count")
-    plt.grid(True)
-    plt.tight_layout()
-    chart_path_up = os.path.splitext(excel_path)[0] + "_trend_up.png"
-    plt.savefig(chart_path_up, dpi=160)
-    plt.close()
-    logger.info(f"📈 Saved trend chart: {chart_path_up}")
+    chart_infos = [
+        ("up",      "tab:blue",   "涨停数 (Up)"),
+        ("down",    "tab:red",    "跌停数 (Down)"),
+        ("even",    "tab:green",  "连板数 (Even Board)"),
+        ("break_rate", "tab:purple", "破板率 (Break Rate %)"),
+    ]
+    chart_files = [
+        "_trend_up.png", "_trend_down.png", "_trend_even.png", "_trend_break.png"
+    ]
+    ylabel = ["Count", "Count", "Count", "Percent"]
 
-    # Chart 2: Down
-    plt.figure(figsize=(7, 3))
-    plt.plot(df_plot["date"], df_plot["down"], marker='o', color='tab:red', label="Down")
-    plt.title(f"跌停数 (Down) - Recent {days} Days")
-    plt.xlabel("Date")
-    plt.ylabel("Count")
-    plt.grid(True)
-    plt.tight_layout()
-    chart_path_down = os.path.splitext(excel_path)[0] + "_trend_down.png"
-    plt.savefig(chart_path_down, dpi=160)
-    plt.close()
-    logger.info(f"📈 Saved trend chart: {chart_path_down}")
-
-    # Chart 3: Even
-    plt.figure(figsize=(7, 3))
-    plt.plot(df_plot["date"], df_plot["even"], marker='o', color='tab:green', label="Even")
-    plt.title(f"连板数 (Even Board) - Recent {days} Days")
-    plt.xlabel("Date")
-    plt.ylabel("Count")
-    plt.grid(True)
-    plt.tight_layout()
-    chart_path_even = os.path.splitext(excel_path)[0] + "_trend_even.png"
-    plt.savefig(chart_path_even, dpi=160)
-    plt.close()
-    logger.info(f"📈 Saved trend chart: {chart_path_even}")
-
-    # Chart 4: Break Rate
-    plt.figure(figsize=(7, 3))
-    plt.plot(df_plot["date"], df_plot["break_rate"], marker='o', color='tab:purple', label="Break Rate (%)")
-    plt.title(f"破板率 (Break Rate %) - Recent {days} Days")
-    plt.xlabel("Date")
-    plt.ylabel("Percent")
-    plt.grid(True)
-    plt.tight_layout()
-    chart_path_break = os.path.splitext(excel_path)[0] + "_trend_break.png"
-    plt.savefig(chart_path_break, dpi=160)
-    plt.close()
-    logger.info(f"📈 Saved trend chart: {chart_path_break}")
+    for i, (col, color, title) in enumerate(chart_infos):
+        plt.figure(figsize=(7,3))
+        plt.plot(df_plot["date"], df_plot[col], marker='o', color=color)
+        plt.title(f"{title} - Recent {days} Days", fontproperties=prop)
+        plt.xlabel("Date", fontproperties=prop)
+        plt.ylabel(ylabel[i], fontproperties=prop)
+        plt.grid(True)
+        plt.tight_layout()
+        chart_path = os.path.splitext(excel_path)[0] + chart_files[i]
+        plt.savefig(chart_path, dpi=160)
+        plt.close()
+        logger.info(f"📈 Saved trend chart: {chart_path}")
 
 def excel_flow(date: str, days: int = 5):
-    path = _preprecess_image(f"scraped_images/{date}.png")
+    img_path = f"scraped_images/{date}.png"
+    if not os.path.isfile(img_path):
+        logger.error(f"Image file does not exist: {img_path}")
+        return None
+    path = _preprecess_image(img_path)
     #_draw_boxes(path)
     rec_texts = _ocr_image(path)
     #print(rec_texts)
@@ -386,25 +339,10 @@ def excel_flow(date: str, days: int = 5):
         if "涨停" in token and "未开板新股" in token:
             _process_trendings(date, token, "excel/trendings.xlsx", days)
             break
-    
+    try:
+        os.remove(path)
+    except:
+        pass
+
 if __name__ == "__main__":
-    # import glob
-
-    # # Find all files in "scraped_images" with name format yyyy-MM-dd.png
-    # img_files = glob.glob("scraped_images/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].png")
-
-    # def extract_date_from_filename(filename):
-    #     # filename = "scraped_images/2024-06-12.png"
-    #     base = os.path.basename(filename)
-    #     date_part = base[:-4]  # Remove ".png"
-    #     return date_part
-
-    # # Build (date, filepath) tuples
-    # dated_files = [ (extract_date_from_filename(f), f) for f in img_files ]
-
-    # # Sort by date string (ISO format sorts chronologically)
-    # dated_files.sort(key=lambda x: x[0])
-    # for date, file in dated_files:
-    #     mainflow(date, 10)
-    # # If you only need the sorted date list, extract it:
-    excel_flow("2025-09-24")
+    excel_flow("2025-12-03")

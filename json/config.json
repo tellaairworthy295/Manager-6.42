@@ -1,0 +1,27 @@
+{
+  "TranslationConfig": {
+    "ENABLE_TRANSLATION": true,
+    "USE_WEB_SCRAPING": true,
+    "MAX_CHUNK_SIZE": 4000,
+    "REQUEST_DELAY": 1.0,
+    "DISABLE_PROXY": true,
+    "TIMEOUT_SECONDS": 15
+  },
+  "EmailConfig": {
+    "SMTP_SERVER": "smtp.qq.com",
+    "SMTP_PORT": 465,
+    "SENDER_EMAIL": "dialego@qq.com",
+    "SENDER_PASSWORD": "larvpvanryndbajf",
+    "RECEIVER_EMAIL": ["dialego@qq.com"],
+    "SUBJECT": "Report",
+    "BODY": "Please find the attached files.",
+    "ATTACHMENTS": []
+  },
+  "DatabaseConfig": {
+    "DB_HOST": "localhost",
+    "DB_PORT": 3306,
+    "DB_USER": "muheng",
+    "DB_PASSWORD": "123456",
+    "DB_NAME": "scraped_data"
+  }
+}

@@ -1,15 +1,33 @@
 import re
 import time
 import random
+import json
+import os
 from typing import List, Optional
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from config import TranslationConfig as tc, setup_logging
+from config import setup_logging
+
+# Load translation config from config.json
+def _load_translation_config():
+    with open("json/config.json", 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    tcfg = config.get("TranslationConfig", {})
+    return {
+        "ENABLE_TRANSLATION": tcfg.get("ENABLE_TRANSLATION", True),
+        "USE_WEB_SCRAPING": tcfg.get("USE_WEB_SCRAPING", True),
+        "MAX_CHUNK_SIZE": tcfg.get("MAX_CHUNK_SIZE", 4000),
+        "REQUEST_DELAY": tcfg.get("REQUEST_DELAY", 1.0),
+        "DISABLE_PROXY": tcfg.get("DISABLE_PROXY", False),
+        "TIMEOUT_SECONDS": tcfg.get("TIMEOUT_SECONDS", 15),
+    }
+
+_translation_config = _load_translation_config()
 
 # Optional: try deep-translator, fallback gracefully
 try:
-    from deep_translator import GoogleTranslator
+    from deep_translator import LingueeTranslator
     HAS_DEEP_TRANSLATOR = True
 except ImportError:
     HAS_DEEP_TRANSLATOR = False
@@ -20,7 +38,6 @@ try:
     HAS_GOOGLETRANS = True
 except ImportError:
     HAS_GOOGLETRANS = False
-
 
 logger = setup_logging("logs/translation", "translation")
 
@@ -38,10 +55,21 @@ class TranslationService:
         4️⃣ Original text (last resort)
     """
 
-    def __init__(self, use_web_scraping=True, max_chunk_size=4000, enable_translation=True):
+    def __init__(
+        self,
+        use_web_scraping=_translation_config["USE_WEB_SCRAPING"],
+        max_chunk_size=_translation_config["MAX_CHUNK_SIZE"],
+        enable_translation=_translation_config["ENABLE_TRANSLATION"],
+        request_delay=_translation_config["REQUEST_DELAY"],
+        disable_proxy=_translation_config["DISABLE_PROXY"],
+        timeout_seconds=_translation_config["TIMEOUT_SECONDS"]
+    ):
         self.use_web_scraping = use_web_scraping
         self.max_chunk_size = max_chunk_size
         self.enable_translation = enable_translation
+        self.request_delay = request_delay
+        self.disable_proxy = disable_proxy
+        self.timeout_seconds = timeout_seconds
 
         # Initialize translators
         self.translator = Translator() if HAS_GOOGLETRANS else None
@@ -61,7 +89,8 @@ class TranslationService:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                           'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.128 Safari/537.36'
         })
-        self.session.proxies = {}
+        if self.disable_proxy:
+            self.session.proxies = {}
 
     # ------------------------
     # Chunking logic
@@ -98,7 +127,7 @@ class TranslationService:
         if not HAS_DEEP_TRANSLATOR:
             return None
         try:
-            return GoogleTranslator(source='auto', target='zh-CN').translate(text)
+            return LingueeTranslator(source='auto', target='chinese').translate(text)
         except Exception as e:
             logger.warning(f"deep-translator error: {e}")
             return None
@@ -125,7 +154,7 @@ class TranslationService:
 
         for endpoint in endpoints:
             try:
-                resp = self.session.get(endpoint, params=params, timeout=(5, 20))
+                resp = self.session.get(endpoint, params=params, timeout=(5, self.timeout_seconds))
                 resp.raise_for_status()
                 try:
                     data = resp.json()
@@ -145,7 +174,7 @@ class TranslationService:
     # ------------------------
     # High-level translation with retries
     # ------------------------
-    def translate_text(self, text: str, source_lang='auto', target_lang='zh-CN') -> str:
+    def translate_text(self, text: str) -> str:
         if not self.enable_translation:
             return text
         if not text or not text.strip():
@@ -169,7 +198,7 @@ class TranslationService:
         for i, chunk in enumerate(chunks):
             translated_chunk = self._translate_with_fallbacks(chunk, chunk_index=i + 1)
             translated_chunks.append(translated_chunk)
-            time.sleep(1.5)  # prevent throttling
+            time.sleep(self.request_delay)  # Configurable delay
 
         result = '\n\n'.join(translated_chunks)
         _translation_cache[text] = result
@@ -240,9 +269,12 @@ def get_translation_service() -> TranslationService:
     if _translation_service is None:
         try:
             _translation_service = TranslationService(
-                use_web_scraping=tc.USE_WEB_SCRAPING,
-                max_chunk_size=tc.MAX_CHUNK_SIZE,
-                enable_translation=tc.ENABLE_TRANSLATION,
+                use_web_scraping=_translation_config["USE_WEB_SCRAPING"],
+                max_chunk_size=_translation_config["MAX_CHUNK_SIZE"],
+                enable_translation=_translation_config["ENABLE_TRANSLATION"],
+                request_delay=_translation_config["REQUEST_DELAY"],
+                disable_proxy=_translation_config["DISABLE_PROXY"],
+                timeout_seconds=_translation_config["TIMEOUT_SECONDS"],
             )
         except ImportError:
             _translation_service = TranslationService()

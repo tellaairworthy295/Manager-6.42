@@ -1,0 +1,99 @@
+2025-12-08 22:01:54,993 [INFO] news_task: [1;36m 
+ -------------- worker-news@LAPTOP-JNBU1HEHe v5.5.3 (immunity)
+--- ***** ----- 
+-- ******* ---- Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39 2025-12-08 22:01:54
+- *** --- * --- 
+- ** ---------- [config]
+- ** ---------- .> app:         worker:0x7054a00eb3e0
+- ** ---------- .> transport:   redis://localhost:6379/0
+- ** ---------- .> results:     redis://localhost:6379/0
+- *** --- * --- .> concurrency: 2 (prefork)
+-- ******* ---- .> task events: ON
+--- ***** ----- 
+ -------------- [queues]
+                .> news             exchange=news(direct) key=news
+                
+[0m[0m
+[tasks]
+  . tasks.alpha_tasks.finalize_and_email
+  . tasks.alpha_tasks.process_single_stock_task
+  . tasks.alpha_tasks.scrape_alpha_task
+  . tasks.news_tasks.finalize_and_update_dify
+  . tasks.news_tasks.scrape_all_news
+  . tasks.news_tasks.scrape_news_task
+[0m
+2025-12-08 22:29:37,497 [INFO] news_task: Started scraping chord: f9ea6702-e182-4dc6-9db1-0c245f5abe0a
+2025-12-08 22:29:37,528 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-08 22:29:37,533 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-08 22:29:43,569 [INFO] news_task: No new URLs found for www.bloomberg.com/news/articles
+2025-12-08 22:29:43,601 [INFO] news_task: All scraping tasks finished: 1 sites, 0 success, 0 failed
+2025-12-08 22:29:43,601 [INFO] news_task: Starting upload...
+2025-12-08 22:29:43,714 [INFO] news_task: 📄 Found 19 existing document(s) across all pages.
+2025-12-08 22:29:43,945 [INFO] news_task: ✅ All done!
+2025-12-08 22:29:43,945 [INFO] news_task: ✅ Dify KB updated after scraping all sites
+2025-12-08 22:59:37,100 [INFO] news_task: Started scraping chord: 654d0773-5881-4933-b25e-529e3c5aa673
+2025-12-08 22:59:37,105 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-08 22:59:37,106 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-08 22:59:40,899 [INFO] news_task: No new URLs found for www.bloomberg.com/news/articles
+2025-12-08 22:59:40,909 [INFO] news_task: All scraping tasks finished: 1 sites, 0 success, 0 failed
+2025-12-08 22:59:40,909 [INFO] news_task: Starting upload...
+2025-12-08 22:59:41,010 [INFO] news_task: 📄 Found 19 existing document(s) across all pages.
+2025-12-08 22:59:41,019 [INFO] news_task: ✅ All done!
+2025-12-08 22:59:41,019 [INFO] news_task: ✅ Dify KB updated after scraping all sites
+2025-12-08 23:29:37,742 [INFO] news_task: Started scraping chord: c2de2702-b772-4acc-a373-9bccc62b3046
+2025-12-08 23:29:37,745 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-08 23:29:37,746 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-08 23:29:40,357 [INFO] news_task: Scraping 1 URLs for www.bloomberg.com/news/articles
+2025-12-08 23:29:40,358 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-08 23:30:27,968 [INFO] news_task: Completed scraping task for www.bloomberg.com/news/articles: 1 success, 0 failed
+2025-12-08 23:30:27,979 [INFO] news_task: All scraping tasks finished: 1 sites, 1 success, 0 failed
+2025-12-08 23:30:27,979 [INFO] news_task: Starting upload...
+2025-12-08 23:30:28,226 [INFO] news_task: 📄 Found 19 existing document(s) across all pages.
+2025-12-08 23:30:29,119 [INFO] news_task: ✅ Uploaded text document: Wall Street Fervor Muzzled at Start of Fed Week_ Markets Wrap.txt
+2025-12-08 23:30:29,174 [INFO] news_task: 🗑️ Deleted document: 77ccf8c7-4b86-49b1-8fc4-5cfc9ec054b4
+2025-12-08 23:30:29,174 [INFO] news_task: ✅ All done!
+2025-12-08 23:30:29,175 [INFO] news_task: ✅ Dify KB updated after scraping all sites
+2025-12-08 23:59:38,346 [INFO] news_task: Started scraping chord: 2d833c28-109b-4659-a403-7d0dee4b3ec3
+2025-12-08 23:59:38,349 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-08 23:59:38,350 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-08 23:59:41,993 [INFO] news_task: Scraping 1 URLs for www.bloomberg.com/news/articles
+2025-12-08 23:59:41,993 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 00:59:36,975 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 00:59:36,976 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 01:00:07,401 [ERROR] news_task: Failed to fetch URLs for www.bloomberg.com/news/articles: No links found
+2025-12-09 01:29:37,593 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 01:29:37,594 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 01:30:08,732 [ERROR] news_task: Failed to fetch URLs for www.bloomberg.com/news/articles: No links found
+2025-12-09 01:59:36,749 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 01:59:36,750 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 02:00:07,733 [ERROR] news_task: Failed to fetch URLs for www.bloomberg.com/news/articles: No links found
+2025-12-09 02:29:36,770 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 02:29:36,770 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 02:30:08,010 [ERROR] news_task: Failed to fetch URLs for www.bloomberg.com/news/articles: No links found
+2025-12-09 03:59:35,699 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 03:59:35,700 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 04:00:07,084 [ERROR] news_task: Failed to fetch URLs for www.bloomberg.com/news/articles: No links found
+2025-12-09 04:29:36,575 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 04:29:36,575 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 04:30:07,957 [ERROR] news_task: Failed to fetch URLs for www.bloomberg.com/news/articles: No links found
+2025-12-09 04:59:38,246 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 04:59:38,247 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 04:59:41,305 [INFO] news_task: Scraping 1 URLs for www.bloomberg.com/news/articles
+2025-12-09 04:59:41,305 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 05:00:04,026 [INFO] news_task: Completed scraping task for www.bloomberg.com/news/articles: 1 success, 0 failed
+2025-12-09 05:29:38,201 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 05:29:38,202 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 05:29:41,267 [INFO] news_task: Scraping 1 URLs for www.bloomberg.com/news/articles
+2025-12-09 05:29:41,268 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 05:30:20,309 [INFO] news_task: Completed scraping task for www.bloomberg.com/news/articles: 1 success, 0 failed
+2025-12-09 05:59:37,939 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 05:59:37,940 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 05:59:41,007 [INFO] news_task: No new URLs found for www.bloomberg.com/news/articles
+2025-12-09 06:29:36,621 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 06:29:36,621 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 06:29:39,797 [INFO] news_task: Scraping 1 URLs for www.bloomberg.com/news/articles
+2025-12-09 06:29:39,797 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 06:30:15,437 [INFO] news_task: Completed scraping task for www.bloomberg.com/news/articles: 1 success, 0 failed
+2025-12-09 07:59:38,332 [INFO] news_task: Starting scraping task for site: www.bloomberg.com/news/articles, query: site:bloomberg.com/news/articles+china+or+"hong kong"+or+ai
+2025-12-09 07:59:38,333 [INFO] news_task: [INFO] Single-instance: extension loaded from bypass-paywalls-chrome-clean-master
+2025-12-09 07:59:41,309 [INFO] news_task: No new URLs found for www.bloomberg.com/news/articles
