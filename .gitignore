@@ -11,6 +11,7 @@
 *.gif
 *.pdf
 *.log
+*.db
 
 # Python virtual environment
 venv/
