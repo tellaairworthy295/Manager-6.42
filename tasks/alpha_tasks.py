@@ -3,10 +3,11 @@ import json
 import os
 import tempfile
 from celery import chord, group
+from docx import Document
 from celery_app import celery_app
 from datetime import datetime
 from config import get_chrome_driver, setup_logging
-from scraper.alpha_scraper import process_single_stock, inject_rabyte_login
+from scraper.alpha_scraper import inject_cookies, process_single_stock
 from utils.sender import load_email_config_from_json, send_email_with_attachments
 from utils.interactive import zip_files, safe_delete
 
@@ -32,7 +33,7 @@ def get_user_dirs(user_id: str):
     default_retry_delay=6,
     name="tasks.alpha_tasks.process_single_stock_task"
 )
-def process_single_stock_task(self, stock: str, user_id: str, prompt: list[str]):
+def process_single_stock_task(self, stock: str, user_id, locators_map, user_config, prompt: list[str]):
     logger.info(f"Processing stock: {stock} for user={user_id}")
 
     # user-specific folders
@@ -40,7 +41,7 @@ def process_single_stock_task(self, stock: str, user_id: str, prompt: list[str])
 
     # Create unique temp folder inside user's tmp/
     import random
-    rand_num = random.randint(10000, 99999)
+    rand_num = random.randint(100000, 999999)
     temp_download_dir = tempfile.mkdtemp(
         prefix=f"{user_id}_{stock}_{rand_num}_",
         dir=TMP_DIR,
@@ -49,19 +50,50 @@ def process_single_stock_task(self, stock: str, user_id: str, prompt: list[str])
 
     driver = get_chrome_driver(temp_download_dir, "")
     try:
-        inject_rabyte_login(driver, user_id, TARGET_URL)
-
         # Process — returns downloaded file path INSIDE temp_download_dir
-        temp_doc_file = process_single_stock(driver, stock, prompt, temp_download_dir)
+        for url, locators in locators_map.items():
+            site_name = locators.get("name")
+            inject_cookies(driver, user_config[site_name], url)
+            temp_file = process_single_stock(driver, stock, prompt, temp_download_dir, locators)
 
-        # Move/copy to user's final_doc folder
-        ext = os.path.splitext(temp_doc_file)[1]
-        final_name = f"{stock}{ext}"
-        final_path = os.path.join(FINAL_DOC_DIR, final_name)
+            # Move/copy to user's final_doc folder
+            ext = os.path.splitext(temp_file)[1]
+            final_name = f"{stock}{ext}"
+            final_path = os.path.join(FINAL_DOC_DIR, final_name)
 
-        os.replace(temp_doc_file, final_path)
-        logger.info(f"✔ Final file stored → {final_path}")
+            os.replace(temp_file, final_path)
+            logger.info(f"✔ Renamed file stored → {final_path}")
 
+        # After processing, append all TXT files into the .docx file
+        # Find final docx file and txt files
+        docx_file = os.path.join(FINAL_DOC_DIR, f"{stock}.docx")
+        txt_files = [
+            os.path.join(FINAL_DOC_DIR, f)
+            for f in os.listdir(FINAL_DOC_DIR)
+            if f.endswith('.txt') and f.startswith(stock)
+        ]
+
+        # Only append if docx exists and there are txt files
+        if os.path.exists(docx_file) and txt_files:
+            try:
+                doc = Document(docx_file)
+                for txt_path in txt_files:
+                    with open(txt_path, "r", encoding="utf-8") as fin:
+                        txt_content = fin.read()
+                        doc.add_paragraph(txt_content)
+                doc.save(docx_file)
+                logger.info(f"✔ Appended text files into docx: {docx_file}")
+                # Remove txt files after appending
+                for txt_path in txt_files:
+                    try:
+                        os.remove(txt_path)
+                        logger.debug(f"Deleted txt file after appending: {txt_path}")
+                    except Exception as e_del:
+                        logger.warning(f"Failed deleting txt file {txt_path}: {e_del}")
+            except Exception as e:
+                logger.warning(f"Failed appending txt to docx: {e}")
+
+        
         return {
             "user_id": user_id,
             "stock": stock,
@@ -120,6 +152,13 @@ def finalize_and_email(self, results):
 
             zip_file = os.path.join(OUTPUT_DIR, f"{date}.zip")
             zip_files(all_docs, zip_file)
+            # try remove originals
+            for f in all_docs:
+                try:
+                    os.remove(f)
+                    logger.debug(f"Deleted original file after zipping: {f}")
+                except Exception as e:
+                    logger.warning(f"Failed deleting '{f}': {e}")
 
             # Email setup
             config = load_email_config_from_json("json/config.json")
@@ -153,7 +192,10 @@ def scrape_alpha_task(stocks: list[str], user_id: str = None):
     # Load user config
     with open("json/prompts.json", "r", encoding="utf-8") as f:
         prompt_config = json.load(f)
-
+    with open("json/selectors.json", "r") as f:
+        locators_map = json.load(f)["agent"]
+    with open("json/cookies.json", "r") as f:
+        user_config = json.load(f)[user_id]
     # Determine which prompt to use (user-specific or default)
     if user_id is not None and str(user_id) in prompt_config and "prompts" in prompt_config[str(user_id)]:
         prompts = prompt_config[str(user_id)]["prompts"]
@@ -161,7 +203,7 @@ def scrape_alpha_task(stocks: list[str], user_id: str = None):
         prompts = prompt_config["default"]["prompts"]
 
     job = group(
-        process_single_stock_task.s(stock, user_id, prompts)
+        process_single_stock_task.s(stock, user_id, locators_map, user_config, prompts)
         for stock in stocks
     )
 

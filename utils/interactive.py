@@ -128,29 +128,31 @@ def close_popup(driver: WebDriver, css_selector: str, max_attempts: int = 5):
 # -----------------------
 # Navigation / login helper
 # -----------------------
-def generate_localstorage_js(_dict, keys):
-        js_lines = []
-        for key in keys:
-            value = _dict[key]
+def generate_localstorage_js(_dict):
+    def js_str(s):
+        # Escape string as JavaScript string literal
+        return json.dumps(s, ensure_ascii=False)
 
-            if isinstance(value, bool):
-                js_value = "true" if value else "false"
-                js_lines.append(f"window.localStorage.setItem('{key}', '{js_value}');")
-
-            elif isinstance(value, (int, float)):
-                js_lines.append(f"window.localStorage.setItem('{key}', '{value}');")
-
-            elif isinstance(value, dict):
-                json_str = json.dumps(value, ensure_ascii=False)
-                js_lines.append(
-                    f"window.localStorage.setItem('{key}', JSON.stringify({json_str}));"
-                )
-
-            else:  # string or token
-                js_lines.append(
-                    f"window.localStorage.setItem('{key}', '{value}');"
-                )
-        return "\n".join(js_lines)
+    js_lines = []
+    for key, value in _dict.items():
+        js_key = js_str(key)
+        if isinstance(value, bool):
+            js_value = "true" if value else "false"
+            js_lines.append(f"window.localStorage.setItem({js_key}, {js_value});")
+        elif isinstance(value, (int, float)):
+            js_lines.append(f"window.localStorage.setItem({js_key}, {value});")
+        elif isinstance(value, dict):
+            json_str = json.dumps(value, ensure_ascii=False)
+            # Use js_str to ensure correct escaping of quotes
+            js_lines.append(
+                f"window.localStorage.setItem({js_key}, JSON.stringify({json_str}));"
+            )
+        else:  # string or token
+            js_value = js_str(value)
+            js_lines.append(
+                f"window.localStorage.setItem({js_key}, {js_value});"
+            )
+    return "\n".join(js_lines)
 
 # -----------------------
 # Zip and cleanup
@@ -167,13 +169,7 @@ def zip_files(d_files: list[str], out_file: str):
         for f in docx_files:
             zf.write(f, arcname=os.path.basename(f))
     logger.info(f"Created zip: {out_file}")
-    # try remove originals
-    for f in docx_files:
-        try:
-            os.remove(f)
-            logger.debug(f"Deleted original file after zipping: {f}")
-        except Exception as e:
-            logger.warning(f"Failed deleting '{f}': {e}")
+
 
 def safe_delete(path, retries=3):
     for i in range(retries):
@@ -194,7 +190,7 @@ def safe_delete(path, retries=3):
     # -----------------------------
     # Convert locators from JSON into (By.X, value)
     # -----------------------------
-def parse(loc):
+def parse_locators(loc):
     if not loc:
         return None
     by = loc["by"].lower()

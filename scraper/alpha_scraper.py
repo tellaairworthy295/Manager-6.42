@@ -1,16 +1,14 @@
 
-import json
 import os
 import time
 import glob
-from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support import expected_conditions as EC, wait
 from config import setup_logging
-from utils.interactive import safe_click, safe_send_keys, generate_localstorage_js
+from utils.interactive import parse_locators, safe_click, safe_send_keys, generate_localstorage_js
 
 logger = setup_logging("logs/alphapai", "alphapai_scraper")
 # ========================= CONFIG =========================   
@@ -50,30 +48,25 @@ def _wait_for_download_complete(download_dir: str, timeout: int = 30):
 # -----------------------
 # Wait-for-answer / download button detector
 # -----------------------
-def _wait_for_answer(driver: WebDriver, timeout: int = 360):
+def _wait_for_answer(driver: WebDriver, finish_locator, timeout: int = 360):
     """
     Wait until the answer is finished by waiting for the download button to appear.
     If the button appears, clicks it.
     """
-    finish_locator = (By.CSS_SELECTOR, "div.btn-download-file")
-
     logger.info("Waiting for answer to finish (waiting for download button)...")
 
     try:
         WebDriverWait(driver, timeout).until(
             EC.presence_of_element_located(finish_locator)
         )
-        logger.info("Download button appeared — answer finished.")
-        # Now click the button
-        safe_click(driver, finish_locator, max_attempts=3, wait_time=3)
-        logger.info("Clicked the download button.")
+        logger.info("Finish locator appeared — answer finished.")
     except TimeoutException:
         raise TimeoutException("Download button did not appear — answer not finished in time.")
 
 # -----------------------
 # The main process_single_stock function
 # -----------------------
-def process_single_stock(driver: WebDriver, stock: str, prompt: list[str], download_dir: str) -> str:
+def process_single_stock(driver: WebDriver, stock: str, prompt: list[str], download_dir: str, locators) -> str:
     """
     Entire flow for one stock:
       - send multi-part prompt (with {stock} replaced)
@@ -82,15 +75,16 @@ def process_single_stock(driver: WebDriver, stock: str, prompt: list[str], downl
     Returns: path to downloaded file
     """
     logger.info("Refreshed page, processing stock: %s", stock)
-
+    click_locator = parse_locators(locators.get("click_locator"))
+    if click_locator:
+        safe_click(driver, click_locator, max_attempts=3, wait_time=5)
     # 1) Prepare prompt with correct {stock} substitution for each part
     if prompt and any("{stock}" in p for p in prompt):
         prompt_for_stock = [p.replace("{stock}", stock) for p in prompt]
     else:
         prompt_for_stock = prompt
-    logger.info(prompt_for_stock)
     # 2) Send prompt to textarea safely
-    textarea_locator = (By.CSS_SELECTOR, "textarea.el-textarea__inner")
+    textarea_locator = parse_locators(locators.get("text_box_locator"))
     safe_click(driver, textarea_locator, max_attempts=3, wait_time=5)
     for part in prompt_for_stock:
         safe_send_keys(driver, textarea_locator, part, max_attempts=3, clear_first=False)
@@ -99,55 +93,60 @@ def process_single_stock(driver: WebDriver, stock: str, prompt: list[str], downl
     logger.info(f"Prompt sent for {stock}")
 
     # 3) Wait for answer & get download locator
-    _wait_for_answer(driver, timeout=600)
+    finish_locator = parse_locators(locators.get("finish_locator"))
+    _wait_for_answer(driver, finish_locator, timeout=360)
     time.sleep(1)
 
-    # 4) Trigger download & wait_for_download (rename to stock)
-    downloaded_file = _wait_for_download_complete(download_dir)
-    logger.info(f"Downloaded file for {stock}: {downloaded_file}")
-    return downloaded_file
+    # 4) Get file
+    content_locator = parse_locators(locators.get("content_locator"))
+    if content_locator:
+        element = wait.until(EC.presence_of_element_located(content_locator))
+        logger.info("Located full text")
+        full_text = element.text
+        txt_filename = os.path.join(download_dir, f"{stock}.txt")
+        with open(txt_filename, "w", encoding="utf-8") as f:
+            f.write(full_text)
+        result_file = txt_filename
+    else:
+        safe_click(driver, finish_locator, max_attempts=3, wait_time=3)
+        logger.info("Clicked the download button.")
+        result_file = _wait_for_download_complete(download_dir)
+    
+    logger.info(f"Fetch result file for {stock}: {result_file}")
+    return result_file
 
-def inject_rabyte_login(driver, user_id, TARGET_URL):
-    driver.get(TARGET_URL)
+def inject_cookies(driver, site_config, url):
+    driver.get(url)
     time.sleep(2)
+    cookies = site_config["cookies"]
+    local_storage = site_config["local_storage"]
 
-    with open("json/cookies.json", "r") as f:
-        config = json.load(f)
-    user_config = config[user_id]
-    alphapai_config = user_config["alphapai"]
-    cookies = alphapai_config["cookies"]
-    local_storage = alphapai_config["local_storage"]
-
+    # Add cookies via JavaScript to fix add_cookie failure (esp for cross-domain/format/httponly issues)
     for ck in cookies:
+        # Fallback: inject via JavaScript (will only work for non-HttpOnly cookies)
+        name = ck.get("name")
+        value = ck.get("value")
+        domain = ck.get("domain", "")
+        path = ck.get("path", "/")
+        domain_part = f"; domain={domain}" if domain else ""
+        path_part = f"; path={path}" if path else "; path=/"
+        js_code = f'document.cookie = "{name}={value}{domain_part}{path_part}";'
         try:
-            driver.add_cookie({
-                "name": ck["name"],
-                "value": ck["value"],
-                "domain": ck["domain"],
-                "path": ck["path"]
-            })
-        except Exception as e:
-            print("Cookie injection error:", ck["name"], e)
+            driver.execute_script(js_code)
+        except Exception as js_e:
+            print(f"[WARNING] Cookie JS injection failed: {name} ({js_e})")
 
     print("✓ Device cookies injected")
 
-    # Keys stored in alphapai root
-    local_storage_keys = [
-        "USER_AUTH_TOKEN",
-        "hasShowpaipaiAnswerRangeGuide",
-        "search-to-paipai-guide",
-        "paipai-agent-fastsheet-us-guide",
-        "pc-admin-side-adv-modal-storage",
-        "search-to-paipai-guide-date",
-        "version-market-tip"
-    ]
-
-    localstorage_script = generate_localstorage_js(local_storage, local_storage_keys)
+    localstorage_script = generate_localstorage_js(local_storage)
 
     # Inject LocalStorage
-    driver.execute_script(localstorage_script)
-    print("✓ LocalStorage flags & token injected")
+    if localstorage_script:
+        driver.execute_script(localstorage_script)
+        print("✓ LocalStorage flags & token injected")
     time.sleep(1)
     driver.refresh()
-    time.sleep(2)
-    print("✓ Rabyte login session fully injected (cookies + localStorage)")
+    time.sleep(20000)
+    print("✓ login session fully injected (cookies + localStorage)")
+
+

@@ -114,9 +114,11 @@ def get_chrome_driver(
     profile_dir = None
 
     chrome_options = Options()
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--remote-debugging-port=9222")
+    chrome_options.add_argument("--auto-open-devtools-for-tabs")
+
 
     # ------------------------------------------------------------------
     # Safe base next to extension (sibling) to avoid recursive copying
@@ -179,11 +181,12 @@ def get_chrome_driver(
             driver_executable_path="chromedriver-linux64/chromedriver",
             browser_executable_path=browser_executable_path,
             options=chrome_options,
-            version_main=142
+            version_main=143
         )
-    except Exception:
+    except Exception as e:
+        raise RuntimeError(f"driver errror!!!!{e}")
         driver = uc.Chrome(
-            version_main=142,
+            version_main=143,
             options=chrome_options,
             mirror="https://registry.npmmirror.com/-/binary/chromedriver/"
         )
@@ -214,7 +217,7 @@ def get_chrome_driver(
     try:
         stealth(
             driver,
-            languages=["zh-CN", "zh"],
+            languages=["en-US", "en"],
             vendor="Google Inc.",
             platform="Win32",
             webgl_vendor="Intel Inc.",
@@ -223,7 +226,7 @@ def get_chrome_driver(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/142.0.7444.175 Safari/537.36"
+                "Chrome/143.0.7499.40 Safari/537.36"
             ),
         )
     except Exception as e:

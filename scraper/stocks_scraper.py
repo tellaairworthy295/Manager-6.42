@@ -1,4 +1,5 @@
 
+
 import json
 import re
 import requests
@@ -13,7 +14,7 @@ from utils.interactive import safe_click
 from utils.database import get_db_manager, StockRepository
 logger = setup_logging("logs/stocks", "stocks_scraper")
 
-def main_scraper(urls: list[str], date):
+def main_scraper(date):
     # Load selectors and cookies once
     with open("json/selectors.json", "r") as f:
         selectors_map = json.load(f)["stocks"]
@@ -22,18 +23,13 @@ def main_scraper(urls: list[str], date):
 
     all_records = []
 
-    for url in urls:
+    # Iterate all URLs in the stocks field of selectors.json
+    for url, selectors in selectors_map.items():
         driver = get_chrome_driver(base_bypass_ext_path="")
         logger.info(f"Driver launched for {url}")
         try:
             driver.get(url)
             logger.info("Page loaded.")
-
-            if url not in selectors_map:
-                logger.error(f"No selectors configured for URL: {url}")
-                continue
-
-            selectors = selectors_map[url]
 
             # Handle cookies if needed
             if selectors.get("cookies"):
@@ -42,6 +38,7 @@ def main_scraper(urls: list[str], date):
                     driver.add_cookie(cookie)
                 driver.refresh()
                 logger.info("Cookies added and page refreshed.")
+
             # Scrape records
             records = _scrape_stocks(
                 driver,
@@ -126,17 +123,6 @@ def _scrape_stocks(driver, date, click_selector, row_selector, name_selector, co
 
             name = name_tag.get_text(strip=True)
             code_raw = code_tag.get_text(strip=True)
-
-            # Normalize code formats
-            # m = re.match(r'([a-zA-Z]{2})(\d{6})', code_raw)  # sh600519 / sz000001
-            # if m:
-            #     code = f"{m.group(2)}.{m.group(1).upper()}"
-            # else:
-            #     m2 = re.match(r'(\d{6})(?:\.[A-Za-z]{2})?', code_raw)  # 002913.SZ or only numbers
-            #     if m2:
-            #         code = m2.group(1)
-            #     else:
-            # Only extract the numbers if present, otherwise as is
             numbers = re.findall(r'\d{6}', code_raw)
             code = numbers[0] if numbers else code_raw
 

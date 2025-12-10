@@ -25,3 +25,5 @@ chrome-linux64/
 logs/
 scraped_images/
 alphaStockAnalysis/
+# Ignore any file or directory starting with 'chrome'
+chrome*

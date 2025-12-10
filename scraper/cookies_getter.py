@@ -16,7 +16,7 @@ class BaseCookies:
     - overridable login()
     """
 
-    def __init__(self, phone, passwd, url, section_name, cookies: bool, user_id=None):
+    def __init__(self, phone, passwd, url, section_name, user_id=None):
         """
         phone/passwd/url come from cookies.json
         section_name: "jiuyan", "xuangutong", "alphapai", etc.
@@ -27,7 +27,6 @@ class BaseCookies:
         self.url = url
         self.section_name = section_name
         self.user_id = user_id  # supports user-specific area
-        self.cookies = cookies
         self.logger = logger.bind(site=section_name)
         self.driver = get_chrome_driver("", "")
 
@@ -64,6 +63,27 @@ class BaseCookies:
             }
             return items;
         """)
+        if not data:
+            import subprocess, json
+            def get_storage_state(url):
+                result = subprocess.run(
+                    ["python", "test.py", url],
+                    capture_output=True, text=True
+                )
+                if not result.stdout.strip():
+                    raise RuntimeError(
+                        f"Failed to get localStorage for {url}: No output from 'test.py'."
+                    )
+                try:
+                    return json.loads(result.stdout)
+                except json.JSONDecodeError as e:
+                    raise RuntimeError(
+                        f"Failed to parse localStorage JSON for {url}: {e}\nOutput was: {result.stdout}"
+                    )
+
+            data = get_storage_state(self.driver.current_url)
+            self.logger.warning(f"Loaded localStorage via fallback: {data}")
+
         return self._decode_local_storage(data)
 
     @staticmethod
@@ -87,7 +107,7 @@ class BaseCookies:
     # -------------------------------------------------------
     # Saving logic
     # -------------------------------------------------------
-    def save_to_json(self, cookies=None, local_storage=None):
+    def save_to_json(self, cookies, local_storage):
         """
         Stores data in:
             common           → cookies.json["common"][section_name]
@@ -107,8 +127,7 @@ class BaseCookies:
         else:
             section = data["common"].get(self.section_name, {})
         # Store
-        if self.cookies and cookies:
-            section["cookies"] = cookies
+        section["cookies"] = cookies
         section["local_storage"] = local_storage
         # Write back
         if self.user_id:
@@ -119,10 +138,7 @@ class BaseCookies:
         with open("json/cookies.json", "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
-        if self.cookies:
-            self.logger.info(f"Saved cookies + localStorage for {self.section_name}")
-        else:
-            self.logger.info(f"Saved localStorage for {self.section_name}")
+        self.logger.info(f"Saved cookies + localStorage for {self.section_name}")
 
     # -------------------------------------------------------
     # Main workflow
@@ -133,8 +149,7 @@ class BaseCookies:
             self.login()  # implemented in subclass
             cookies = None
             local_storage = None
-            if self.cookies:
-                cookies = self.extract_cookies()
+            cookies = self.extract_cookies()
             local_storage = self.extract_local_storage()
 
             if local_storage or cookies:
@@ -154,7 +169,6 @@ class GeneralCookies(BaseCookies):
     - Performs login with phone/password
     - Saves cookies + LocalStorage through BaseCookies
     """
-
     def __init__(self, config: dict, user_id: str | None):
         """
         config is one entry inside "authen": [...]
@@ -170,12 +184,9 @@ class GeneralCookies(BaseCookies):
             phone=config.get("phone"),
             passwd=config.get("passwd"),
             url=config.get("url"),
-            cookies=config.get("cookies"),
             section_name=config.get("name"),
-            user_id=user_id,
+            user_id=user_id
         )
-
-        # Load JSON locators (optional)
         locs = config.get("locators", {})
 
         def parse(loc):
@@ -196,6 +207,7 @@ class GeneralCookies(BaseCookies):
         self.password_locator = parse(locs.get("pwd_input"))
         self.submit_locator = parse(locs.get("login_btn"))
         self.optional_open_login_locator = parse(locs.get("open_login_btn"))
+        self.check_box_locator = parse(locs.get("check_box"))
 
     # ---------------------------------------------------------------------
     # LOGIN LOGIC (only this function is site-specific through JSON)
@@ -203,7 +215,6 @@ class GeneralCookies(BaseCookies):
     def login(self):
         self.logger.info("Starting generic login flow...")
 
-        # 1. Ensure login dialog is visible
         if self.login_dialog_locator:
             try:
                 self.wait(self.login_dialog_locator, timeout=8)
@@ -222,6 +233,14 @@ class GeneralCookies(BaseCookies):
             except:
                 self.logger.warning("Tab switch locator exists but could not be clicked.")
 
+        if self.check_box_locator:
+            try:
+                safe_click(self.driver, self.check_box_locator)
+                time.sleep(0.3)
+                self.logger.info("Checked the checkbox as required.")
+            except Exception as e:
+                self.logger.warning(f"Checkbox locator exists but could not be clicked: {e}")
+            
         # 3. Enter credentials
         if self.phone_locator:
             safe_send_keys(self.driver, self.phone_locator, self.phone)
@@ -238,7 +257,7 @@ class GeneralCookies(BaseCookies):
             raise RuntimeError(f"No submit button locator for site: {self.section_name}")
 
         self.logger.info("Login button clicked, waiting for login success...")
-
+        time.sleep(15)
         # 5. Wait login dialog to disappear (if locator defined)
         if self.login_dialog_locator:
             try:
@@ -287,4 +306,13 @@ def update_all_cookies():
                 print(f"[ERROR] User site '{entry.get('name')}' for user_id '{user_id}' failed: {e}")
 
 if __name__ == "__main__":
-    update_all_cookies()
+    user_id = "564b3391-510f-4b50-a038-7df413bec15d"
+    # Load cookies.json and find the gangtise entry under this user_id
+    with open("json/cookies.json", "r", encoding="utf-8") as f:
+        cookies_data = json.load(f)
+    auth_list = cookies_data[user_id]["authen"]
+    gangtise_entry = next((entry for entry in auth_list if entry["name"] == "gangtise"), None)
+    if gangtise_entry is None:
+        raise RuntimeError("gangtise entry not found for user_id '%s'" % user_id)
+    scraper = GeneralCookies(gangtise_entry, user_id=user_id)
+    scraper.run()

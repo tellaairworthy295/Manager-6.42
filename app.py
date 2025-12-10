@@ -36,6 +36,7 @@ async def ping():
 @app.get("/api/refresh_cookies")
 async def refresh_cookies():
     update_all_cookies()
+    return {"status": "done"}
 
 @app.post("/api/add_user")
 async def add_users(request: Request):
@@ -254,14 +255,11 @@ async def news_analyzer(request: Request):
 @app.post("/api/scrape_stocks")
 async def scrape_stocks_api(request: Request):
     data = await request.json()
-    urls = data.get("urls")
     date = data.get("date") or datetime.today().strftime("%Y-%m-%d")
     days = data.get("days", 10)
-    if not urls:
-        raise HTTPException(status_code=400, detail="URLs are required")
-
+    
     try:
-        await asyncio.to_thread(main_scraper, urls, date)
+        await asyncio.to_thread(main_scraper, date)
         await asyncio.to_thread(excel_flow, date, days)
 
         config = load_email_config_from_json("json/config.json")

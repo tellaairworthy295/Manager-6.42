@@ -237,11 +237,6 @@ def scrape_news(url: str, site: str):
                 translation_status = 0
                 title_zh = ""
                 content_zh = ""
-        else:
-            logger.info("Translation is disabled in configuration")
-            translation_status = 0
-            title_zh = ""
-            content_zh = ""
 
         try:
             # Save to database using repository
