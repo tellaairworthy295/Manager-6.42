@@ -4,13 +4,7 @@ import os
 import builtins
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
-import shutil
-import time
-import uuid
-from selenium_stealth import stealth
-from selenium.webdriver.chrome.options import Options
-import undetected_chromedriver as uc
-
+from playwright.sync_api import sync_playwright
 
 # ========================= Logging Setup =========================
 def setup_logging(dir: str, name: str):
@@ -75,191 +69,78 @@ def setup_logging(dir: str, name: str):
 
     return logger
 
-# ========================= Chrome Setup =========================
-def get_safe_temp_base(base_bypass_ext_path):
-    """
-    Place _temp_profiles as a sibling directory to the base extension folder
-    (so we avoid copying temp dirs into new copies).
-    """
-    if base_bypass_ext_path and os.path.exists(base_bypass_ext_path):
-        parent = os.path.dirname(os.path.abspath(base_bypass_ext_path))
-        safe_base = os.path.join(parent, "_temp_profiles")
-    else:
-        # fallback to current working dir if base not found
-        safe_base = os.path.join(os.getcwd(), "_temp_profiles")
-    os.makedirs(safe_base, exist_ok=True)
-    return safe_base
-
-def copy_extension_once(src_ext_path, dest_ext_path):
-    """
-    Copy extension directory while ignoring any _temp_profiles folders (prevents recursion).
-    Raises on failure.
-    """
-    if not os.path.exists(src_ext_path):
-        raise FileNotFoundError(f"Source extension not found: {src_ext_path}")
-    if os.path.exists(dest_ext_path):
-        # unlikely but be safe: remove stale target first
-        shutil.rmtree(dest_ext_path)
-    # ignore _temp_profiles and macOS/hidden files that may cause trouble
-    ignore = shutil.ignore_patterns("_temp_profiles", "._*", ".DS_Store")
-    shutil.copytree(src_ext_path, dest_ext_path, ignore=ignore)
-
-def get_chrome_driver(
+# ========================= Chrome Setup =========================  
+def get_playwright_browser(
     download_dir: str = "",
-    base_bypass_ext_path: str = "bypass-paywalls-chrome-clean-master",
-    browser_executable_path: str = "chrome-linux64/chrome",
-    multi_instance: bool = False,
+    base_bypass_ext_path: str = "bypass-paywalls-chrome-clean-master"
 ):
-    ext_temp_path = None
-    profile_dir = None
+    """
+    Launch a Playwright Chromium browser with extension and download prefs.
+    Equivalent to your Selenium driver setup.
+    """
 
-    chrome_options = Options()
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--remote-debugging-port=9222")
-    chrome_options.add_argument("--auto-open-devtools-for-tabs")
+    # Ensure absolute paths
+    download_dir = os.path.abspath(download_dir) if download_dir else None
+    ext_path = os.path.abspath(base_bypass_ext_path) if base_bypass_ext_path else None
 
+    # Persistent user data dir is required for extensions
+    user_data_dir = os.path.abspath("./playwright-profile")
 
-    # ------------------------------------------------------------------
-    # Safe base next to extension (sibling) to avoid recursive copying
-    # ------------------------------------------------------------------
-    if base_bypass_ext_path:
-        safe_base = get_safe_temp_base(base_bypass_ext_path)
+    with sync_playwright() as p:
+        args = [
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--remote-debugging-port=9222",
+            "--auto-open-devtools-for-tabs",
+        ]
 
-    # ------------------------------------------------------------------
-    # Extension setup
-    # ------------------------------------------------------------------
-    if base_bypass_ext_path and os.path.exists(base_bypass_ext_path):
-        if multi_instance:
-            # ensure we always copy from the ORIGINAL base extension path,
-            # not from an existing ext_temp_path (which prevents nesting).
-            ext_temp_path = os.path.join(safe_base, f"ext_copy_{uuid.uuid4().hex}")
-            try:
-                copy_extension_once(base_bypass_ext_path, ext_temp_path)
-                chrome_options.add_argument(f"--load-extension={ext_temp_path}")
-                print(f"[INFO] Multi-instance: extension copied to {ext_temp_path}")
-            except Exception as e:
-                print(f"[WARNING] Failed to copy extension: {e}")
-                ext_temp_path = None
+        # Extension setup
+        if ext_path and os.path.exists(ext_path):
+            args.append(f"--disable-extensions-except={ext_path}")
+            args.append(f"--load-extension={ext_path}")
+            print(f"[INFO] Extension loaded from {ext_path}")
         else:
-            # Single-instance: load original extension directly (no copies)
-            chrome_options.add_argument(f"--load-extension={base_bypass_ext_path}")
-            print(f"[INFO] Single-instance: extension loaded from {base_bypass_ext_path}")
-    else:
-        if base_bypass_ext_path:
-            print(f"[WARNING] Bypass extension not found at {base_bypass_ext_path}")
-        else:
-            print(f"[INFO] No bypass extension loaded")
+            if base_bypass_ext_path:
+                print(f"[WARNING] Bypass extension not found at {ext_path}")
+            else:
+                print(f"[INFO] No bypass extension loaded")
 
-    # ------------------------------------------------------------------
-    # Profile setup (placed under safe_base as sibling)
-    # ------------------------------------------------------------------
-    if multi_instance:
-        profile_dir = os.path.join(safe_base, f"profile_{uuid.uuid4().hex}")
-        os.makedirs(profile_dir, exist_ok=True)
-        chrome_options.add_argument(f"--user-data-dir={profile_dir}")
-        print(f"[INFO] Multi-instance: profile created at {profile_dir}")
-
-    # ------------------------------------------------------------------
-    # Download prefs
-    # ------------------------------------------------------------------
-    if download_dir:
-        prefs = {
-            "profile.default_content_settings.popups": 0,
-            "download.prompt_for_download": False,
-            "directory_upgrade": True,
-            "safebrowsing.enabled": True,
-            "download.default_directory": os.path.abspath(download_dir),
-        }
-        chrome_options.add_experimental_option("prefs", prefs)
-
-    # ------------------------------------------------------------------
-    # Launch Chrome
-    # ------------------------------------------------------------------
-    try:
-        driver = uc.Chrome(
-            driver_executable_path="chromedriver-linux64/chromedriver",
-            browser_executable_path=browser_executable_path,
-            options=chrome_options,
-            version_main=143
-        )
-    except Exception as e:
-        raise RuntimeError(f"driver errror!!!!{e}")
-        driver = uc.Chrome(
-            version_main=143,
-            options=chrome_options,
-            mirror="https://registry.npmmirror.com/-/binary/chromedriver/"
-        )
-
-    # ------------------------------------------------------------------
-    # Minimize window after launch (most robust way)
-    # ------------------------------------------------------------------
-    # try:
-    #     driver.minimize_window()
-    # except Exception as e:
-    #     print(f"[WARNING] Failed to minimize window: {e}")
-
-    # ------------------------------------------------------------------
-    # Ensure download behavior
-    # ------------------------------------------------------------------
-    if download_dir:
-        try:
-            driver.execute_cdp_cmd(
-                "Page.setDownloadBehavior",
-                {"behavior": "allow", "downloadPath": os.path.abspath(download_dir)},
+        # Launch persistent context (needed for extensions)
+        if ext_path:
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=user_data_dir,
+                headless=False,  # must be headful for extensions
+                args=args,
             )
-        except Exception as e:
-            print(f"[WARNING] Failed to set download path: {e}")
+        else:
+            browser = p.chromium.launch(
+                headless=False,
+                args=args,
+            )
+            context = browser.new_context()
 
-    # ------------------------------------------------------------------
-    # Apply stealth
-    # ------------------------------------------------------------------
-    try:
-        stealth(
-            driver,
-            languages=["en-US", "en"],
-            vendor="Google Inc.",
-            platform="Win32",
-            webgl_vendor="Intel Inc.",
-            renderer="Intel Iris OpenGL Engine",
-            fix_hairline=True,
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/143.0.7499.40 Safari/537.36"
-            ),
+        # Download behavior
+        if download_dir:
+            context.set_default_downloads_path(download_dir)
+            print(f"[INFO] Downloads will be saved to {download_dir}")
+
+        return context
+
+
+def get_playwright_page(context):
+     # Apply stealth‑like settings manually
+    page = context.new_page()
+    page.set_extra_http_headers({
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/143.0.7499.40 Safari/537.36"
         )
-    except Exception as e:
-        print(f"[WARNING] stealth() failed: {e}")
+    })
 
-    if multi_instance:
-        return driver, ext_temp_path, profile_dir
-    else:
-        return driver
-
-def cleanup_driver_dirs(ext_temp_path, profile_dir, retries=6, delay=0.5):
-    """
-    Try several times to remove the temp dirs. Logs clearly if eventual failure.
-    """
-    for path in (ext_temp_path, profile_dir):
-        if not path:
-            continue
-        if not os.path.exists(path):
-            # nothing to do
-            continue
-        for attempt in range(1, retries + 1):
-            try:
-                shutil.rmtree(path)
-                print(f"[INFO] Removed temp path: {path}")
-                break
-            except FileNotFoundError:
-                break
-            except PermissionError as e:
-                # common on Windows if some handle lingers; wait & retry
-                if attempt < retries:
-                    time.sleep(delay)
-                else:
-                    print(f"[WARNING] Could not remove {path} after {retries} attempts: {e}")
-            except Exception as e:
-                print(f"[WARNING] Unexpected error removing {path}: {e}")
-                break
+    # You can also inject JS to spoof navigator values if needed
+    page.add_init_script("""
+        Object.defineProperty(navigator, 'platform', {get: () => 'Win32'});
+        Object.defineProperty(navigator, 'vendor', {get: () => 'Google Inc.'});
+    """)
+    return page

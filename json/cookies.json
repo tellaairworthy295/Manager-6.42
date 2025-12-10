@@ -338,25 +338,145 @@
       }
     },
     "gangtise": {
-      "local_storage": {},
+      "local_storage": {
+        "cookies": [
+          {
+            "name": "HWWAFSESID",
+            "value": "0487c73250060228d4",
+            "domain": "open.gangtise.com",
+            "path": "/",
+            "expires": -1,
+            "httpOnly": false,
+            "secure": false,
+            "sameSite": "Lax"
+          },
+          {
+            "name": "HWWAFSESTIME",
+            "value": "1765343878589",
+            "domain": "open.gangtise.com",
+            "path": "/",
+            "expires": -1,
+            "httpOnly": false,
+            "secure": false,
+            "sameSite": "Lax"
+          }
+        ],
+        "origins": [
+          {
+            "origin": "https://open.gangtise.com",
+            "localStorage": [
+              {
+                "name": "G_remberPassword",
+                "value": "false"
+              },
+              {
+                "name": "G_USER_ID",
+                "value": "929101509502930944"
+              },
+              {
+                "name": "G_cnfr_uid",
+                "value": "25960"
+              },
+              {
+                "name": "G_isPamirs",
+                "value": ""
+              },
+              {
+                "name": "G_UID",
+                "value": "25960"
+              },
+              {
+                "name": "G_showTheme",
+                "value": "light"
+              },
+              {
+                "name": "G_noChangeProduct",
+                "value": "1"
+              },
+              {
+                "name": "G_userPrivacyPolicy",
+                "value": "true"
+              },
+              {
+                "name": "G_activeProduct",
+                "value": "{\"productCode\":10018,\"productName\":\"云投研买方版\",\"productType\":2,\"tenantId\":1855,\"tenantCode\":\"T00013631\",\"tenantName\":\"中泰证券（自营）\",\"comboId\":661,\"endValid\":1766419199000,\"tenantIpaddrControl\":null,\"pickerName\":\"中泰证券（自营）云投研\"}"
+              },
+              {
+                "name": "G_tenantId",
+                "value": "1855"
+              },
+              {
+                "name": "G_GangtiseLogConfig",
+                "value": "{\"waitCount\":10,\"waitTIme\":60000,\"sendOnClose\":true,\"url\":\"/application/log/log-service/api/behaviorLog/singleReceive\",\"userId\":\"929101509502930944\",\"uid\":25960,\"timeDiff\":0,\"deviceCode\":\"1\",\"productCode\":10018,\"productVersion\":\"v2.7.18\",\"ipaddr\":\"114.87.128.98\",\"tenant_id\":1855,\"clientType\":\"\"}"
+              },
+              {
+                "name": "G_detailOnly",
+                "value": "false"
+              },
+              {
+                "name": "G_token",
+                "value": "8e669afa-7f62-4632-84af-53e14cff770c"
+              },
+              {
+                "name": "G_cnfr_phone",
+                "value": "13651677354"
+              },
+              {
+                "name": "G_timeDiff",
+                "value": "0"
+              },
+              {
+                "name": "G_rPFlag",
+                "value": "false"
+              },
+              {
+                "name": "G_fingerprintId",
+                "value": "9a1eca45b367480138de2d3e561db99e"
+              },
+              {
+                "name": "G_cnfr_user_name",
+                "value": "李沐恒"
+              },
+              {
+                "name": "G_userCategory",
+                "value": "1"
+              },
+              {
+                "name": "G_user",
+                "value": "{\"access_token\":\"8e669afa-7f62-4632-84af-53e14cff770c\",\"expires_in\":10800,\"user_id\":\"929101509502930944\",\"uid\":25960,\"identifier\":\"13651677354\",\"user_name\":\"李沐恒\",\"user_key\":\"f1e7fecaf460480693e4abb50132bfcf\",\"user_category\":1,\"user_level\":0,\"ipaddr\":\"114.87.128.98\",\"tenant_id\":1855,\"product_code\":10018,\"product_type\":null,\"client_category\":1,\"version\":\"1.0.0\",\"time\":1765343928,\"long_term\":0}"
+              },
+              {
+                "name": "G_user_key",
+                "value": "f1e7fecaf460480693e4abb50132bfcf"
+              },
+              {
+                "name": "tab",
+                "value": "{\"tabs\":[{\"code\":\"20088\",\"name\":\"首页\",\"value\":\"home\",\"alive\":\"home\",\"mod_id\":\"\",\"func_id\":\"\",\"keep\":true,\"time\":1765343931775}],\"activeTab\":{},\"tabTempParams\":{},\"backTabList\":[],\"saveTabs\":false}"
+              }
+            ]
+          }
+        ]
+      },
       "cookies": [
         {
+          "name": "HWWAFSESID",
+          "value": "0487c73250060228d4",
           "domain": "open.gangtise.com",
-          "httpOnly": false,
-          "name": "HWWAFSESTIME",
           "path": "/",
-          "sameSite": "Lax",
+          "expiry": -1,
+          "httpOnly": false,
           "secure": false,
-          "value": "1765288676564"
+          "sameSite": "Lax"
         },
         {
+          "name": "HWWAFSESTIME",
+          "value": "1765343878589",
           "domain": "open.gangtise.com",
-          "httpOnly": false,
-          "name": "HWWAFSESID",
           "path": "/",
-          "sameSite": "Lax",
+          "expiry": -1,
+          "httpOnly": false,
           "secure": false,
-          "value": "6209a730345e53a754"
+          "sameSite": "Lax"
         }
       ]
     }
