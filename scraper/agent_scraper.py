@@ -22,14 +22,14 @@ def process_single_stock(page: Page, stock: str, prompt: list[str], download_dir
     """
     logger.info("processing stock: %s", stock)
     url = locators.get("url")
-    page.goto(url, wait_until="domcontentloaded", timeout=60000)
+    page.goto(url, wait_until="domcontentloaded", timeout=8000)
     # 0) Wait for progressively loaded content BEFORE any other process
     wait_for_dynamical = locators.get("wait_for_dynamical")
     if wait_for_dynamical:
         logger.info(f"Waiting for progressively loaded content: {wait_for_dynamical}")
         dyn_locator = parse_locators(wait_for_dynamical)
         try:
-            page.wait_for_selector(dyn_locator, timeout=30_000, state="visible")
+            page.wait_for_selector(dyn_locator, timeout=8000, state="visible")
             logger.info("Progressively loaded content is ready.")
         except PlaywrightTimeoutError:
             logger.warning("Wait for progressive content timed out. Proceeding anyway.")
@@ -56,7 +56,7 @@ def process_single_stock(page: Page, stock: str, prompt: list[str], download_dir
     finish_locator = parse_locators(locators.get("finish_locator"))
     logger.info("Waiting for answer to finish (waiting for download button)...")
     try:
-        page.wait_for_selector(finish_locator, timeout=360 * 1000, state="visible")
+        page.wait_for_selector(finish_locator, timeout=300 * 1000, state="visible")
         logger.info("Finish locator appeared — answer finished.")
     except PlaywrightTimeoutError:
         raise PlaywrightTimeoutError("Download button did not appear — answer not finished in time.")

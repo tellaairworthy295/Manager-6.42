@@ -9,6 +9,7 @@ import os
 from loguru import logger
 from pwright.context_manager import playwright_context
 from pwright.page_factory import new_stealth_page
+from pwright.playwright_manager import PlaywrightManager
 from utils.database import get_db_manager, StockRepository
 from utils.interactive import safe_click
 
@@ -23,50 +24,55 @@ def main_scraper(date):
         cookies_map = json.load(f)["common"]
 
     all_records = []
+    try:
+        # Iterate all URLs in the stocks field of selectors.json
+        for url, selectors in selectors_map.items():
+            storage_state = cookies_map.get(selectors["name"]) if selectors.get("cookies") else None
+            with playwright_context(storage_state=storage_state, bypass_ext_path="") as context:
+                page = new_stealth_page(context)
+                try:
+                    page.goto(url, wait_until="domcontentloaded", timeout=100_000)
+                    logger.info("Page loaded.")
+                    
+                    # Scrape records
+                    records = _scrape_stocks(
+                        page,
+                        date,
+                        click_selector=selectors["click_selector"],
+                        row_selector=selectors["row_selector"],
+                        name_selector=selectors["name_selector"],
+                        code_selector=selectors["code_selector"],
+                        analysis_selector=selectors["analysis_selector"]
+                    )
 
-    # Iterate all URLs in the stocks field of selectors.json
-    for url, selectors in selectors_map.items():
-        storage_state = cookies_map.get(selectors["name"]) if selectors.get("cookies") else None
-        with playwright_context(storage_state=storage_state, bypass_ext_path="") as context:
-            page = new_stealth_page(context)
-            try:
-                page.goto(url, wait_until="domcontentloaded", timeout=100_000)
-                logger.info("Page loaded.")
-                
-                # Scrape records
-                records = _scrape_stocks(
-                    page,
-                    date,
-                    click_selector=selectors["click_selector"],
-                    row_selector=selectors["row_selector"],
-                    name_selector=selectors["name_selector"],
-                    code_selector=selectors["code_selector"],
-                    analysis_selector=selectors["analysis_selector"]
-                )
-
-                if records:
-                    all_records.extend(records)
-                    logger.info(f"Scraped {len(records)} records from {url}")
-                else:
-                    logger.warning(f"No records scraped from {url}")
-                
-                # Scrape images if configured
-                if selectors.get("image"):
-                    scraped_dir = "images"
-                    if not os.path.isdir(scraped_dir):
-                        os.makedirs(scraped_dir, exist_ok=True)
+                    if records:
+                        all_records.extend(records)
+                        logger.info(f"Scraped {len(records)} records from {url}")
                     else:
-                        for fname in os.listdir(scraped_dir):
-                            file_path = os.path.join(scraped_dir, fname)
-                            try:
-                                if os.path.isfile(file_path):
-                                    os.remove(file_path)
-                            except Exception as e:
-                                logger.warning(f"Could not delete {file_path}: {e}")
-                    _scrape_images(page, url)
+                        logger.warning(f"No records scraped from {url}")
+                    
+                    # Scrape images if configured
+                    if selectors.get("image"):
+                        scraped_dir = "images"
+                        if not os.path.isdir(scraped_dir):
+                            os.makedirs(scraped_dir, exist_ok=True)
+                        else:
+                            for fname in os.listdir(scraped_dir):
+                                file_path = os.path.join(scraped_dir, fname)
+                                try:
+                                    if os.path.isfile(file_path):
+                                        os.remove(file_path)
+                                except Exception as e:
+                                    logger.warning(f"Could not delete {file_path}: {e}")
+                        _scrape_images(page, url)
 
-            except Exception as e:
-                logger.error(f"Error scraping {url}: {e}")
+                except Exception as e:
+                    logger.error(f"Error scraping {url}: {e}")
+    finally:
+        try:
+            PlaywrightManager.instance().close_browser()
+        except Exception:
+            pass
 
     # Save all records at once
     if all_records:
@@ -158,7 +164,7 @@ def _scrape_images(page, url) -> str | None:
             try:
                 img_data = requests.get(img_url).content
                 # Use a more descriptive name for the single image
-                img_name = os.path.join("images", f"涨停简图.png") 
+                img_name = os.path.join("images", f"Image.png") 
                 with open(img_name, "wb") as handler:
                     handler.write(img_data)
                 logger.info(f"Downloaded target image: {img_url}")

@@ -268,4 +268,4 @@ def clean_dify_knowledge():
 
 if __name__ == "__main__":
     #upload_flow()
-    list_documents()
+    list_bases()

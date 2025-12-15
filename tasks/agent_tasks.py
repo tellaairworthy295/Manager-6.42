@@ -10,6 +10,7 @@ from pwright.page_factory import new_stealth_page
 from pwright.context_manager import playwright_context
 
 from scraper.agent_scraper import process_single_stock
+from utils.agent_limit import release_slot
 from utils.sender import load_email_config_from_json, send_email_with_attachments
 
 # Configure loguru for agent tasks module
@@ -62,7 +63,7 @@ def process_single_site(
     source,
     site_locators,
     storage_state,
-    prompts,
+    prompt,
 ):
     logger.info(f"[{stock}] Processing website = {source}, user={user_id}")
 
@@ -72,7 +73,7 @@ def process_single_site(
         with playwright_context(storage_state=storage_state, bypass_ext_path="") as context:
             page = new_stealth_page(context)
             final_path = process_single_stock(
-                page, stock, prompts, final_docs, site_locators
+                page, stock, prompt, final_docs, site_locators
             )
 
             return {
@@ -112,60 +113,70 @@ def finalize_and_email(self, all_site_results):
     all_site_results = list of results from all process_single_site tasks.
     No stock grouping anymore.
     """
-    if not all_site_results:
-        return {"status": "nothing_to_send"}
+    try:
+        if not all_site_results:
+            return {"status": "nothing_to_send"}
 
-    user_id = all_site_results[0]["user_id"]
-    date = datetime.today().strftime("%Y-%m-%d")
+        user_id = all_site_results[0]["user_id"]
+        date = datetime.today().strftime("%Y-%m-%d")
 
-    _, _, output_dir = get_user_dirs(user_id)
+        _, _, output_dir = get_user_dirs(user_id)
 
-    success_files = []
-    failed = []
+        success_files = []
+        failed = []
+        failed_details = []
 
-    # collect all TXT files and failures
-    for result in all_site_results:
-        if result["status"] == "success":
-            success_files.append(result["file"])
-        else:
-            failed.append(f"{result['stock']} @ {result['site']}")
+        # collect all TXT files and failures with details
+        for result in all_site_results:
+            if result["status"] == "success":
+                success_files.append(result["file"])
+            else:
+                failed.append(f"{result['stock']} @ {result['site']}")
 
-    logger.info(
-        f"[finalize] user={user_id}: {len(success_files)} success files, "
-        f"{len(failed)} failures."
-    )
+        logger.info(
+            f"[finalize] user={user_id}: {len(success_files)} success files, "
+            f"{len(failed)} failures."
+        )
 
-    zip_path = os.path.join(output_dir, f"{date}_{user_id}.zip")
+        zip_path = os.path.join(output_dir, f"{date}_{user_id}.zip")
 
-    if success_files:
-        try:
-            with zipfile.ZipFile(zip_path, "w") as zf:
-                for f in success_files:
-                    zf.write(f, arcname=os.path.basename(f))
+        detailed_failures_text = "\n".join(failed) if failed else "无"
 
-            config = load_email_config_from_json("json/config.json")
-            config.ATTACHMENTS = [zip_path]
-            config.BODY = (
-                f"Agent 分析（{date}）\n"
-                f"成功文件 {len(success_files)} 个。\n"
-                f"失败 {len(failed)} 个。\n"
-            )
+        if success_files:
+            try:
+                with zipfile.ZipFile(zip_path, "w") as zf:
+                    for f in success_files:
+                        zf.write(f, arcname=os.path.basename(f))
 
-            send_email_with_attachments(**config.as_dict())
-            logger.info(f"📧 Email sent to user {user_id}")
+                config = load_email_config_from_json("json/config.json")
+                config.ATTACHMENTS = [zip_path]
+                config.BODY = (
+                    f"Agent 分析（{date}）\n"
+                    f"成功文件 {len(success_files)} 个。\n"
+                    f"失败 {len(failed)} 个。\n\n"
+                    f"失败详情:\n{detailed_failures_text}\n"
+                )
 
-        except Exception as e:
-            logger.exception(f"❌ Final email failed: {e}")
-            if self.request.retries < self.max_retries:
-                raise self.retry(exc=e)
+                send_email_with_attachments(**config.as_dict())
+                logger.info(f"📧 Email sent to user {user_id}")
 
-    return {
-        "user_id": user_id,
-        "success_count": len(success_files),
-        "failed_sites": failed,
-        "zip_file": zip_path,
-        "status": "DONE",
-    }
+            except Exception as e:
+                logger.exception(f"❌ Final email failed: {e}")
+                if self.request.retries < self.max_retries:
+                    raise self.retry(exc=e)
+
+        return {
+            "user_id": user_id,
+            "success_count": len(success_files),
+            "failed_sites": failed,
+            "zip_file": zip_path,
+            "status": "DONE",
+        }
+    finally:
+        # Ensure Playwright browser is torn down once the main agent task finishes
+        from pwright.playwright_manager import PlaywrightManager
+        PlaywrightManager.instance().close_browser()
+        release_slot()
 
 
 # -------------------------------------------------------------
@@ -183,10 +194,10 @@ def scrape_agent_task(stocks: list[str], user_id: str, all_cookies):
     init_user_dirs(user_id)
 
     # select prompt list
-    if user_id in prompt_config and "prompts" in prompt_config[user_id]:
-        prompts = prompt_config[user_id]["prompts"]
+    if user_id in prompt_config and "prompt" in prompt_config[user_id]:
+        prompt = prompt_config[user_id]["prompt"]
     else:
-        prompts = prompt_config["default"]["prompts"]
+        prompt = prompt_config["default"]["prompt"]
 
     # build ALL website tasks
     all_tasks = []
@@ -202,7 +213,7 @@ def scrape_agent_task(stocks: list[str], user_id: str, all_cookies):
                     source,
                     locators,
                     storage_state,
-                    prompts,
+                    prompt,
                 )
             )
 

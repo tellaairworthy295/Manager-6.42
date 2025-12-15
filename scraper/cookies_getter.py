@@ -5,6 +5,7 @@ from loguru import logger
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 from pwright.context_manager import playwright_context
 from pwright.page_factory import new_stealth_page
+from pwright.playwright_manager import PlaywrightManager
 
 class BaseCookies:
     """Lightweight base class that provides:
@@ -59,7 +60,8 @@ class BaseCookies:
                 {"name": "search-to-paipai-guide-date", "value": "1765348801926"},
                 {"name": "version-market-tip", "value": "1"},
                 {"name": "MODE", "value": "undefined"},
-                {"name": "hasShowpaipaiAnswerRangeGuide", "value": "true"}
+                {"name": "hasShowpaipaiAnswerRangeGuide", "value": "true"},
+                {"name": "version-social-sub-tip", "value": "1"}
             ]
             if "localStorage" not in origins[0] or not isinstance(origins[0]["localStorage"], list):
                 origins[0]["localStorage"] = []
@@ -271,7 +273,7 @@ class GeneralCookies(BaseCookies):
                 self.page.wait_for_selector(
                     self.login_dialog_locator,
                     state="hidden",
-                    timeout=60000
+                    timeout=8000
                 )
                 self.logger.info("Login dialog disappeared — login successful.")
             except PlaywrightTimeoutError:
@@ -326,10 +328,13 @@ def update_all_cookies():
                 "locators": locator_cfg.get("locators"),
             }
     
-            with playwright_context(storage_state=None, bypass_ext_path="") as context:
-                page = new_stealth_page(context)
-                scraper = GeneralCookies(auth_entry, page = page, user_id=user_id)
-                scraper.run()
+            try:
+                with playwright_context(storage_state=None, bypass_ext_path="") as context:
+                    page = new_stealth_page(context)
+                    scraper = GeneralCookies(auth_entry, page=page, user_id=user_id)
+                    scraper.run()
+            finally:
+                _close_browser_safely()
 
 
 def update_common_cookies(sources: list = None):
@@ -365,10 +370,13 @@ def update_common_cookies(sources: list = None):
             "locators": locator_cfg.get("locators"),
         }
 
-        with playwright_context(storage_state=None, bypass_ext_path="") as context:
-            page = new_stealth_page(context)
-            scraper = GeneralCookies(auth_entry, page = page, user_id=uid)
-            scraper.run()
+        try:
+            with playwright_context(storage_state=None, bypass_ext_path="") as context:
+                page = new_stealth_page(context)
+                scraper = GeneralCookies(auth_entry, page=page, user_id=uid)
+                scraper.run()
+        finally:
+            _close_browser_safely()
 
 
 def update_agent_cookies(user_credentials: list[dict]):
@@ -399,23 +407,21 @@ def update_agent_cookies(user_credentials: list[dict]):
             "wait_for_dynamical": locator_cfg.get("wait_for_dynamical"),
             "locators": locator_cfg.get("locators"),
         }
-        with playwright_context(storage_state=None, bypass_ext_path="") as context:
-            page = new_stealth_page(context)
-            scraper = GeneralCookies(auth_entry, page = page, user_id=None)
-            ck = scraper.get_ck()
-            cks[source] = ck
+        try:
+            with playwright_context(storage_state=None, bypass_ext_path="") as context:
+                page = new_stealth_page(context)
+                scraper = GeneralCookies(auth_entry, page=page, user_id=None)
+                ck = scraper.get_ck()
+                cks[source] = ck
+        finally:
+            _close_browser_safely()
 
     return cks
 
-    
-if __name__ == "__main__":
-    user_id = "564b3391-510f-4b50-a038-7df413bec15d"
-    # Load cookies.json and find the gangtise entry under this user_id
-    with open("json/cookies.json", "r", encoding="utf-8") as f:
-        cookies_data = json.load(f)
-    auth_list = cookies_data["common"]["authen"]
-    gangtise_entry = next((entry for entry in auth_list if entry["name"] == "gangtise"), None)
-    if gangtise_entry is None:
-        raise RuntimeError("gangtise entry not found for user_id '%s'" % user_id)
-    scraper = GeneralCookies(gangtise_entry, user_id=None)
-    scraper.run()
+
+def _close_browser_safely():
+    """Ensure singleton Playwright browser is closed to avoid leaks."""
+    try:
+        PlaywrightManager.instance().close_browser()
+    except Exception:
+        pass

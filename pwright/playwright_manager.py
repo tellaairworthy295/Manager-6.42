@@ -26,6 +26,11 @@ class PlaywrightManager:
             )
         return self._browser
 
+    def close_browser(self):
+        if self._browser:
+            self._browser.close()
+            self._browser = None
+            
     def shutdown(self):
         if self._browser:
             self._browser.close()

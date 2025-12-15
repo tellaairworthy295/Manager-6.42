@@ -62,7 +62,7 @@ def scrape_news_task(self, query: str, site: str = None, source: str = None):
         content = ""
         # Brief dwell before opening a new article to avoid rapid-fire requests
         time.sleep(random.uniform(2.5, 5.0))
-        for attempt in range(1, 4):
+        for attempt in range(1, 3):
             try:
                 content = scrape_news(url, source)
                 if content:
@@ -71,8 +71,8 @@ def scrape_news_task(self, query: str, site: str = None, source: str = None):
                     break
                 else:
                     # If content is empty, treat like a failure and allow retry
-                    logger.warning(f"Content empty for {url} (attempt {attempt}/3)")
-                    if attempt == 3:
+                    logger.warning(f"Content empty for {url} (attempt {attempt}/2)")
+                    if attempt == 2:
                         failed += 1
                         failed_urls.append(url)
                     else:

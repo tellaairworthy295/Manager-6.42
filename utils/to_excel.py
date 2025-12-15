@@ -346,7 +346,7 @@ def _append_to_excel(rec_texts, excel_path: str):
     df = pd.DataFrame(data, columns=cols)
 
     # Output path for this date
-    save_path = os.path.join(excel_path, f"涨停简图.xlsx")
+    save_path = os.path.join(excel_path, f"ImageToExcel.xlsx")
 
     # Save to Excel
     df.to_excel(save_path, index=False)
@@ -439,19 +439,22 @@ def _process_trendings(date_str: str, summary_text: str, excel_path: str, days: 
 
 def excel_flow(date: str, days: int = 5):
     scraped_dir = "images"
-    img_path = f"{scraped_dir}/涨停简图.png"
+    img_path = f"{scraped_dir}/Image.png"
     if not os.path.isfile(img_path):
         logger.error(f"Image file does not exist: {img_path}")
         return None
-    path = _preprecess_image(img_path)
-    #_draw_boxes(path)
-    rec_texts = ocr_image_safe(path)
-    _normalize_text(rec_texts)
-    _append_to_excel(rec_texts, "excel")
-    for token in rec_texts:
-        if "涨停" in token and "未开板新股" in token:
-            _process_trendings(date, token, "excel/trendings.xlsx", days)
-            break
+    try:
+        path = _preprecess_image(img_path)
+        #_draw_boxes(path)
+        rec_texts = ocr_image_safe(path)
+        _normalize_text(rec_texts)
+        _append_to_excel(rec_texts, "excel")
+        for token in rec_texts:
+            if "涨停" in token and "未开板新股" in token:
+                _process_trendings(date, token, "excel/trendings.xlsx", days)
+                break
+    except Exception as e:
+        logger.error(f"Error while OCR: {e}")
 
 if __name__ == "__main__":
     excel_flow("2025-12-11")
