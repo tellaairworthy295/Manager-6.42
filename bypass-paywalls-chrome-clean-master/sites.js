@@ -58,6 +58,11 @@ var defaultSites = {
     remove_cookies_select_drop: ["blaize_session"],
     block_regex: /\.adweek\.com\/wp-content\/plugins\/adw-zephr\//
   },
+  "Aftenposten.no": {
+    domain: "aftenposten.no",
+    allow_cookies: 1,
+    useragent: "googlebot"
+  },
   "Al-Monitor (fetch from archive.is)": {
     domain: "al-monitor.com",
     allow_cookies: 1,
@@ -240,6 +245,11 @@ var defaultSites = {
     domain: "axios.com",
     allow_cookies: 1
   },
+  "Badische Neueste Nachrichten (fetch from archive.is)": {
+    domain: "bnn.de",
+    allow_cookies: 1,
+    cs_dompurify: 1
+  },
   "Balkan Insight": {
     domain: "balkaninsight.com",
     allow_cookies: 1,
@@ -349,7 +359,7 @@ var defaultSites = {
     domain: "###_usa_bridge_tower",
     group: [],
     allow_cookies: 1,
-    block_regex: "\\.{domain}\\/script\\.js"
+    block_regex: "(\\.{domain}\\/script\\.js|\\.blueconic\\.net\\/)"
   },
   "Brill": {
     domain: "brill.com",
@@ -836,15 +846,15 @@ var defaultSites = {
     allow_cookies: 1,
     block_regex: /(\.elpais\.com\.uy\/user\/authStatus|\.evolok\.net\/|\.cxense\.com\/)/
   },
-  "El Tiempo": {
+  "El Tiempo (CO)": {
     domain: "eltiempo.com",
     allow_cookies: 1,
     block_regex: /\.tinypass\.com\//
   },
-  "El Tribuno": {
+  "El Tribuno (AR)": {
     domain: "eltribuno.com",
     allow_cookies: 1,
-    block_regex: /\.eltribuno\.com\/scripts\/Bellhop\/dist\/bellhop\.min\.js/
+    block_regex: /\.ampproject\.org\/v0\/amp-access-.+\.js/
   },
   "El Universal.com.mx": {
     domain: "eluniversal.com.mx",
@@ -1002,18 +1012,18 @@ var defaultSites = {
     domain: "###_uk_ft_specialist",
     group: [],
     allow_cookies: 1,
-    block_regex: /\.money-media\.com\/pub\/.+\/enroll-.+\.js/,
+    block_regex: /\.ftspecialist-us\.com\/pub\/.+\/enroll-.+\.js/,
     useragent: "googlebot",
     ld_json_next: "div#anonymous-lead-enroll-form|div.article-body>div>p",
     cs_code: [{"cond": "div.article-body", "rm_class": "one-click"}, {"hide_elem": "div[id$='ad-header']"}],
     exception: [{
         domain: "endpoints.news",
         allow_cookies: 1,
-        useragent: "googlebot",
+        useragent: "googlebot"
       }, {
         domain: "financialadvisoriq.com",
         allow_cookies: 1,
-        block_regex: /\.money-media\.com\/pub\/.+\/content-.+\.js/,
+        block_regex: /\.ftspecialist-us\.com\/pub\/.+\/content-.+\.js/,
         ld_json_next: "div#anonymous-lead-enroll-form|div.article-body>div>p",
         cs_code: [{"cond": "div.article-body", "rm_class": "one-click"}, {"hide_elem": "div[id$='ad-header']"}]
       }
@@ -2230,14 +2240,14 @@ var defaultSites = {
     allow_cookies: 1,
     block_regex: /\.piano\.io\//
   },
-  "NOZ/MHN Mediengruppe (fetch from archive.is)": {
+  "NOZ/MHN Mediengruppe": {
     domain: "###_de_noz_mhn",
     group: [
       "noz.de",
       "shz.de"
     ],
     allow_cookies: 1,
-    cs_dompurify: 1
+    useragent: "googlebot"
   },
   "NRC Handelsblad": {
     domain: "nrc.nl",
@@ -2436,7 +2446,8 @@ var defaultSites = {
       "smartcompany.com.au",
       "themandarin.com.au"
     ],
-    remove_cookies_select_drop: ["blaize_session"]
+    remove_cookies_select_drop: ["blaize_session"],
+    cs_dompurify: 1
   },
   "Profil.at": {
     domain: "profil.at",
@@ -2666,6 +2677,11 @@ var defaultSites = {
   "Southern Weekly": {
     domain: "infzm.com",
     allow_cookies: 1
+  },
+  "Spacenews": {
+    domain: "spacenews.com",
+    allow_cookies: 1,
+    block_regex: /\/spacenews\.com\/wp-content\/plugins\/newspack-plugin\/dist\/content-gate-metering\.js/
   },
   "Spektrum.de": {
     domain: "spektrum.de",
@@ -3267,7 +3283,7 @@ var defaultSites = {
     block_regex: "(\\.{domain}\\/(script|.+\\/tncms\\/api\\/access\\..+)\\.js|\\.ampproject\\.org\\/v\\d\\/amp-access-.+\\.js)",
     cs_dompurify: 1
   },
-  "The Wall Street Journal (not pro)": {
+  "The Wall Street Journal": {
     domain: "wsj.com",
     allow_cookies: 1,
     referer_custom: "https://www.drudgereport.com/",
@@ -3562,7 +3578,7 @@ var defaultSites = {
   "Newspack (WordPress plugin)": {
     domain: "###_wp_newspack_gate",
     allow_cookies: 1,
-    block_regex_general: /\/wp-content\/plugins\/newspack-plugin\/dist\/memberships-gate-metering\.js/
+    block_regex_general: /\/wp-content\/plugins\/newspack-plugin\/dist\/.+-gate-metering\.js/
   },
   "Omeda Olytics": {
     domain: "omeda.com",
@@ -3740,7 +3756,8 @@ var fr_monde_diplo_nofix_domains = ['editionarabediplo.com', 'eldiplo.org', 'lem
 var it_gedi_nofix_domains = ['gelocal.it', 'limesonline.com'];
 var it_gruppo_nem_nofix_domains = ['corrierealpi.it', 'ilnordest.it', 'ilpiccolo.it', 'mattinopadova.it', 'messaggeroveneto.it', 'nuovavenezia.it', 'tribunatreviso.it'];
 var mx_grupo_reforma_nofix_domains = ['elnorte.com', 'mural.com.mx', 'reforma.com'];
+var pt_medialivre_nofix_domains = ['cmjornal.pt', 'jornaldenegocios.pt', 'record.pt'];
 var se_bonnier_group_nofix_domains = ['di.se', 'expressen.se'];
 var uk_ft_group_nofix_domains = ['ftchinese.com', 'ftchineselive.com', 'sustainableviews.com', 'thebanker.com'];
 var usa_allcity_network_nofix_domains = ['allchgo.com', 'alldlls.com', 'allphly.com', 'gophnx.com', 'thednvr.com'];
-var nofix_sites = ['11freunde.de', '24.hu', '444.hu', 'abplive.com', 'aerzteblatt.de', 'africa-confidential.com', 'aftenposten.no', 'aftonbladet.se', 'agefi.fr', 'allgaeuer-zeitung.de', 'altroconsumo.it', 'americanscientist.org', 'arkansasonline.com', 'arretsurimages.net', 'asahi.com', 'asiatimes.com', 'augsburger-allgemeine.de', 'autocarpro.in', 'aviationweek.com', 'badische-zeitung.de', 'bisnis.com', 'bloomberglaw.com', 'bloombergtax.com', 'bmj.com', 'bnef.com', 'bnn.de', 'borsen.dk', 'breakingviews.com', 'breitbart.com', 'bunshun.jp', 'businessinsider.de', 'businesslive.co.za', 'caixin.com', 'caixinglobal.com', 'cambiocolombia.com', 'capital.de', 'caravanmagazine.in', 'catalyst-journal.com', 'cfnews.net', 'chegg.com', 'cieletespace.fr', 'cmjornal.pt', 'consumerreports.org', 'cookpolitical.com', 'costar.com', 'coursehero.com', 'crunchbase.com', 'dealstreetasia.com', 'defence24.pl', 'delfi.ee', 'denikn.cz', 'deraktionaer.de', 'deutsche-wirtschafts-nachrichten.de', 'die-glocke.de', 'diepresse.com', 'digitimes.com.tw', 'donaukurier.de', 'dorzeczy.pl', 'e24.no', 'echo24.cz', 'elnuevodia.com', 'elordenmundial.com', 'epochtimes.se', 'epw.in', 'euractiv.com', 'ewmagazine.nl', 'falter.at', 'fd.nl', 'finance.si', 'finanz-szene.de', 'franc-tireur.fr', 'freiepresse.de', 'gamestar.de', 'gazetaprawna.pl', 'gazeteoksijen.com', 'geo.de', 'golem.de', 'gp.se', 'haufe.de', 'hbr-caijing.com', 'hbrarabic.com', 'hbrfrance.fr', 'hedgehogreview.com', 'heraldo.es', 'hindutamil.in', 'history.org.uk', 'hn.cz', 'hsj.co.uk', 'hvg.hu', 'idnes.cz', 'iex.nl', 'ifre.com', 'ilsecoloxix.it', 'iltalehti.fi', 'indiasworld.in', 'indiatimes.com', 'information.dk', 'intelligentinvestor.com.au', 'investing.com', 'investors.com', 'jacobin.com', 'janes.com', 'jazziz.com', 'jn.pt', 'jota.info', 'jungefreiheit.de', 'jyllands-posten.dk', 'kicker.de', 'kleinezeitung.at', 'kommunen.dk', 'krone.at', 'lanouvellerepublique.fr', 'laprovence.com', 'latribune.fr', 'laverita.info', 'lavie.fr', 'lavozdegalicia.es', 'law360.ca', 'law360.co.uk', 'law360.com', 'leconomiste.com', 'ledesk.ma', 'lefilmfrancais.com', 'lesjours.fr', 'lexisnexis.co.uk', 'libertiesjournal.com', 'liga.net', 'lindipendente.online', 'lorientlejour.com', 'lr-online.de', 'lz.de', 'mailplus.co.uk', 'main-echo.de', 'mainpost.de', 'malaysiakini.com', 'maville.com', 'mediapart.fr', 'mlex.com', 'money.it', 'moneycontrol.com', 'moodys.com', 'mopo.de', 'morningstar.com', 'motorsport.com', 'moz.de', 'mt.de', 'mz.de', 'nachrichten.at', 'naiz.eus', 'nationaljournal.com', 'nbr.co.nz', 'nejm.org', 'newleftreview.org', 'news24.com', 'newsmax.comac', 'newspapers.com', 'newsroom.co.nz', 'nexojornal.com.br', 'nexos.com.mx', 'next.ink', 'nikkansports.com', 'nikkei.com', 'nn.de', 'noen.at', 'note.com', 'nouvelobs.com', 'ntnews.com.au', 'oantagonista.com.br', 'ojogo.pt', 'on3.com', 'onetz.de', 'oup.com', 'pagina12.com.ar', 'penews.com', 'pff.com', 'politicopro.com', 'politiken.dk', 'postimees.ee', 'pressreader.com', 'publico.pt', 'quechoisir.org', 'racingpost.com', 'rbc.ru', 'reason.com', 'record.pt', 'republic.ru', 'rhein-zeitung.de', 'rivals.com', 'rnz.de', 'rtings.com', 'ruhrnachrichten.de', 'sciencedirect.com', 'scienceshumaines.com', 'seekingalpha.com', 'sn.at', 'springer.com', 'statista.com', 'stimme.de', 'storm.mg', 'streetinsider.com', 'studocu.com', 'substack.com', 'suedostschweiz.ch', 'svd.se', 'swp.de', 'table.media', 'tabletmag.com', 'taxation.co.uk', 'taxjournal.com', 'telquel.ma', 'tempo.co', 'test.de', 'the-ken.com', 'theinformation.com', 'theinitium.com', 'thejakartapost.com', 'thelancet.com', 'themorningcontext.com', 'theparisreview.org', 'thestar.com.my', 'timeslive.co.za', 'tipranks.com', 'tradingview.com', 'tt.com', 'udn.com', 'van-magazin.de', 'van-magazine.com', 'vedomosti.ru', 'vi.nl', 'volksstimme.de', 'voguescandinavia.com', 'weltwoche.ch', 'weltwoche.de', 'which.co.uk', 'wissenschaft.de', 'worldpoliticsreview.com', 'woz.ch', 'wpolityce.pl', 'wz.de', 'xakep.ru', 'zaobao.com.sg', 'zerohedge.com', 'zive.cz'].concat(custom_flex_nofix_domains, ch_media_nofix_domains, de_westfalen_medien_nofix_domains, fi_sanoma_nofix_domains, fr_groupe_infopro_nofix_domains, fr_indigo_nofix_domains, fr_jamg_nofix_domains, fr_monde_diplo_nofix_domains, it_gedi_nofix_domains, it_gruppo_nem_nofix_domains, mx_grupo_reforma_nofix_domains, se_bonnier_group_nofix_domains, uk_ft_group_nofix_domains, usa_allcity_network_nofix_domains);
+var nofix_sites = ['11freunde.de', '24.hu', '444.hu', 'abplive.com', 'aerzteblatt.de', 'africa-confidential.com', 'aftonbladet.se', 'agefi.fr', 'allgaeuer-zeitung.de', 'altroconsumo.it', 'americanscientist.org', 'arkansasonline.com', 'arretsurimages.net', 'asahi.com', 'asiatimes.com', 'augsburger-allgemeine.de', 'autocarpro.in', 'aviationweek.com', 'badische-zeitung.de', 'bisnis.com', 'bloomberglaw.com', 'bloombergtax.com', 'bmj.com', 'bnef.com', 'borsen.dk', 'breakingviews.com', 'breitbart.com', 'bunshun.jp', 'businessinsider.de', 'businesslive.co.za', 'caixin.com', 'caixinglobal.com', 'cambiocolombia.com', 'capital.de', 'caravanmagazine.in', 'catalyst-journal.com', 'cfnews.net', 'chegg.com', 'cieletespace.fr', 'consumerreports.org', 'cookpolitical.com', 'costar.com', 'coursehero.com', 'crunchbase.com', 'dealstreetasia.com', 'defence24.pl', 'delfi.ee', 'denikn.cz', 'deraktionaer.de', 'deutsche-wirtschafts-nachrichten.de', 'die-glocke.de', 'diepresse.com', 'digitimes.com.tw', 'donaukurier.de', 'dorzeczy.pl', 'e24.no', 'echo24.cz', 'elnuevodia.com', 'elordenmundial.com', 'epochtimes.se', 'epw.in', 'euractiv.com', 'ewmagazine.nl', 'falter.at', 'fd.nl', 'finance.si', 'finanz-szene.de', 'franc-tireur.fr', 'freiepresse.de', 'gamestar.de', 'gazetaprawna.pl', 'gazeteoksijen.com', 'geo.de', 'golem.de', 'gp.se', 'haufe.de', 'hbr-caijing.com', 'hbrarabic.com', 'hbrfrance.fr', 'hedgehogreview.com', 'heraldo.es', 'hindutamil.in', 'history.org.uk', 'hn.cz', 'hsj.co.uk', 'hvg.hu', 'idnes.cz', 'iex.nl', 'ifre.com', 'ilsecoloxix.it', 'iltalehti.fi', 'indiasworld.in', 'indiatimes.com', 'information.dk', 'intelligentinvestor.com.au', 'investing.com', 'investors.com', 'jacobin.com', 'janes.com', 'jazziz.com', 'jn.pt', 'jota.info', 'jungefreiheit.de', 'jyllands-posten.dk', 'kicker.de', 'kleinezeitung.at', 'kommunen.dk', 'krone.at', 'lanouvellerepublique.fr', 'laprovence.com', 'latribune.fr', 'laverita.info', 'lavie.fr', 'lavozdegalicia.es', 'law360.ca', 'law360.co.uk', 'law360.com', 'leconomiste.com', 'ledesk.ma', 'lefilmfrancais.com', 'lesjours.fr', 'lexisnexis.co.uk', 'libertiesjournal.com', 'liga.net', 'lindipendente.online', 'lorientlejour.com', 'lr-online.de', 'lz.de', 'mailplus.co.uk', 'main-echo.de', 'mainpost.de', 'malaysiakini.com', 'maville.com', 'mediapart.fr', 'mlex.com', 'money.it', 'moneycontrol.com', 'moodys.com', 'mopo.de', 'morningstar.com', 'motorsport.com', 'moz.de', 'mt.de', 'mz.de', 'nachrichten.at', 'naiz.eus', 'nationaljournal.com', 'nbr.co.nz', 'nejm.org', 'newleftreview.org', 'news24.com', 'newsmax.comac', 'newspapers.com', 'newsroom.co.nz', 'nexojornal.com.br', 'nexos.com.mx', 'next.ink', 'nikkansports.com', 'nikkei.com', 'nn.de', 'noen.at', 'note.com', 'nouvelobs.com', 'ntnews.com.au', 'oantagonista.com.br', 'ojogo.pt', 'on3.com', 'onetz.de', 'oup.com', 'pagina12.com.ar', 'penews.com', 'pff.com', 'politicopro.com', 'politiken.dk', 'postimees.ee', 'pressreader.com', 'publico.pt', 'quechoisir.org', 'racingpost.com', 'rbc.ru', 'reason.com', 'republic.ru', 'rhein-zeitung.de', 'rivals.com', 'rnz.de', 'rtings.com', 'ruhrnachrichten.de', 'sciencedirect.com', 'scienceshumaines.com', 'seekingalpha.com', 'sn.at', 'springer.com', 'statista.com', 'stimme.de', 'storm.mg', 'streetinsider.com', 'studocu.com', 'substack.com', 'suedostschweiz.ch', 'svd.se', 'swp.de', 'table.media', 'tabletmag.com', 'taxation.co.uk', 'taxjournal.com', 'telquel.ma', 'tempo.co', 'test.de', 'the-ken.com', 'theinformation.com', 'theinitium.com', 'thejakartapost.com', 'thelancet.com', 'themorningcontext.com', 'theparisreview.org', 'thestar.com.my', 'timeslive.co.za', 'tipranks.com', 'tradingview.com', 'tt.com', 'udn.com', 'van-magazin.de', 'van-magazine.com', 'vedomosti.ru', 'vi.nl', 'volksstimme.de', 'voguescandinavia.com', 'weltwoche.ch', 'weltwoche.de', 'which.co.uk', 'wissenschaft.de', 'worldpoliticsreview.com', 'woz.ch', 'wpolityce.pl', 'wz.de', 'xakep.ru', 'zaobao.com.sg', 'zerohedge.com', 'zive.cz'].concat(custom_flex_nofix_domains, ch_media_nofix_domains, de_westfalen_medien_nofix_domains, fi_sanoma_nofix_domains, fr_groupe_infopro_nofix_domains, fr_indigo_nofix_domains, fr_jamg_nofix_domains, fr_monde_diplo_nofix_domains, it_gedi_nofix_domains, it_gruppo_nem_nofix_domains, mx_grupo_reforma_nofix_domains, pt_medialivre_nofix_domains, se_bonnier_group_nofix_domains, uk_ft_group_nofix_domains, usa_allcity_network_nofix_domains);

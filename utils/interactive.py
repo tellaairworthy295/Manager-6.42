@@ -1,178 +1,101 @@
 
-import json
+
 import os
 import shutil
 import time
-from typing import Tuple
-import zipfile
-from click import ClickException
-from selenium.webdriver.common.by import By
-from selenium.webdriver import ActionChains
-from selenium.webdriver.remote.webdriver import WebDriver
-from selenium.common.exceptions import (
-    TimeoutException,
-    StaleElementReferenceException,
-    InvalidSelectorException,
-)
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from config import setup_logging
-logger = setup_logging("logs/cookies", "cookies")
-DEFAULT_TIMEOUT = 10
+from playwright.sync_api import Page
+import time
+from playwright.sync_api import Page
 
-def find_fresh(driver: WebDriver, locator: Tuple[By, str], timeout: int = DEFAULT_TIMEOUT):
-    """Return a fresh element reference using explicit wait (presence)."""
-    wait = WebDriverWait(driver, timeout)
-    return wait.until(EC.presence_of_element_located(locator))
-
-# -----------------------
-# Robust send keys
-# -----------------------
-def safe_send_keys(driver: WebDriver, locator: Tuple[By, str], text: str, max_attempts: int = 5, clear_first: bool = True):
+def safe_click(page: Page, locator: str, max_attempts: int = 3, timeout: int = 10_000):
     last_err = None
     for attempt in range(1, max_attempts + 1):
         try:
-            elem = find_fresh(driver, locator)
-            if clear_first:
-                try:
-                    elem.clear()
-                except Exception:
-                    # some inputs don't support clear; ignore
-                    pass
-            elem.send_keys(text)
-            return
-        except (StaleElementReferenceException, TimeoutException, InvalidSelectorException, Exception) as e:
-            last_err = e
-            logger.warning(f"safe_send_keys attempt {attempt}/{max_attempts} failed for {locator}: {e}")
-            time.sleep(1)
-    raise RuntimeError(f"Failed to send keys to {locator}: {last_err}")
-
-    
-def safe_click(driver: WebDriver, locator: Tuple[By, str], max_attempts: int = 5, wait_time: int = DEFAULT_TIMEOUT):
-    """
-    Robust click:
-      - re-finds element each attempt (avoids stale)
-      - scrolls into view
-      - tries JS click -> ActionChains -> element.click()
-      - raises ClickException on repeated failure
-    locator: tuple like (By.CSS_SELECTOR, "div.foo")
-    """
-    last_err = None
-    for attempt in range(1, max_attempts + 1):
-        try:
-            elem = find_fresh(driver, locator, timeout=wait_time)
-            # scroll center
-            try:
-                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", elem)
-            except Exception:
-                pass
-            time.sleep(0.15)
-
-            # Strategy 1: JS click
-            try:
-                driver.execute_script("arguments[0].click();", elem)
-                logger.debug(f"safe_click: JS click succeeded on {locator}")
-                return
-            except Exception as e_js:
-                last_err = e_js
-
-            # Strategy 2: ActionChains
-            try:
-                ActionChains(driver).move_to_element(elem).pause(0.05).click().perform()
-                logger.debug(f"safe_click: ActionChains click succeeded on {locator}")
-                return
-            except Exception as e_ac:
-                last_err = e_ac
-
-            # Strategy 3: direct click()
-            try:
-                elem.click()
-                logger.debug(f"safe_click: direct click succeeded on {locator}")
-                return
-            except Exception as e_click:
-                last_err = e_click
-
-        except (StaleElementReferenceException, TimeoutException, InvalidSelectorException) as e:
-            last_err = e
-
-        logger.warning(f"safe_click failed (attempt {attempt}/{max_attempts}) for {locator}: {last_err}")
-        time.sleep(1 * attempt)
-
-    raise ClickException(f"All click attempts failed for {locator}: {last_err}")
-
-# -----------------------
-# Popup closing helper
-# -----------------------
-def close_popup(driver: WebDriver, css_selector: str, max_attempts: int = 5):
-    locator = (By.CSS_SELECTOR, css_selector)
-    for attempt in range(1, max_attempts + 1):
-        try:
-            # short wait for clickable
-            btn = WebDriverWait(driver, 3).until(EC.element_to_be_clickable(locator))
-            safe_click(driver, locator)
-            time.sleep(0.25)
-            logger.info(f"Closed popup {css_selector}")
-            return
-        except TimeoutException:
-            logger.info(f"No popup {css_selector} found (attempt {attempt}).")
-            return
-        except InvalidSelectorException:
-            logger.warning(f"Invalid selector for popup: {css_selector}")
+            loc = page.locator(locator).first
+            loc.scroll_into_view_if_needed()
+            loc.click(timeout=timeout)  # normal click
             return
         except Exception as e:
-            logger.warning(f"close_popup attempt {attempt} failed for {css_selector}: {e}")
-            time.sleep(0.5)
-    logger.warning(f"Failed to close popup {css_selector} after {max_attempts} attempts")
+            last_err = e
+            if attempt == max_attempts:
+                try:
+                    loc = page.locator(locator).first
+                    # Try force click first
+                    try:
+                        loc.click(timeout=timeout, force=True)
+                        return
+                    except Exception:
+                        # JS fallback: dispatch full MouseEvent
+                        page.evaluate(
+                            """(el) => {
+                                const evt = new MouseEvent('click', {
+                                    bubbles: true,
+                                    cancelable: true,
+                                    view: window
+                                });
+                                el.dispatchEvent(evt);
+                            }""",
+                            loc
+                        )
+                        return
+                except Exception as js_e:
+                    last_err = f"{last_err}; JS click: {js_e}"
+            time.sleep(attempt)
+    raise RuntimeError(f"Failed to click {locator}: {last_err}")
+
+def safe_fill(page: Page, locator: str, text: str, max_attempts: int = 3,
+              timeout: int = 10_000, clear_first: bool = True):
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            loc = page.locator(locator).first
+            loc.scroll_into_view_if_needed()
+            if clear_first:
+                loc.fill("", timeout=timeout)  # replace
+                loc.fill(text, timeout=timeout)
+            else:
+                loc.type(text, timeout=timeout)  # append
+            return
+        except Exception as e:
+            last_err = e
+            if attempt == max_attempts:
+                try:
+                    handle = page.locator(locator).first
+                    if clear_first:
+                        page.evaluate(
+                            """(el, value) => {
+                                if ('value' in el) {
+                                    el.value = value;
+                                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                                } else {
+                                    el.textContent = value;
+                                }
+                            }""",
+                            handle, text
+                        )
+                    else:
+                        page.evaluate(
+                            """(el, value) => {
+                                if ('value' in el) {
+                                    el.value += value;
+                                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                                } else {
+                                    el.textContent += value;
+                                }
+                            }""",
+                            handle, text
+                        )
+                    return
+                except Exception as js_e:
+                    last_err = f"{last_err}; JS fill: {js_e}"
+            time.sleep(attempt)
+    raise RuntimeError(f"Failed to fill {locator}: {last_err}")
 
 
-# -----------------------
-# Navigation / login helper
-# -----------------------
-def generate_localstorage_js(_dict):
-    def js_str(s):
-        # Escape string as JavaScript string literal
-        return json.dumps(s, ensure_ascii=False)
-
-    js_lines = []
-    for key, value in _dict.items():
-        js_key = js_str(key)
-        if isinstance(value, bool):
-            js_value = "true" if value else "false"
-            js_lines.append(f"window.localStorage.setItem({js_key}, {js_value});")
-        elif isinstance(value, (int, float)):
-            js_lines.append(f"window.localStorage.setItem({js_key}, {value});")
-        elif isinstance(value, dict):
-            json_str = json.dumps(value, ensure_ascii=False)
-            # Use js_str to ensure correct escaping of quotes
-            js_lines.append(
-                f"window.localStorage.setItem({js_key}, JSON.stringify({json_str}));"
-            )
-        else:  # string or token
-            js_value = js_str(value)
-            js_lines.append(
-                f"window.localStorage.setItem({js_key}, {js_value});"
-            )
-    return "\n".join(js_lines)
-
-# -----------------------
-# Zip and cleanup
-# -----------------------
-def zip_files(d_files: list[str], out_file: str):
-    if not d_files:
-        logger.warning("zip_files called with empty list")
-        return None
-    docx_files = [f for f in d_files if os.path.exists(f) and (f.lower().endswith('.docx') or f.lower().endswith('.doc'))]
-    if not docx_files:
-        logger.warning("No doc/docx files found to zip")
-        return None
-    with zipfile.ZipFile(out_file, "w") as zf:
-        for f in docx_files:
-            zf.write(f, arcname=os.path.basename(f))
-    logger.info(f"Created zip: {out_file}")
-
-
-def safe_delete(path, retries=3):
-    for i in range(retries):
+def safe_delete(path, retries=2):
+    for _ in range(retries):
         try:
             shutil.rmtree(path)
             return
@@ -191,12 +114,13 @@ def safe_delete(path, retries=3):
     # Convert locators from JSON into (By.X, value)
     # -----------------------------
 def parse_locators(loc):
+    """Convert JSON locator to Playwright locator string."""
     if not loc:
         return None
     by = loc["by"].lower()
     value = loc["value"]
     if by == "css":
-        return (By.CSS_SELECTOR, value)
+        return value  # Playwright accepts CSS selectors directly
     if by == "xpath":
-        return (By.XPATH, value)
+        return f"xpath={value}"  # Playwright XPath format
     raise ValueError(f"Unknown locator type: {by}")

@@ -2,12 +2,11 @@ import re
 import time
 import random
 import json
-import os
 from typing import List, Optional
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from config import setup_logging
+from loguru import logger
 
 # Load translation config from config.json
 def _load_translation_config():
@@ -25,13 +24,7 @@ def _load_translation_config():
 
 _translation_config = _load_translation_config()
 
-# Optional: try deep-translator, fallback gracefully
-try:
-    from deep_translator import LingueeTranslator
-    HAS_DEEP_TRANSLATOR = True
-except ImportError:
-    HAS_DEEP_TRANSLATOR = False
-
+# Remove deep-translator entirely!
 # Fallback: googletrans
 try:
     from googletrans import Translator
@@ -39,7 +32,8 @@ try:
 except ImportError:
     HAS_GOOGLETRANS = False
 
-logger = setup_logging("logs/translation", "translation")
+# Configure loguru for translation service module
+logger.add("logs/translation/translation_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
 
 # Simple in-memory cache
 _translation_cache = {}
@@ -49,10 +43,9 @@ class TranslationService:
     """
     Translation service with chunking, retries, and multiple fallback translators.
     Priority:
-        1️⃣ Deep Translator
-        2️⃣ Google Web API (scraping)
-        3️⃣ googletrans
-        4️⃣ Original text (last resort)
+        1️⃣ Google Web API (scraping)
+        2️⃣ googletrans
+        3️⃣ Original text (last resort)
     """
 
     def __init__(
@@ -123,15 +116,6 @@ class TranslationService:
     # ------------------------
     # Translation methods
     # ------------------------
-    def _translate_with_deep_translator(self, text: str) -> Optional[str]:
-        if not HAS_DEEP_TRANSLATOR:
-            return None
-        try:
-            return LingueeTranslator(source='auto', target='chinese').translate(text)
-        except Exception as e:
-            logger.warning(f"deep-translator error: {e}")
-            return None
-
     def _translate_with_googletrans(self, text: str) -> Optional[str]:
         if not HAS_GOOGLETRANS or not self.translator:
             return None
@@ -208,11 +192,6 @@ class TranslationService:
         """Try translators in priority order with retries."""
         for attempt in range(3):
             try:
-                if HAS_DEEP_TRANSLATOR:
-                    result = self._translate_with_deep_translator(text)
-                    if result and self._is_valid_translation(text, result):
-                        return result
-
                 if self.use_web_scraping:
                     result = self._translate_with_web_scraping(text)
                     if result and self._is_valid_translation(text, result):

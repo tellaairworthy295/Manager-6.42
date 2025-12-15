@@ -180,6 +180,7 @@ Global Polymer Group:
 [Science](https://www.science.org)* -
 [ScienceNews.org](https://www.sciencenews.org) -
 [Scientific American](https://www.scientificamerican.com) -
+[Spacenews](https://spacenews.com) -
 [StatNews](https://www.statnews.com) -
 [The Scientist](https://www.the-scientist.com) -
 [Times Higher Education](https://www.timeshighereducation.com)
@@ -716,6 +717,7 @@ Grouped in options:\
 [Aachener Zeitung](https://www.aachener-zeitung.de) -
 [Ärzte Zeitung](https://www.aerztezeitung.de) -
 [Automobilwoche](https://www.automobilwoche.de) -
+[Badische Neueste Nachrichten](https://www.bnn.de) -
 [Bild](https://www.bild.de) -
 [Berliner Zeitung](https://www.berliner-zeitung.de) -
 [Börsen-Zeitung](https://www.boersen-zeitung.de) -
@@ -912,6 +914,7 @@ Grouped in options:\
 *[VmnMedia Group](https://vmnmedia.nl)* sites (opt-in to custom sites)
 
 ##### Norway
+[Aftenposten](https://www.aftenposten.no) -
 [Bergens Tidende](https://www.bt.no) -
 [Dagsavisen](https://www.dagsavisen.no)\
 Grouped in options:\

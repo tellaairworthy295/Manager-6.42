@@ -1,18 +1,19 @@
 
-
 import json
 import re
 import requests
 from bs4 import BeautifulSoup
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from urllib.parse import urljoin
 import os
-from config import setup_logging, get_chrome_driver
-from utils.interactive import safe_click
+from loguru import logger
+from pwright.context_manager import playwright_context
+from pwright.page_factory import new_stealth_page
 from utils.database import get_db_manager, StockRepository
-logger = setup_logging("logs/stocks", "stocks_scraper")
+from utils.interactive import safe_click
+
+# Configure loguru for stocks scraper module
+logger.add("logs/stocks/stocks_scraper_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
 
 def main_scraper(date):
     # Load selectors and cookies once
@@ -25,63 +26,63 @@ def main_scraper(date):
 
     # Iterate all URLs in the stocks field of selectors.json
     for url, selectors in selectors_map.items():
-        driver = get_chrome_driver(base_bypass_ext_path="")
-        logger.info(f"Driver launched for {url}")
-        try:
-            driver.get(url)
-            logger.info("Page loaded.")
-
-            # Handle cookies if needed
-            if selectors.get("cookies"):
-                cookies = cookies_map.get(selectors["name"], [])
-                for cookie in cookies["cookies"]:
-                    driver.add_cookie(cookie)
-                driver.refresh()
-                logger.info("Cookies added and page refreshed.")
-
-            # Scrape records
-            records = _scrape_stocks(
-                driver,
-                date,
-                click_selector=selectors["click_selector"],
-                row_selector=selectors["row_selector"],
-                name_selector=selectors["name_selector"],
-                code_selector=selectors["code_selector"],
-                analysis_selector=selectors["analysis_selector"]
-            )
-
-            if records:
-                all_records.extend(records)
-                logger.info(f"Scraped {len(records)} records from {url}")
-            else:
-                logger.warning(f"No records scraped from {url}")
-            
-            # Scrape images if configured
-            if selectors.get("image"):
-                _scrape_images(driver, url, date)
-
-        except Exception as e:
-            logger.error(f"Error scraping {url}: {e}")
-        finally:
+        storage_state = cookies_map.get(selectors["name"]) if selectors.get("cookies") else None
+        with playwright_context(storage_state=storage_state, bypass_ext_path="") as context:
+            page = new_stealth_page(context)
             try:
-                driver.quit()
-            except:
-                pass
+                page.goto(url, wait_until="domcontentloaded", timeout=100_000)
+                logger.info("Page loaded.")
+                
+                # Scrape records
+                records = _scrape_stocks(
+                    page,
+                    date,
+                    click_selector=selectors["click_selector"],
+                    row_selector=selectors["row_selector"],
+                    name_selector=selectors["name_selector"],
+                    code_selector=selectors["code_selector"],
+                    analysis_selector=selectors["analysis_selector"]
+                )
+
+                if records:
+                    all_records.extend(records)
+                    logger.info(f"Scraped {len(records)} records from {url}")
+                else:
+                    logger.warning(f"No records scraped from {url}")
+                
+                # Scrape images if configured
+                if selectors.get("image"):
+                    scraped_dir = "images"
+                    if not os.path.isdir(scraped_dir):
+                        os.makedirs(scraped_dir, exist_ok=True)
+                    else:
+                        for fname in os.listdir(scraped_dir):
+                            file_path = os.path.join(scraped_dir, fname)
+                            try:
+                                if os.path.isfile(file_path):
+                                    os.remove(file_path)
+                            except Exception as e:
+                                logger.warning(f"Could not delete {file_path}: {e}")
+                    _scrape_images(page, url)
+
+            except Exception as e:
+                logger.error(f"Error scraping {url}: {e}")
 
     # Save all records at once
     if all_records:
         db_manager = get_db_manager()
         repo = StockRepository(db_manager)
         count = repo.insert_or_update_stocks(all_records)
-        logger.info(f"Data saved to database for {date}, total {count} records")
+        logger.info(f"Saved {count} stock records to database (inserted or analysis-merged) for {date}")
         result = repo.get_today_stocks()
-        with open(f"stocks_{date}.txt", "w", encoding="utf-8") as f:
+        logger.info(f"Fetched {len(result)} stocks for today ({date}) from database")
+        with open(f"stocks_analysis.txt", "w", encoding="utf-8") as f:
             for item in result:
                 line = f"{item['stock']}\t{item['code']}\n{item['analysis']}\n\n"
                 f.write(line)
         
 
-def _scrape_stocks(driver, date, click_selector, row_selector, name_selector, code_selector, analysis_selector) -> list[dict] | None:
+def _scrape_stocks(page, date, click_selector, row_selector, name_selector, code_selector, analysis_selector) -> list[dict] | None:
     """
     Generic scraper for stock tables.
     Parameters:
@@ -96,22 +97,13 @@ def _scrape_stocks(driver, date, click_selector, row_selector, name_selector, co
     """
     try:
         if click_selector:
-            safe_click(driver, (By.XPATH, click_selector))
+            safe_click(page, f"xpath={click_selector}")
 
         # Wait until at least one row is present
-        for _ in range(3):
-            try:
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, row_selector))
-                )
-                # Now get the updated DOM
-                html = driver.page_source
-                soup = BeautifulSoup(html, "html.parser")
-                rows = soup.select(row_selector)
-                break
-            except:
-                pass
-
+        page.wait_for_selector(row_selector, state="attached", timeout=15_000)
+        html = page.content()
+        soup = BeautifulSoup(html, "html.parser")
+        rows = soup.select(row_selector)
         records = []
         for row in rows:
             name_tag = row.select_one(name_selector)
@@ -138,24 +130,21 @@ def _scrape_stocks(driver, date, click_selector, row_selector, name_selector, co
         return records if records else None
 
     except Exception as e:
-        print(f"Error scraping stocks: {e}")
+        logger.error(f"Error scraping stocks: {e}")
         return None
 
     
-def _scrape_images(driver, url, date) -> str | None:
+def _scrape_images(page, url) -> str | None:
     logger.info(f"Scraping 涨停简图 from: {url}")
-    button_locator = (
-        By.XPATH,
-        "//div[contains(@class,'yd-tabs_item')]/div[text()='涨停简图']"
-    )
-    safe_click(driver, button_locator)
+    button_locator = "xpath=//div[contains(@class,'yd-tabs_item')]/div[text()='涨停简图']"
+    safe_click(page, button_locator)
     try:
-        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div#QR-code img")))
+        page.wait_for_selector("div#QR-code img", timeout=20_000)
         logger.info("Image area loaded.")
-    except:
+    except PlaywrightTimeoutError:
         return None
        
-    soup = BeautifulSoup(driver.page_source, "html.parser")
+    soup = BeautifulSoup(page.content(), "html.parser")
 
     # Find the specific image element
     target_img_tag = soup.select_one("div#QR-code img")
@@ -168,10 +157,8 @@ def _scrape_images(driver, url, date) -> str | None:
                 img_url = urljoin(url, img_url)
             try:
                 img_data = requests.get(img_url).content
-                # Ensure the scraped_images directory exists
-                os.makedirs("scraped_images", exist_ok=True)
                 # Use a more descriptive name for the single image
-                img_name = os.path.join("scraped_images", f"{date}.png") 
+                img_name = os.path.join("images", f"涨停简图.png") 
                 with open(img_name, "wb") as handler:
                     handler.write(img_data)
                 logger.info(f"Downloaded target image: {img_url}")
@@ -185,9 +172,3 @@ def _scrape_images(driver, url, date) -> str | None:
     else:
         logger.info("Target image ('涨停简图') not found after clicking the button.")
         return None
-
-
-if __name__ == "__main__":
-    TARGET_URL = ["https://xuangutong.com.cn/dingpan"]
-    main_scraper(TARGET_URL, "2025-12-02")
-    #print(result)

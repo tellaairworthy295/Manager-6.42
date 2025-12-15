@@ -3,7 +3,6 @@ Database module with SQLAlchemy models and connection pooling for MySQL.
 Provides modular, extensible, and maintainable database operations.
 """
 import json
-import os
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, UniqueConstraint
@@ -15,9 +14,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, case
 
 from contextlib import contextmanager
-from config import setup_logging
-
-logger = setup_logging("logs/database", "database")
 
 from sqlalchemy.orm import declarative_base
 Base = declarative_base()
@@ -96,6 +92,29 @@ class NewsAnalysis(Base):
             "analysis": self.analysis,
         }
 
+class User(Base):
+    """Model for users table."""
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(64), nullable=False)
+    email = Column(String(254))
+    source = Column(String(100), nullable=False)
+    phone = Column(String(40))
+    password = Column(String(128))
+    
+    __table_args__ = (
+        UniqueConstraint('user_id', 'source', name='uq_userid_source'),
+    )
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "user_id": self.user_id,
+            "email": self.email,
+            "source": self.source,
+            "phone": self.phone,
+            "password": self.password,
+        }
 
 # ==================== Database Connection Setup ====================
 
@@ -153,8 +172,6 @@ class DatabaseManager:
                 autoflush=False,
             )
         )
-        
-        logger.info(f"Database connection initialized: {db_host}:{db_port}/{db_name}")
     
     @contextmanager
     def get_session(self) -> Session:
@@ -165,7 +182,6 @@ class DatabaseManager:
             session.commit()
         except Exception as e:
             session.rollback()
-            logger.error(f"Database session error: {e}")
             raise
         finally:
             session.close()
@@ -173,13 +189,11 @@ class DatabaseManager:
     def create_tables(self):
         """Create all tables if they don't exist."""
         Base.metadata.create_all(self.engine)
-        logger.info("Database tables created/verified")
     
     def close(self):
         """Close all database connections."""
         self.session_factory.remove()
         self.engine.dispose()
-        logger.info("Database connections closed")
 
 
 # Global database manager instance
@@ -249,10 +263,8 @@ class NewsArticleRepository:
             try:
                 result = session.execute(stmt)
                 session.commit()
-                logger.info(f"Saved article to database: {url}")
             except IntegrityError as e:
                 session.rollback()
-                logger.warning(f"Upsert failed for article {url}: {e}")
                 raise
             
             return result
@@ -275,7 +287,6 @@ class NewsArticleRepository:
                 {"url": a.url, "title": a.title, "content": a.content}
                 for a in articles
             ]
-            logger.info(f"Fetched {len(result)} articles from database")
             return result
     
     def get_recent_urls(self, hours: int = 1) -> List[str]:
@@ -292,26 +303,6 @@ class NewsArticleRepository:
                 .all()
             )
             return [url[0] for url in urls]
-    
-    def fetch_articles_for_export(self, hours: int = 12) -> List[Dict[str, Any]]:
-        """Fetch articles for export (scraped within last N hours)."""
-        cutoff_time = datetime.now() - timedelta(hours=hours)
-        
-        with self.db_manager.get_session() as session:
-            articles = (
-                session.query(NewsArticle)
-                .filter(
-                    NewsArticle.content_fully_loaded == True,
-                    NewsArticle.scraped_at >= cutoff_time
-                )
-                .all()
-            )
-            
-            return [
-                {"title": a.title, "content": a.content}
-                for a in articles
-                if a.title and a.content
-            ]
 
 
 class StockRepository:
@@ -340,7 +331,6 @@ class StockRepository:
                 }
                 for s in stocks
             ]
-            logger.info(f"Fetched {len(result)} stocks for today ({today}) from database")
             return result
 
     def insert_or_update_stocks(self, records: List[Dict[str, Any]]) -> int:
@@ -384,33 +374,129 @@ class StockRepository:
                     count += 1
                 except IntegrityError:
                     session.rollback()
-                    logger.warning(f"Duplicate handling failed for {rec['stock']} on {rec['date']}")
 
             session.commit()
-            logger.info(f"Saved {count} stock records to database (inserted or analysis-merged)")
             return count
 
 
 class NewsAnalysisRepository:
     """Repository for news analysis operations."""
-    
+
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
-    
+
     def save_analysis(self, analysis_result: str) -> NewsAnalysis:
-        """Save analysis result."""
+        """
+        Save analysis result.
+
+        Converts the current datetime to compatible MySQL date and time strings.
+        Ensures time is stored as a full datetime ('YYYY-MM-DD HH:MM:SS') if necessary,
+        to avoid incorrect time or date format issues (e.g., see DataError 1292).
+        """
         now = datetime.now()
+        # Save as MySQL DATETIME to avoid DataError for TIME-only fields
+        datetime_str = now.strftime("%Y-%m-%d %H:%M:%S")
         date_str = now.strftime('%Y-%m-%d')
-        time = now.strftime('%H:%M:%S')
-        
+
         with self.db_manager.get_session() as session:
             analysis = NewsAnalysis(
                 date=date_str,
-                time=time,
+                time=datetime_str,  # Store full datetime string
                 analysis=analysis_result,
             )
             session.add(analysis)
             session.flush()
-            logger.info(f"Saved analysis to database for {date_str}")
             return analysis
 
+class UsersRepository:
+    """Repository for users table operations."""
+    
+    def __init__(self, db_manager: DatabaseManager):
+        self.db_manager = db_manager
+
+    def insert_or_update_user(
+        self,
+        user_id: str,
+        source: str,
+        email: Optional[str] = None,
+        phone: Optional[str] = None,
+        password: Optional[str] = None,
+    ) -> User:
+        """Insert or update a user record with user_id and source as unique key."""
+        with self.db_manager.get_session() as session:
+            stmt = insert(User).values(
+                user_id=user_id,
+                email=email,
+                source=source,
+                phone=phone,
+                password=password,
+            )
+            stmt = stmt.on_duplicate_key_update(
+                email=stmt.inserted.email,
+                phone=stmt.inserted.phone,
+                password=stmt.inserted.password,
+            )
+            try:
+                result = session.execute(stmt)
+                session.commit()
+            except IntegrityError as e:
+                session.rollback()
+                raise
+            return result
+
+    def get_user(self, user_id: str, source: str) -> Optional[Dict[str, Any]]:
+        """Get a user record by user_id and source."""
+        with self.db_manager.get_session() as session:
+            user = (
+                session.query(User)
+                .filter(User.user_id == user_id, User.source == source)
+                .first()
+            )
+            if user:
+                return user.to_dict()
+            return None
+
+    def get_email_by_user_id(self, user_id: str) -> Optional[str]:
+        """
+        Get a valid email address for a specific user_id.
+        Returns the first non-empty, non-null, non-NaN email found for the user_id.
+        """
+        with self.db_manager.get_session() as session:
+            users = (
+                session.query(User)
+                .filter(User.user_id == user_id)
+                .all()
+            )
+            for user in users:
+                email = getattr(user, "email", None)
+                if email is not None:
+                    email_str = str(email).strip()
+                    if email_str and email_str.lower() not in {"null", "nan"}:
+                        return email_str
+            return None
+
+    def get_all_users(self) -> List[Dict[str, Any]]:
+        """Get all users."""
+        with self.db_manager.get_session() as session:
+            users = session.query(User).all()
+            return [u.to_dict() for u in users]
+        
+    def get_all_unique_valid_emails(self) -> List[str]:
+        """
+        Get all unique, valid emails from the users table.
+        Filters out emails that are None, "", "null", or "NaN" (case insensitive).
+        """
+        with self.db_manager.get_session() as session:
+            query = session.query(User.email).distinct()
+            raw_emails = [row[0] for row in query if row[0] is not None]
+            filtered_emails = []
+            seen = set()
+            for email in raw_emails:
+                email_str = str(email).strip()
+                # Exclude invalid
+                if not email_str or email_str.lower() in {"null", "nan"}:
+                    continue
+                if email_str not in seen:
+                    seen.add(email_str)
+                    filtered_emails.append(email_str)
+            return filtered_emails

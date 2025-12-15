@@ -2,8 +2,9 @@
 import json
 import time
 from loguru import logger
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
-from config import get_playwright_browser, get_playwright_page
+from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+from pwright.context_manager import playwright_context
+from pwright.page_factory import new_stealth_page
 
 class BaseCookies:
     """Lightweight base class that provides:
@@ -13,7 +14,7 @@ class BaseCookies:
     - overridable login()
     """
 
-    def __init__(self, phone, passwd, url, section_name, user_id=None):
+    def __init__(self, phone, passwd, url, section_name, page: Page, user_id=None):
         """
         phone/passwd/url come from cookies.json
         section_name: "jiuyan", "xuangutong", "alphapai", etc.
@@ -26,24 +27,7 @@ class BaseCookies:
         self.user_id = user_id  # supports user-specific area
         self.logger = logger.bind(site=section_name)
         
-        # Initialize Playwright
-        self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(
-            headless=False,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-            ]
-        )
-        self.context = self.browser.new_context(
-            viewport={"width": 1920, "height": 1080},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/143.0.7499.40 Safari/537.36"
-            )
-        )
-        self.page = self.context.new_page()
+        self.page = page
 
     # -------------------------------------------------------
     # Fundamental behavior
@@ -57,16 +41,8 @@ class BaseCookies:
         self.page.goto(self.url, wait_until="domcontentloaded", timeout=60000)
         time.sleep(2)
 
-    def wait(self, locator, timeout=8000):
-        """Wait for element to be visible. locator is a string (CSS or XPath)."""
-        try:
-            self.page.wait_for_selector(locator, timeout=timeout, state="visible")
-            return self.page.locator(locator).first
-        except PlaywrightTimeoutError:
-            raise TimeoutError(f"Element not found: {locator}")
-
     @staticmethod
-    def normalize_domains(cookie_list):
+    def normalize_cookies(cookie_list):
         for c in cookie_list:
             domain = c.get("domain", "")
             if domain.startswith("www"):
@@ -74,16 +50,28 @@ class BaseCookies:
         return cookie_list
 
     @staticmethod
-    def _decode_local_storage(ls_dict):
-        """Try JSON decode; fall back to string."""
-        result = {}
-        for k, v in ls_dict.items():
-            try:
-                result[k] = json.loads(v)
-            except Exception:
-                result[k] = v
-        return result
-
+    def normalize_local_storage(origins):
+        if origins[0].get("origin", "") == "https://alphapai-web.rabyte.cn":
+            # Add specified pairs manually to localStorage for alphapai
+            manual_pairs = [
+                {"name": "search-to-paipai-guide", "value": "true"},
+                {"name": "paipai-agent-fastsheet-us-guide", "value": "true"},
+                {"name": "search-to-paipai-guide-date", "value": "1765348801926"},
+                {"name": "version-market-tip", "value": "1"},
+                {"name": "MODE", "value": "undefined"},
+                {"name": "hasShowpaipaiAnswerRangeGuide", "value": "true"}
+            ]
+            if "localStorage" not in origins[0] or not isinstance(origins[0]["localStorage"], list):
+                origins[0]["localStorage"] = []
+            # Only add if not already present
+            existing_names = {entry['name'] for entry in origins[0]["localStorage"]}
+            for pair in manual_pairs:
+                if pair['name'] not in existing_names:
+                    origins[0]["localStorage"].append(pair)
+        elif origins[0].get("origin", "") == "https://www.jiuyangongshe.com":
+            # Remove all localStorage for this origin
+            origins[0]["localStorage"] = []
+            
     # -------------------------------------------------------
     # Saving logic
     # -------------------------------------------------------
@@ -113,6 +101,8 @@ class BaseCookies:
             self.open_url()
             self.login()  # implemented in subclass
             data = self.page.context.storage_state()
+            self.normalize_cookies(data["cookies"])
+            self.normalize_local_storage(data["origins"])
             if data:
                 self.save_to_json(data)
 
@@ -123,10 +113,25 @@ class BaseCookies:
                 self.playwright.stop()
             except:
                 pass
-
+    
+    def get_ck(self):
+        try:
+            self.open_url()
+            self.login()  # implemented in subclass
+            data = self.page.context.storage_state()
+            self.normalize_cookies(data["cookies"])
+            self.normalize_local_storage(data["origins"])
+            return data
+        finally:
+            try:
+                self.context.close()
+                self.browser.close()
+                self.playwright.stop()
+            except:
+                pass
 
 class GeneralCookies(BaseCookies):
-    def __init__(self, config: dict, user_id: str | None):
+    def __init__(self, config: dict, page: Page, user_id: str | None):
         """
         config is one entry inside "authen": [...]
         {
@@ -142,12 +147,16 @@ class GeneralCookies(BaseCookies):
             passwd=config.get("passwd"),
             url=config.get("url"),
             section_name=config.get("name"),
+            page = page,
             user_id=user_id
         )
         locs = config.get("locators", {})
-
+        wfd = config.get("wait_for_dynamical", None)
+        self.logger.info(wfd)
         def parse(loc):
             """Convert JSON locator to Playwright locator string."""
+            if loc == None:
+                return None
             if not loc:
                 return None
             by = loc["by"].lower()
@@ -165,7 +174,12 @@ class GeneralCookies(BaseCookies):
         self.password_locator = parse(locs.get("pwd_input"))
         self.submit_locator = parse(locs.get("login_btn"))
         self.optional_open_login_locator = parse(locs.get("open_login_btn"))
-        self.check_box_locator = parse(locs.get("check_box"))
+        self.wait_for_dynamic = parse(wfd)
+        self.check_box_locators = []
+        check_box = locs.get("check_box", [])
+        if check_box:
+            for check_box_locator in locs.get("check_box", []):
+                self.check_box_locators.append(parse(check_box_locator))
 
     # ---------------------------------------------------------------------
     # Playwright helper methods
@@ -212,14 +226,12 @@ class GeneralCookies(BaseCookies):
 
         if self.login_dialog_locator:
             try:
-                self.wait(self.login_dialog_locator, timeout=60000)
+                self.page.wait_for_selector(self.login_dialog_locator, timeout=8000, state="visible")
                 self.logger.info("Login dialog already visible.")
             except:
                 if self.optional_open_login_locator:
                     self._safe_click(self.optional_open_login_locator)
-                    time.sleep(1)
-                self.wait(self.login_dialog_locator, timeout=60000)
-
+                self.page.wait_for_selector(self.login_dialog_locator, timeout=8000, state="visible")
         # 2. Switch to phone/password login tab
         if self.tab_locator:
             try:
@@ -228,13 +240,14 @@ class GeneralCookies(BaseCookies):
             except Exception as e:
                 self.logger.warning(f"Tab switch locator exists but could not be clicked: {e}")
 
-        if self.check_box_locator:
-            try:
-                self._safe_click(self.check_box_locator)
-                time.sleep(0.3)
-                self.logger.info("Checked the checkbox as required.")
-            except Exception as e:
-                self.logger.warning(f"Checkbox locator exists but could not be clicked: {e}")
+        if self.check_box_locators:
+            for check_box_locator in self.check_box_locators:
+                try:
+                    self._safe_click(check_box_locator)
+                    time.sleep(0.3)
+                    self.logger.info("Checked the checkbox as required.")
+                except Exception as e:
+                    self.logger.warning(f"Checkbox locator exists but could not be clicked: {e}")
             
         # 3. Enter credentials
         if self.phone_locator:
@@ -252,7 +265,6 @@ class GeneralCookies(BaseCookies):
             raise RuntimeError(f"No submit button locator for site: {self.section_name}")
 
         self.logger.info("Login button clicked, waiting for login success...")
-        time.sleep(1)
         # 5. Wait login dialog to disappear (if locator defined)
         if self.login_dialog_locator:
             try:
@@ -265,51 +277,145 @@ class GeneralCookies(BaseCookies):
             except PlaywrightTimeoutError:
                 raise RuntimeError("Login dialog did not disappear — login likely failed.")
 
-        time.sleep(3)
+        if self.wait_for_dynamic:
+            self.page.wait_for_selector(self.wait_for_dynamic, timeout=8000, state="visible")
+            
         
+
+from utils.database import get_db_manager, UsersRepository
 
 def update_all_cookies():
     """
-    Updates ALL cookies:
-    - common section websites
-    - all user-specific websites (iterate all user_id in cookies.json except 'common')
+    Updates cookies for all users (including 'common') and all supported sources.
+    - For all users in database (including 'common'), grab their login info and refresh all their cookies.
     """
-    with open("json/cookies.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
+    db = get_db_manager()
+    users_repo = UsersRepository(db)
+    all_users = users_repo.get_all_users()  # List[dict], including "common"
 
-    # ------------------------------
-    # 1. COMMON WEBSITES
-    # ------------------------------
-    common_auth = data.get("common", {}).get("authen", [])
-    for entry in common_auth:
-        try:
-            scraper = GeneralCookies(entry, user_id=None)
-            scraper.run()
-        except Exception as e:
-            print(f"[ERROR] Common site '{entry.get('name')}' failed: {e}")
+    # index by user_id for loop logic
+    from collections import defaultdict
 
-    # ------------------------------
-    # 2. USER-SPECIFIC WEBSITES (iterate all user_ids except 'common')
-    # ------------------------------
-    for user_id in data:
-        if user_id == "common":
-            continue
-        user_auth = data[user_id].get("authen", [])
-        for entry in user_auth:
-            try:
-                scraper = GeneralCookies(entry, user_id=user_id)
+    with open("json/locators.json", "r", encoding="utf-8") as f:
+        locators_data = json.load(f)
+        
+    users_by_id = defaultdict(list)
+    for row in all_users:
+        users_by_id[row["user_id"]].append(row)
+
+    for user_id, auth_entries in users_by_id.items():
+        for entry in auth_entries:
+            source = entry.get("source")
+            phone = entry.get("phone")
+            password = entry.get("password")
+            email = entry.get("email", None)
+
+            # get locator & site config
+            locator_cfg = locators_data.get(source)
+            if not locator_cfg:
+                continue
+
+            # Prepare auth info (phone, password, etc)
+            auth_entry = {
+                "name": source,
+                "url": locator_cfg.get("url"),
+                "phone": phone,
+                "passwd": password,
+                "email": email,
+                "wait_for_dynamical": locator_cfg.get("wait_for_dynamical"),
+                "locators": locator_cfg.get("locators"),
+            }
+    
+            with playwright_context(storage_state=None, bypass_ext_path="") as context:
+                page = new_stealth_page(context)
+                scraper = GeneralCookies(auth_entry, page = page, user_id=user_id)
                 scraper.run()
-            except Exception as e:
-                print(f"[ERROR] User site '{entry.get('name')}' for user_id '{user_id}' failed: {e}")
 
+
+def update_common_cookies(sources: list = None):
+    """
+    Updates cookies for a given user and specified sources.
+    - If user_id is None: updates ONLY 'common' user for all sources or limited by sources param.
+    - If sources is given: updates only those sites, otherwise updates all sites for the user.
+    """
+    db = get_db_manager()
+    users_repo = UsersRepository(db)
+
+    with open("json/locators.json", "r", encoding="utf-8") as f:
+        locators_data = json.load(f)
+    # Who to update
+    uid = "common"
+    common_auths = [r for r in users_repo.get_all_users() if r["user_id"] == uid and r["source"] in sources]
+
+    for entry in common_auths:
+        source = entry.get("source")
+        phone = entry.get("phone")
+        password = entry.get("password")
+        # get locator & site config
+        locator_cfg = locators_data.get(source)
+        if not locator_cfg:
+            continue
+
+        auth_entry = {
+            "name": source,
+            "url": locator_cfg.get("url"),
+            "phone": phone,
+            "passwd": password,
+            "wait_for_dynamical": locator_cfg.get("wait_for_dynamical"),
+            "locators": locator_cfg.get("locators"),
+        }
+
+        with playwright_context(storage_state=None, bypass_ext_path="") as context:
+            page = new_stealth_page(context)
+            scraper = GeneralCookies(auth_entry, page = page, user_id=uid)
+            scraper.run()
+
+
+def update_agent_cookies(user_credentials: list[dict]):
+    """
+    Accepts a list of user credentials [{"source": ..., "phone": ..., "password": ...}, ...]
+    Runs cookie updating logic for each entry.
+    Each dict must have: "source", "phone", "password" (optionally: "email").
+    """
+    with open("json/locators.json", "r", encoding="utf-8") as f:
+        locators_data = json.load(f)
+    
+    cks = {}
+    for cred in user_credentials:
+        source = cred.get("source")
+        phone = cred.get("phone")
+        password = cred.get("password")
+        email = cred.get("email", None)
+        locator_cfg = locators_data.get(source)
+        if not locator_cfg:
+            continue
+
+        auth_entry = {
+            "name": source,
+            "url": locator_cfg.get("url"),
+            "phone": phone,
+            "passwd": password,
+            "email": email,
+            "wait_for_dynamical": locator_cfg.get("wait_for_dynamical"),
+            "locators": locator_cfg.get("locators"),
+        }
+        with playwright_context(storage_state=None, bypass_ext_path="") as context:
+            page = new_stealth_page(context)
+            scraper = GeneralCookies(auth_entry, page = page, user_id=None)
+            ck = scraper.get_ck()
+            cks[source] = ck
+
+    return cks
+
+    
 if __name__ == "__main__":
     user_id = "564b3391-510f-4b50-a038-7df413bec15d"
     # Load cookies.json and find the gangtise entry under this user_id
     with open("json/cookies.json", "r", encoding="utf-8") as f:
         cookies_data = json.load(f)
-    auth_list = cookies_data[user_id]["authen"]
+    auth_list = cookies_data["common"]["authen"]
     gangtise_entry = next((entry for entry in auth_list if entry["name"] == "gangtise"), None)
     if gangtise_entry is None:
         raise RuntimeError("gangtise entry not found for user_id '%s'" % user_id)
-    scraper = GeneralCookies(gangtise_entry, user_id=user_id)
+    scraper = GeneralCookies(gangtise_entry, user_id=None)
     scraper.run()

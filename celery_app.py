@@ -10,9 +10,8 @@ def clean_redis_db(redis_url):
         db_index = int(parsed.path[1:]) if parsed.path else 0
         client = redis.Redis(host=parsed.hostname, port=parsed.port, db=db_index)
         client.flushdb()
-        print(f"[celery_app] Redis DB {db_index} at {parsed.hostname}:{parsed.port} cleared.")
     except Exception as e:
-        print(f"[celery_app] WARNING: Failed to clean Redis: {e}")
+        pass
 
 BROKER_URL = "redis://localhost:6379/0"
 BACKEND_URL = "redis://localhost:6379/0"
@@ -30,7 +29,7 @@ celery_app = Celery(
 celery_app.conf.update(
     task_routes={
         "tasks.news_tasks.*": {"queue": "news"},
-        "tasks.alpha_tasks.*": {"queue": "alpha"},
+        "tasks.agent_tasks.*": {"queue": "agent"},
     },
     result_expires=3600,  # results expire in 1 hour
     task_track_started=True,    
@@ -39,5 +38,5 @@ celery_app.conf.update(
     result_serializer="json",
 )
 # 👇 Import task modules so they register on app startup
-import tasks.alpha_tasks
+import tasks.agent_tasks
 import tasks.news_tasks

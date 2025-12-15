@@ -1,16 +1,21 @@
 {
   "news": {
-      "bloomberg.com": {
-        "selector": "article p, div.body-content p",
+      "bloomberg": {
+        "selector": "article p, div.body-content p, div[data-component='story-text'] p",
         "min_paragraphs": 5,
         "unwanted_content": [
           "Bloomberg may send me offers and promotions.",
           "By submitting my information, I agree to the Privacy Policy and Terms of Service"
         ]
       },
-      "reuters.com": {
-        "selector": "div.article-body-module__content__bnXL1 div[data-testid*='paragraph']",
+      "reuters": {
+        "selector": "div[data-testid='article-body'] p, div[data-testid*='paragraph']",
         "min_paragraphs": 5,
+        "unwanted_content": []
+      },
+      "bbc": {
+        "selector": "div[data-component=\"text-block\"] p",
+        "min_paragraphs": 3,
         "unwanted_content": []
       }
     },
@@ -37,19 +42,21 @@
       }
     },
   "agent": {
-    "https://alphapai-web.rabyte.cn/reading/paipai/index": {
-      "name": "alphapai",
+    "alphapai": {
+      "url": "https://alphapai-web.rabyte.cn/reading/paipai/index",
       "click_locator": null,
       "text_box_locator": { "by": "css", "value": "textarea.el-textarea__inner" },
       "finish_locator": { "by": "css", "value": "div.btn-download-file" },
-      "content_locator": null
+      "content_locator": null,
+      "wait_for_dynamical": null
     },
-    "https://open.gangtise.com/?ai/knowledge=%2Fknowledge%2F%3Ft%3D1765246113209%23%2Fknowledge#/ai/knowledge": {
-      "name": "gangtise",
+    "gangtise": {
+      "url": "https://open.gangtise.com/?ai/knowledge=%2Fknowledge%2F%3Ft%3D1765246113209%23%2Fknowledge#/ai/knowledge",
       "click_locator": { "by": "xpath", "value": "//div[contains(@class, 'menu-item') and .//div[@class='title-open'][text()='AI助手']]" },
       "text_box_locator": { "by": "css", "value": "textarea.el-textarea__inner" },
-      "finish_locator": { "by": "css", "value": "div.agent-utils flex" },
-      "content_locator": { "by": "css", "value": "div.markdown-it markdown-box answer" }
+      "finish_locator": { "by": "css", "value": "div.iconfont.send.cursor-pointer.disable.icon-fasong" },
+      "content_locator": {"by": "css", "value": "div.markdown-it.markdown-box.answer"},
+      "wait_for_dynamical": {"by": "css", "value": "div.hotspot-top"}
     }
   }
 }

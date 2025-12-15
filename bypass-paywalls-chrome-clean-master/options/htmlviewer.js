@@ -82,7 +82,7 @@ if (window.location.href === 'https://codebeautify.org/htmlviewer') {
           document.querySelectorAll('[hidden]').forEach(e => e.removeAttribute('hidden'));
           hide = 'div[id^="traffective-ad-"]';
         } else if (matchUrlDomain('mainpost.de', canonical_url)) {
-          hide = 'div.aa-first-layer';
+          hide = 'div.pt_onlinestory';
         } else if (matchUrlDomain('nn.de', canonical_url)) {
           hide = 'div.article__ad__container';
         } else if (matchUrlDomain(['noz.de', 'shz.de'], canonical_url)) {
@@ -144,7 +144,26 @@ if (window.location.href === 'https://codebeautify.org/htmlviewer') {
           hide = 'tab-bar-component, div#form_don';
         }
       } else if (hostname.endsWith('.se')) {
-        if (matchUrlDomain('gp.se', canonical_url)) {
+        if (matchUrlDomain('aftonbladet.se', canonical_url)) {
+          let video = document.querySelector('div[class^="inlinevideo-root_"]');
+          if (video) {
+            let json_script = document.querySelector('script[type="application/ld+json"]');
+            if (json_script) {
+              try {
+                let json = JSON.parse(json_script.text);
+                if (json[1] && json[1].video && json[1].video.contentURL) {
+                  let video_new = document.createElement('video');
+                  video_new.setAttribute('controls', true);
+                  video_new.src = json[1].video.contentURL;
+                  video_new.style = 'width: 100%;';
+                  video.parentNode.replaceChild(video_new, video);
+                }
+              } catch (err) {
+                console.log(err);
+              }
+            }
+          }
+        } else if (matchUrlDomain('gp.se', canonical_url)) {
           let ref_headers = document.querySelectorAll('div#ref-header-publisher');
           if (ref_headers.length > 1)
             ref_headers[0].remove();

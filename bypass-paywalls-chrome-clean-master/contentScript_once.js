@@ -62,6 +62,9 @@ window.setTimeout(function () {
         else if (document.querySelector('div.c-footer__copyright > a[href^="https://nemedia.com.au"]')) {
           group = '###_au_nomedia';
           nofix = 1;
+        } else if (document.querySelector('div[class^="menu-"] > ul > li a[href*="/in-business"]')) {
+          group = '###_au_star_news';
+          nofix = 1;
         } else if (hostname.match('farmingahead.com.au')) {
           group = '###_uk_aspermont';
           nofix = 1;
@@ -170,7 +173,7 @@ window.setTimeout(function () {
         group = '###_uk_axate.io';
       else if (matchDomain(['flightglobal.com', 'freightcarbonzero.com', 'heavyliftpfi.com', 'personneltoday.com', 'railwaygazette.com']))
         group = '###_uk_dvv_media';
-      else if (matchDomain(['agendaweek.com', 'boardiq.com', 'endpoints.news', 'financialadvisoriq.com', 'fundfire.com', 'healthpayerspecialist.com', 'ignites.com', 'ignitesasia.com', 'igniteseurope.com', 'lifeannuityspecialist.com', 'pandcspecialist.com']))
+      else if (matchDomain(['agendanews.com', 'boardiq.com', 'endpoints.news', 'financialadvisoriq.com', 'fundfire.com', 'healthpayerspecialist.com', 'ignites.com', 'ignitesasia.com', 'igniteseurope.com', 'lifeannuityspecialist.com', 'pandcspecialist.com']))
         group = '###_uk_ft_specialist';
       else if (document.querySelector('footer li > a[href^="https://www.newsquest.co.uk/"]'))
         group = '###_uk_newsquest';

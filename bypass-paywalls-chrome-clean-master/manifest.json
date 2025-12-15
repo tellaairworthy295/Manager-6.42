@@ -53,6 +53,7 @@
     "*://*.aerokurier.de/*",
     "*://*.aerztezeitung.de/*",
     "*://*.afr.com/*",
+    "*://*.aftenposten.no/*",
     "*://*.aisnenouvelle.fr/*",
     "*://*.ajc.com/*",
     "*://*.al-monitor.com/*",
@@ -114,6 +115,7 @@
     "*://*.bloombergadria.com/*",
     "*://*.bnd.com/*",
     "*://*.bndestem.nl/*",
+    "*://*.bnn.de/*",
     "*://*.boersen-zeitung.de/*",
     "*://*.bonappetit.com/*",
     "*://*.bordermail.com.au/*",
@@ -732,6 +734,7 @@
     "*://*.smh.com.au/*",
     "*://*.sofrep.com/*",
     "*://*.sourcingjournal.com/*",
+    "*://*.spacenews.com/*",
     "*://*.spectator.co.uk/*",
     "*://*.spectator.com.au/*",
     "*://*.spektrum.de/*",
@@ -961,13 +964,13 @@
     "*://*.epochbase.com/*",
     "*://*.epochbase.eu/*",
     "*://*.flip-pay.com/*",
+    "*://*.ftspecialist-us.com/*",
     "*://*.gjirafa.tech/*",
     "*://*.glanacion.com/*",
     "*://*.go.com/*",
     "*://*.hadrianpaywall.com/*",
     "*://*.mcclatchy.com/*",
     "*://*.medscapestatic.com/*",
-    "*://*.money-media.com/*",
     "*://*.ndcmediagroep.nl/*",
     "*://*.nhst.tech/*",
     "*://*.nyt.com/*",
@@ -986,5 +989,5 @@
     "*://codebeautify.org/*",
     "*://gitflic.ru/*"
   ],
-  "version": "4.2.6.0"
+  "version": "4.2.6.7"
 }

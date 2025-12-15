@@ -35,5 +35,5 @@
   "host_permissions": [
     "*://*/*"
   ],
-  "version": "4.2.6.0"
+  "version": "4.2.6.7"
 }

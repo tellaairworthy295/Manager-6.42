@@ -9,9 +9,10 @@ import matplotlib.pyplot as plt
 from paddleocr import PaddleOCR
 import pandas as pd
 from matplotlib import font_manager
-from config import setup_logging
+from loguru import logger
 
-logger = setup_logging("logs/jiuyan", "jiuyan_scraper")
+# Configure loguru for to_excel module
+logger.add("logs/to_excel/to_excel_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
 FONT_PATH = "fonts/NotoSansSC-VariableFont_wght.ttf"
 
 def _draw_boxes(img_path):
@@ -57,7 +58,79 @@ def _draw_boxes(img_path):
     logger.info(f"✅ Saved image with drawn boxes to: {drawn_img_path}")
 
     return boxes, drawn_img_path
-    
+
+
+def horizontal_projection(bin_img):
+    """
+    bin_img: binary image (text=0, background=255)
+    returns array of ink density per row
+    """
+    return np.sum(bin_img == 0, axis=1)
+
+def find_safe_cut_lines(
+    bin_img,
+    min_gap_height=15,
+    max_ink_ratio=0.02
+):
+    """
+    Returns y positions suitable for slicing
+    """
+    h, w = bin_img.shape
+    projection = horizontal_projection(bin_img)
+
+    max_ink = w * max_ink_ratio
+    safe_rows = projection < max_ink
+
+    cut_lines = []
+    start = None
+
+    for y, is_safe in enumerate(safe_rows):
+        if is_safe and start is None:
+            start = y
+        elif not is_safe and start is not None:
+            if y - start >= min_gap_height:
+                cut_lines.append((start + y) // 2)
+            start = None
+
+    return cut_lines
+
+def choose_cut_near(cut_lines, target_y, max_shift=200):
+    candidates = [y for y in cut_lines if abs(y - target_y) <= max_shift]
+    if not candidates:
+        return target_y  # fallback
+    return min(candidates, key=lambda y: abs(y - target_y))
+
+def smart_slice_tall_image(
+    img,
+    target_height=3600,
+    overlap=0
+):
+    gray = np.array(img)
+    h, w = gray.shape
+    cut_lines = find_safe_cut_lines(gray)
+
+    slices = []
+    y = 0
+
+    while y < h:
+        target_y = min(y + target_height, h)
+        cut_y = choose_cut_near(cut_lines, target_y)
+
+        crop = img.crop((0, y, w, cut_y))
+        slices.append(crop)
+
+        if cut_y == h:
+            break
+
+        y = max(cut_y - overlap, y + 1)
+
+    return slices
+
+
+def _is_tall_image(img, ratio=2.0):
+    w, h = img.size
+    return h / w >= ratio
+
 def _normalize_text(text: list[str], space: bool = False) -> str:
         """Clean and normalize a label string (Chinese/English mixed)."""
         for idx, label in enumerate(text):
@@ -74,16 +147,11 @@ def _normalize_text(text: list[str], space: bool = False) -> str:
                 label = re.sub(r"[\s\u3000\u00A0]+", "", label)
             label = label.replace("（", "(").replace("）", ")")
             text[idx] = label.strip()
-    
+
 def _preprecess_image(img_path):
     img = Image.open(img_path)
-    w, h = img.size
-    pad = int(min(w, h) * 0.05)
-    padded_img = Image.new("RGB", (w + pad * 2, h + pad * 2), (255, 255, 255))
-    padded_img.paste(img, (pad, pad))
-    padded_img_array = cv2.cvtColor(np.array(padded_img), cv2.COLOR_RGB2BGR)
-
-    gray = cv2.cvtColor(padded_img_array, cv2.COLOR_BGR2GRAY)
+    img_array = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
 
     # 3️⃣ threshold (keeps text, removes light watermark)
     _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -98,22 +166,11 @@ def _preprecess_image(img_path):
     logger.info(f"✅ Saved grayscale + enhanced-contrast + thresholded to: {new_img_path}")
     return new_img_path
 
-def _ocr_image(img_path, y_tolerance_ratio=0.6, x_tolerance_ratio=12):
+def _sort_ocr_results(texts, boxes, y_tolerance_ratio=0.6, x_tolerance_ratio=12):
     """
     OCR an image and return texts sorted top-to-bottom and left-to-right.
     Line grouping considers both vertical proximity and minimal horizontal edge distance.
     """
-
-    ocr = PaddleOCR(lang='ch', use_textline_orientation=True)
-    result = ocr.predict(img_path)
-    if not result or not isinstance(result, list):
-        return []
-
-    res = result[0]
-    texts = res.get("rec_texts", [])
-    boxes = res.get("rec_polys", [])
-    if not texts or not boxes or len(texts) != len(boxes):
-        return texts
 
     # Compute mean height for tolerance
     heights = []
@@ -181,8 +238,64 @@ def _ocr_image(img_path, y_tolerance_ratio=0.6, x_tolerance_ratio=12):
 
     return sorted_texts
 
+def ocr_image_safe(
+    img_path,
+    y_tolerance_ratio=0.6,
+    x_tolerance_ratio=12,
+    tall_ratio=2.0
+):
+    ocr = PaddleOCR(lang="ch", use_textline_orientation=True)
 
-def _append_to_excel(date_str: str, rec_texts, excel_path: str):
+    img = Image.open(img_path)
+    all_sorted_texts = []
+    if _is_tall_image(img, tall_ratio):
+        logger.info("📐 Tall image detected, slicing before OCR")
+        slices = smart_slice_tall_image(img)
+    else:
+        slices = [img]
+
+    img_dir = os.path.dirname(os.path.abspath(img_path))
+    for idx, crop in enumerate(slices):
+        # Accept PIL.Image input directly to OCR without saving temp files
+        img = crop
+        w, h = img.size
+        pad = int(min(w, h) * 0.05)
+        # Handle padding for grayscale image
+        padded_img = Image.new("L", (w + pad * 2, h + pad * 2), 255)
+        padded_img.paste(img, (pad, pad))
+        # Save the padded image for debugging/inspection
+        padded_img_save_path = os.path.join(
+            img_dir,
+            f"ocr_slice_{idx}_padded.png"
+        )
+        try:
+            padded_img.save(padded_img_save_path)
+            logger.info(f"💾 Saved OCR padded image: {padded_img_save_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save padded image: {e}")
+
+        result = ocr.predict(padded_img_save_path)
+        if not result or not isinstance(result, list):
+            continue
+
+        res = result[0]
+        texts = res.get("rec_texts", [])
+        boxes = res.get("rec_polys", [])
+
+        if not texts or not boxes:
+            continue
+
+        sorted_texts =  _sort_ocr_results(
+            texts,
+            boxes,
+            y_tolerance_ratio,
+            x_tolerance_ratio
+        )
+        all_sorted_texts.extend(sorted_texts)
+
+    return all_sorted_texts
+
+def _append_to_excel(rec_texts, excel_path: str):
     """
     Save OCR-recognized texts to an Excel file grouped by 8 fields:
     ["Section", "Board", "Code", "Name", "Time", "Market", "Turnover", "Keyword"].
@@ -233,7 +346,7 @@ def _append_to_excel(date_str: str, rec_texts, excel_path: str):
     df = pd.DataFrame(data, columns=cols)
 
     # Output path for this date
-    save_path = os.path.join(excel_path, f"{date_str}.xlsx")
+    save_path = os.path.join(excel_path, f"涨停简图.xlsx")
 
     # Save to Excel
     df.to_excel(save_path, index=False)
@@ -325,24 +438,20 @@ def _process_trendings(date_str: str, summary_text: str, excel_path: str, days: 
         logger.info(f"📈 Saved trend chart: {chart_path}")
 
 def excel_flow(date: str, days: int = 5):
-    img_path = f"scraped_images/{date}.png"
+    scraped_dir = "images"
+    img_path = f"{scraped_dir}/涨停简图.png"
     if not os.path.isfile(img_path):
         logger.error(f"Image file does not exist: {img_path}")
         return None
     path = _preprecess_image(img_path)
     #_draw_boxes(path)
-    rec_texts = _ocr_image(path)
-    #print(rec_texts)
+    rec_texts = ocr_image_safe(path)
     _normalize_text(rec_texts)
-    _append_to_excel(date, rec_texts, "excel")
+    _append_to_excel(rec_texts, "excel")
     for token in rec_texts:
         if "涨停" in token and "未开板新股" in token:
             _process_trendings(date, token, "excel/trendings.xlsx", days)
             break
-    try:
-        os.remove(path)
-    except:
-        pass
 
 if __name__ == "__main__":
-    excel_flow("2025-12-03")
+    excel_flow("2025-12-11")

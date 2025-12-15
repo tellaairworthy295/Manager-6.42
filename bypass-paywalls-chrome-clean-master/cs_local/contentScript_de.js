@@ -166,7 +166,7 @@ else if (matchDomain(['beobachter.ch', 'handelszeitung.ch'])) {
 else if (matchDomain('berliner-zeitung.de')) {
   let url = window.location.href;
   getArchive(url, 'div[class^="soft-paywall_wrapper_"]', '', 'div#articleBody');
-  let ads = 'div[class^="traffective_"], div[class^="article_billboard-"], div[class*="_ad_"], div[class^="outbrain_"], div[id^="qmn-ad-"], div[style]:empty';
+  let ads = 'div[class^="traffective_"], div[class^="article_billboard-"], div[class*="_ad_"], div[class^="outbrain_"], div[id^="qmn-ad-"], div[style]:empty, div[data-height]';
   hideDOMStyle(ads);
 }
 
@@ -200,6 +200,17 @@ else if (matchDomain('bild.de')) {
 else if (matchDomain('blick.ch')) {
   let ads = 'aside[class*="slot-code"], aside[class*="_teaser_"][class*="slot-code"]';
   hideDOMStyle(ads);
+}
+
+else if (matchDomain('bnn.de')) {
+  func_post = function () {
+    if (mobile) {
+      document.querySelectorAll('picture img[loading="lazy"][style]').forEach(e => e.style = 'width: 95%;');
+    }
+    header_nofix('article section', 'section > span[style*="filter:blur"]', 'BPC > no archive-fix');
+  }
+  let url = window.location.href;
+  getArchive(url, 'section.paywall', '', 'article');
 }
 
 else if (matchDomain('boersen-zeitung.de')) {
@@ -499,24 +510,6 @@ else if (matchDomain('motorradonline.de')) {
 }
 
 else if (matchDomain(['noz.de', 'shz.de'])) {
-  func_post = function () {
-    let podcasts = document.querySelectorAll('div > div[allow][old-src]');
-    for (let elem of podcasts) {
-      let iframe = document.createElement('iframe');
-      iframe.src = elem.getAttribute('old-src');
-      iframe.style = 'width: 100%; height: 300px;';
-      elem.parentNode.replaceChild(iframe, elem);
-    }
-    if (mobile) {
-      let lazy_images = document.querySelectorAll('div > figure > picture > img[loading="lazy"][style]');
-      for (let elem of lazy_images) {
-        elem.style = 'width: 95%;';
-        elem.parentNode.parentNode.parentNode.removeAttribute('style');
-      }
-    }
-  }
-  let url = window.location.href;
-  getArchive(url, 'div.paywall', '', 'article');
   let ads = 'div.ad_label';
   hideDOMStyle(ads);
 }

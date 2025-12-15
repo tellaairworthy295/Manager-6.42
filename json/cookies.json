@@ -1,484 +1,225 @@
 {
   "common": {
-    "authen": [
-      {
-        "name": "jiuyan",
-        "url": "https://www.jiuyangongshe.com",
-        "phone": "18282219269",
-        "passwd": "a123456BBC",
-        "locators": {
-          "login_dialog": {
-            "by": "css",
-            "value": "div.jc-login"
-          },
-          "open_login_btn": {
-            "by": "css",
-            "value": "div.name.lf"
-          },
-          "tab_switch": {
-            "by": "css",
-            "value": "div#tab-accounts"
-          },
-          "check_box": null,
-          "phone_input": {
-            "by": "css",
-            "value": "div#pane-accounts input[name='phone']"
-          },
-          "pwd_input": {
-            "by": "css",
-            "value": "div#pane-accounts input[name='password']"
-          },
-          "login_btn": {
-            "by": "css",
-            "value": "div#pane-accounts button.el-button--primary"
-          }
-        }
-      },
-      {
-        "name": "xuangutong",
-        "url": "https://xuangutong.com.cn",
-        "phone": "13651677354",
-        "passwd": "lmh021152LMH",
-        "locators": {
-          "login_dialog": {
-            "by": "css",
-            "value": "form.form-login"
-          },
-          "open_login_btn": {
-            "by": "css",
-            "value": "span.go-login"
-          },
-          "tab_switch": {
-            "by": "css",
-            "value": "span.switch-item"
-          },
-          "check_box": null,
-          "phone_input": {
-            "by": "css",
-            "value": "input[placeholder='请输入手机号']"
-          },
-          "pwd_input": {
-            "by": "css",
-            "value": "input[placeholder='请输入密码']"
-          },
-          "login_btn": {
-            "by": "css",
-            "value": "button.submit[type='submit']"
-          }
-        }
-      }
-    ],
     "jiuyan": {
       "cookies": [
         {
-          "domain": ".www.jiuyangongshe.com",
-          "httpOnly": false,
-          "name": "Hm_lpvt_2d6d056d37910563cdaa290ee2981080",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "1765287156"
-        },
-        {
-          "domain": ".jiuyangongshe.com",
-          "httpOnly": false,
-          "name": "admin",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "%7B%22user_id%22%3A%22b02098f0d53b42bd88f93f3b9390d57b%22%2C%22country_code%22%3A%22%22%2C%22phone%22%3A%2218282219269%22%2C%22nickname%22%3A%22%E6%97%A0%E5%90%8D%E5%B0%8F%E9%9F%AD92690911%22%2C%22avatar%22%3A%22https%3A%2F%2Fjiucaigongshe.oss-cn-beijing.aliyuncs.com%2Favatar_default.png%22%2C%22gender%22%3A0%2C%22profile%22%3A%22%E8%BF%99%E4%B8%AA%E4%BA%BA%E5%BE%88%E6%87%92%EF%BC%8C%E4%BB%80%E4%B9%88%E9%83%BD%E6%B2%A1%E6%9C%89%E7%95%99%E4%B8%8B%22%2C%22open_id%22%3Anull%2C%22pc_open_id%22%3A%22oiKUzwHZILZEExFYKmSrfVnOaAvU%22%2C%22union_id%22%3A%22o_jtewVqULDTHMtLtI5sqCjwAWgE%22%2C%22city%22%3Anull%2C%22area%22%3Anull%2C%22follow_count%22%3A6%2C%22fans_count%22%3A0%2C%22like_count%22%3A0%2C%22posts%22%3A0%2C%22energy%22%3A100%2C%22integral%22%3A0%2C%22integral_grade%22%3A10%2C%22balance%22%3A0%2C%22interaction%22%3A0%2C%22verify%22%3A0%2C%22msg_vibrate%22%3A0%2C%22faction%22%3A0%2C%22faction_id%22%3A%22%22%2C%22investment_style%22%3A%22%22%2C%22investment_style_id%22%3A%22%22%2C%22status%22%3A0%2C%22reward_read_day%22%3A7%2C%22reward_read_time%22%3Anull%2C%22no_read_limit_time%22%3Anull%2C%22change_nickname_limit_time%22%3Anull%2C%22change_info_limit_time%22%3Anull%2C%22medal_count%22%3A0%2C%22withdraw_review%22%3A0%2C%22newest_article_tool_time%22%3Anull%2C%22create_time%22%3A%222025-09-11%2017%3A13%3A08%22%2C%22low_quality%22%3A0%2C%22style_str%22%3Anull%2C%22has_pwd%22%3A1%2C%22newest_article_tool%22%3A0%2C%22user_no%22%3A%22b02098f0d53b42bd88f93f3b9390d57b%22%2C%22sessionToken%22%3A%22MzA2YmY1YzMtOTVmYS00MTFjLWJlNzMtYWMxNTNlYTM0NjIy%22%7D"
-        },
-        {
-          "domain": ".jiuyangongshe.com",
-          "httpOnly": false,
-          "name": "Hm_lpvt_58aa18061df7855800f2a1b32d6da7f4",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "1765287156"
-        },
-        {
-          "domain": ".jiuyangongshe.com",
-          "httpOnly": false,
           "name": "SESSION",
-          "path": "/",
-          "sameSite": "Lax",
+          "value": "OWUzMzhmM2ItMTY3Yi00MmI3LTgyYTUtZjk5ZTMyMTE5OGMz",
+          "domain": "app.jiuyangongshe.com",
+          "path": "/jystock-app/",
+          "expires": 1768295653.032954,
+          "httpOnly": true,
           "secure": false,
-          "value": "MzA2YmY1YzMtOTVmYS00MTFjLWJlNzMtYWMxNTNlYTM0NjIy"
+          "sameSite": "Lax"
         },
         {
-          "domain": ".jiuyangongshe.com",
-          "expiry": 1796823156,
-          "httpOnly": false,
-          "name": "Hm_lvt_58aa18061df7855800f2a1b32d6da7f4",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "1765287140"
-        },
-        {
-          "domain": ".www.jiuyangongshe.com",
-          "httpOnly": false,
-          "name": "HMACCOUNT",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "B80565CC5D0DD09E"
-        },
-        {
-          "domain": ".www.jiuyangongshe.com",
-          "expiry": 1796823156,
-          "httpOnly": false,
-          "name": "Hm_lvt_2d6d056d37910563cdaa290ee2981080",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "1765287140"
-        },
-        {
-          "domain": ".jiuyangongshe.com",
-          "httpOnly": false,
           "name": "time",
+          "value": "1",
+          "domain": ".jiuyangongshe.com",
           "path": "/",
-          "sameSite": "Lax",
+          "expires": -1,
+          "httpOnly": false,
           "secure": false,
-          "value": "1"
+          "sameSite": "Lax"
+        },
+        {
+          "name": "HMACCOUNT_BFESS",
+          "value": "7F84131CB10BBECF",
+          "domain": ".hm.baidu.com",
+          "path": "/",
+          "expires": 1800263643.596783,
+          "httpOnly": false,
+          "secure": true,
+          "sameSite": "None"
+        },
+        {
+          "name": "Hm_lvt_2d6d056d37910563cdaa290ee2981080",
+          "value": "1765703644",
+          "domain": ".www.jiuyangongshe.com",
+          "path": "/",
+          "expires": 1797239643,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "Hm_lpvt_2d6d056d37910563cdaa290ee2981080",
+          "value": "1765703644",
+          "domain": ".www.jiuyangongshe.com",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "HMACCOUNT",
+          "value": "F228ECC9F3915C61",
+          "domain": ".www.jiuyangongshe.com",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "Hm_lvt_58aa18061df7855800f2a1b32d6da7f4",
+          "value": "1765703644",
+          "domain": ".jiuyangongshe.com",
+          "path": "/",
+          "expires": 1797239643,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "Hm_lpvt_58aa18061df7855800f2a1b32d6da7f4",
+          "value": "1765703644",
+          "domain": ".jiuyangongshe.com",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "SESSION",
+          "value": "OWUzMzhmM2ItMTY3Yi00MmI3LTgyYTUtZjk5ZTMyMTE5OGMz",
+          "domain": ".jiuyangongshe.com",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "admin",
+          "value": "%7B%22user_id%22%3A%22b02098f0d53b42bd88f93f3b9390d57b%22%2C%22country_code%22%3A%22%22%2C%22phone%22%3A%2218282219269%22%2C%22nickname%22%3A%22%E6%97%A0%E5%90%8D%E5%B0%8F%E9%9F%AD92690911%22%2C%22avatar%22%3A%22https%3A%2F%2Fjiucaigongshe.oss-cn-beijing.aliyuncs.com%2Favatar_default.png%22%2C%22gender%22%3A0%2C%22profile%22%3A%22%E8%BF%99%E4%B8%AA%E4%BA%BA%E5%BE%88%E6%87%92%EF%BC%8C%E4%BB%80%E4%B9%88%E9%83%BD%E6%B2%A1%E6%9C%89%E7%95%99%E4%B8%8B%22%2C%22open_id%22%3Anull%2C%22pc_open_id%22%3A%22oiKUzwHZILZEExFYKmSrfVnOaAvU%22%2C%22union_id%22%3A%22o_jtewVqULDTHMtLtI5sqCjwAWgE%22%2C%22city%22%3Anull%2C%22area%22%3Anull%2C%22follow_count%22%3A6%2C%22fans_count%22%3A0%2C%22like_count%22%3A0%2C%22posts%22%3A0%2C%22energy%22%3A100%2C%22integral%22%3A0%2C%22integral_grade%22%3A10%2C%22balance%22%3A0%2C%22interaction%22%3A0%2C%22verify%22%3A0%2C%22msg_vibrate%22%3A0%2C%22faction%22%3A0%2C%22faction_id%22%3A%22%22%2C%22investment_style%22%3A%22%22%2C%22investment_style_id%22%3A%22%22%2C%22status%22%3A0%2C%22reward_read_day%22%3A7%2C%22reward_read_time%22%3Anull%2C%22no_read_limit_time%22%3Anull%2C%22change_nickname_limit_time%22%3Anull%2C%22change_info_limit_time%22%3Anull%2C%22medal_count%22%3A0%2C%22withdraw_review%22%3A0%2C%22newest_article_tool_time%22%3Anull%2C%22create_time%22%3A%222025-09-11%2017%3A13%3A08%22%2C%22low_quality%22%3A0%2C%22style_str%22%3Anull%2C%22has_pwd%22%3A1%2C%22newest_article_tool%22%3A0%2C%22user_no%22%3A%22b02098f0d53b42bd88f93f3b9390d57b%22%2C%22sessionToken%22%3A%22OWUzMzhmM2ItMTY3Yi00MmI3LTgyYTUtZjk5ZTMyMTE5OGMz%22%7D",
+          "domain": ".jiuyangongshe.com",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
         }
       ],
-      "local_storage": {
-        "Hm_lvt_2d6d056d37910563cdaa290ee2981080": "1796823156002|1765287140",
-        "Hm_lvt_58aa18061df7855800f2a1b32d6da7f4": "1796823156007|1765287140",
-        "pgv_pvi": 731061765287141079,
-        "time111": "Tue Dec 09 2025 21:32:35 GMT+0800 (Hong Kong Standard Time)end"
-      }
+      "origins": [
+        {
+          "origin": "https://www.jiuyangongshe.com",
+          "localStorage": []
+        }
+      ]
     },
     "xuangutong": {
       "cookies": [
         {
-          "domain": ".xuangutong.com.cn",
-          "httpOnly": false,
-          "name": "Hm_lpvt_5a36d47aea259294d4ceb6ccbb2fa0d9",
+          "name": "HMACCOUNT_BFESS",
+          "value": "BE0AD5BA6EEF3019",
+          "domain": ".hm.baidu.com",
           "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "1765287174"
+          "expires": 1800177707.42404,
+          "httpOnly": false,
+          "secure": true,
+          "sameSite": "None"
         },
         {
-          "domain": "xuangutong.com.cn",
-          "expiry": 1770471173,
-          "httpOnly": false,
-          "name": "uid",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "2578898"
-        },
-        {
-          "domain": ".xuangutong.com.cn",
-          "httpOnly": false,
-          "name": "Hm_lpvt_65002aa893a15114cd9237a6040fee15",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "1765287173"
-        },
-        {
-          "domain": "xuangutong.com.cn",
-          "expiry": 1770471172,
-          "httpOnly": false,
-          "name": "token",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "64nLCjrhOVe0vcbVIPTsLwjgmvra/OvjlqcV2p14IOlNp/ytnEBdsWOTFKvAnfUeJiYYoU3mwOytLMn1LiSolMALlbUq0mUlk4+1ltRVL81Yejbt4ZmOOkFKb+O65/hO8P5SuX91KC7jk0n99wE0UK7H2kIPeAgt2b6YDKjkPKKyBmhbd1xvU/tcT9xtBcf4Yk6p6Agz0Tmx96aCRSdFjhmfbIQ2M/XvBytasOIh+Kx8RE7SMUhFJR6H0x0C86CScq2fqZ/g8ADpNGuQ6iVcDH+VEUnBeQ88L2mAmniFNTiG9nKcLBpuA97aMaXuUVFRy6SlXckP8tFK8rXnkLXmnw=="
-        },
-        {
-          "domain": "xuangutong.com.cn",
-          "expiry": 1780839160,
-          "httpOnly": false,
-          "name": "_bl_uid",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "g0mFRitwyqmm3LeIvah8o8ssC2kp"
-        },
-        {
-          "domain": ".xuangutong.com.cn",
-          "expiry": 1796823173,
-          "httpOnly": false,
-          "name": "Hm_lvt_5a36d47aea259294d4ceb6ccbb2fa0d9",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "1765287160"
-        },
-        {
-          "domain": ".xuangutong.com.cn",
-          "httpOnly": false,
-          "name": "HMACCOUNT",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "6270BF3C25D2C624"
-        },
-        {
-          "domain": ".xuangutong.com.cn",
-          "expiry": 1796823172,
-          "httpOnly": false,
           "name": "Hm_lvt_65002aa893a15114cd9237a6040fee15",
+          "value": "1765617707",
+          "domain": ".xuangutong.com.cn",
           "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "1765287159"
-        }
-      ],
-      "local_storage": {
-        "Hm_lvt_5a36d47aea259294d4ceb6ccbb2fa0d9": "1796823173805|1765287160",
-        "Hm_lvt_65002aa893a15114cd9237a6040fee15": "1796823172519|1765287159"
-      }
-    }
-  },
-  "564b3391-510f-4b50-a038-7df413bec15d": {
-    "authen": [
-      {
-        "name": "alphapai",
-        "url": "https://alphapai-web.rabyte.cn/reading/paipai/index",
-        "phone": "18516208815",
-        "passwd": "lmh021152LMH",
-        "locators": {
-          "login_dialog": {
-            "by": "css",
-            "value": "div.login-box"
-          },
-          "open_login_btn": null,
-          "tab_switch": {
-            "by": "xpath",
-            "value": "//a[contains(text(),'账号密码登录')]"
-          },
-          "check_box": null,
-          "phone_input": {
-            "by": "xpath",
-            "value": "//input[@placeholder='请输入手机号']"
-          },
-          "pwd_input": {
-            "by": "xpath",
-            "value": "//input[@placeholder='请输入密码']"
-          },
-          "login_btn": {
-            "by": "xpath",
-            "value": "//div[contains(text(),'登录') or contains(text(),'登 录')]"
-          }
-        }
-      },
-      {
-        "name": "gangtise",
-        "url": " https://open.gangtise.com/",
-        "phone": "13651677354",
-        "passwd": "lmh021152LMH",
-        "locators": {
-          "login_dialog": {
-            "by": "css",
-            "value": "div.login-box"
-          },
-          "open_login_btn": null,
-          "tab_switch": null,
-          "check_box": {
-            "by": "css",
-            "value": "div.privacyPolicy .el-checkbox__input"
-          },
-          "phone_input": {
-            "by": "css",
-            "value": "input.login-phone[placeholder='请输入您的手机号/账号']"
-          },
-          "pwd_input": {
-            "by": "css",
-            "value": "input.login-password_[placeholder='请输入密码']"
-          },
-          "login_btn": {
-            "by": "xpath",
-            "value": "//div[contains(@class,'login-button') and normalize-space(text())='登录']"
-          }
-        }
-      }
-    ],
-    "alphapai": {
-      "cookies": [
-        {
-          "domain": ".rabyte.cn",
-          "expiry": 1799847436,
-          "httpOnly": false,
-          "name": "sensorsdata2015jssdkcross",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "%7B%22distinct_id%22%3A%221163481096134852608%22%2C%22first_id%22%3A%2219b03548f751072-010023f59b0131a-1f3f337f-4096000-19b03548f761a52%22%2C%22props%22%3A%7B%22%24latest_traffic_source_type%22%3A%22%E7%9B%B4%E6%8E%A5%E6%B5%81%E9%87%8F%22%2C%22%24latest_search_keyword%22%3A%22%E6%9C%AA%E5%8F%96%E5%88%B0%E5%80%BC_%E7%9B%B4%E6%8E%A5%E6%89%93%E5%BC%80%22%2C%22%24latest_referrer%22%3A%22%22%7D%2C%22identities%22%3A%22eyIkaWRlbnRpdHlfY29va2llX2lkIjoiMTliMDM1NDhmNzUxMDcyLTAxMDAyM2Y1OWIwMTMxYS0xZjNmMzM3Zi00MDk2MDAwLTE5YjAzNTQ4Zjc2MWE1MiIsIiRpZGVudGl0eV9sb2dpbl9pZCI6IjExNjM0ODEwOTYxMzQ4NTI2MDgifQ%3D%3D%22%2C%22history_login_id%22%3A%7B%22name%22%3A%22%24identity_login_id%22%2C%22value%22%3A%221163481096134852608%22%7D%2C%22%24device_id%22%3A%2219b03548f751072-010023f59b0131a-1f3f337f-4096000-19b03548f761a52%22%7D"
-        },
-        {
-          "domain": ".rabyte.cn",
-          "expiry": 1765295999,
-          "httpOnly": false,
-          "name": "sajssdk_2015_cross_new_user",
-          "path": "/",
-          "sameSite": "Lax",
-          "secure": false,
-          "value": "1"
-        }
-      ],
-      "local_storage": {
-        "MODE": "undefined",
-        "USER_AUTH_TOKEN": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxMTYzNDgxMDk2MTM0ODUyNjA4Iiwic3ViIjoie1wiaW50ZXJuYWxcIjpmYWxzZSxcImxvZ2luVGltZVwiOlwiMjAyNS0xMi0wOVQyMTozNzoxMy43NTFcIixcInBsYXRmb3JtXCI6XCJ3ZWJcIixcInVpZFwiOlwiMTE2MzQ4MTA5NjEzNDg1MjYwOFwifSIsImlzcyI6InJhYnl0ZSIsImlhdCI6MTc2NTI4NzQzMywiZXhwIjoxNzY3ODc5NDMzfQ.WI3DaO1ASOETN0NHrRFRftPZjkALDX6OyA-zl2CgaDc",
-        "paipai-agent-fastsheet-us-guide": true,
-        "pc-admin-side-adv-modal-storage": {
-          "dateOflastTime": "2025-12-09",
-          "flag": "18516208815"
-        },
-        "search-to-paipai-guide": true,
-        "search-to-paipai-guide-date": 1765287441590,
-        "version-market-tip": 1
-      }
-    },
-    "gangtise": {
-      "local_storage": {
-        "cookies": [
-          {
-            "name": "HWWAFSESID",
-            "value": "0487c73250060228d4",
-            "domain": "open.gangtise.com",
-            "path": "/",
-            "expires": -1,
-            "httpOnly": false,
-            "secure": false,
-            "sameSite": "Lax"
-          },
-          {
-            "name": "HWWAFSESTIME",
-            "value": "1765343878589",
-            "domain": "open.gangtise.com",
-            "path": "/",
-            "expires": -1,
-            "httpOnly": false,
-            "secure": false,
-            "sameSite": "Lax"
-          }
-        ],
-        "origins": [
-          {
-            "origin": "https://open.gangtise.com",
-            "localStorage": [
-              {
-                "name": "G_remberPassword",
-                "value": "false"
-              },
-              {
-                "name": "G_USER_ID",
-                "value": "929101509502930944"
-              },
-              {
-                "name": "G_cnfr_uid",
-                "value": "25960"
-              },
-              {
-                "name": "G_isPamirs",
-                "value": ""
-              },
-              {
-                "name": "G_UID",
-                "value": "25960"
-              },
-              {
-                "name": "G_showTheme",
-                "value": "light"
-              },
-              {
-                "name": "G_noChangeProduct",
-                "value": "1"
-              },
-              {
-                "name": "G_userPrivacyPolicy",
-                "value": "true"
-              },
-              {
-                "name": "G_activeProduct",
-                "value": "{\"productCode\":10018,\"productName\":\"云投研买方版\",\"productType\":2,\"tenantId\":1855,\"tenantCode\":\"T00013631\",\"tenantName\":\"中泰证券（自营）\",\"comboId\":661,\"endValid\":1766419199000,\"tenantIpaddrControl\":null,\"pickerName\":\"中泰证券（自营）云投研\"}"
-              },
-              {
-                "name": "G_tenantId",
-                "value": "1855"
-              },
-              {
-                "name": "G_GangtiseLogConfig",
-                "value": "{\"waitCount\":10,\"waitTIme\":60000,\"sendOnClose\":true,\"url\":\"/application/log/log-service/api/behaviorLog/singleReceive\",\"userId\":\"929101509502930944\",\"uid\":25960,\"timeDiff\":0,\"deviceCode\":\"1\",\"productCode\":10018,\"productVersion\":\"v2.7.18\",\"ipaddr\":\"114.87.128.98\",\"tenant_id\":1855,\"clientType\":\"\"}"
-              },
-              {
-                "name": "G_detailOnly",
-                "value": "false"
-              },
-              {
-                "name": "G_token",
-                "value": "8e669afa-7f62-4632-84af-53e14cff770c"
-              },
-              {
-                "name": "G_cnfr_phone",
-                "value": "13651677354"
-              },
-              {
-                "name": "G_timeDiff",
-                "value": "0"
-              },
-              {
-                "name": "G_rPFlag",
-                "value": "false"
-              },
-              {
-                "name": "G_fingerprintId",
-                "value": "9a1eca45b367480138de2d3e561db99e"
-              },
-              {
-                "name": "G_cnfr_user_name",
-                "value": "李沐恒"
-              },
-              {
-                "name": "G_userCategory",
-                "value": "1"
-              },
-              {
-                "name": "G_user",
-                "value": "{\"access_token\":\"8e669afa-7f62-4632-84af-53e14cff770c\",\"expires_in\":10800,\"user_id\":\"929101509502930944\",\"uid\":25960,\"identifier\":\"13651677354\",\"user_name\":\"李沐恒\",\"user_key\":\"f1e7fecaf460480693e4abb50132bfcf\",\"user_category\":1,\"user_level\":0,\"ipaddr\":\"114.87.128.98\",\"tenant_id\":1855,\"product_code\":10018,\"product_type\":null,\"client_category\":1,\"version\":\"1.0.0\",\"time\":1765343928,\"long_term\":0}"
-              },
-              {
-                "name": "G_user_key",
-                "value": "f1e7fecaf460480693e4abb50132bfcf"
-              },
-              {
-                "name": "tab",
-                "value": "{\"tabs\":[{\"code\":\"20088\",\"name\":\"首页\",\"value\":\"home\",\"alive\":\"home\",\"mod_id\":\"\",\"func_id\":\"\",\"keep\":true,\"time\":1765343931775}],\"activeTab\":{},\"tabTempParams\":{},\"backTabList\":[],\"saveTabs\":false}"
-              }
-            ]
-          }
-        ]
-      },
-      "cookies": [
-        {
-          "name": "HWWAFSESID",
-          "value": "0487c73250060228d4",
-          "domain": "open.gangtise.com",
-          "path": "/",
-          "expiry": -1,
+          "expires": 1797153721,
           "httpOnly": false,
           "secure": false,
           "sameSite": "Lax"
         },
         {
-          "name": "HWWAFSESTIME",
-          "value": "1765343878589",
-          "domain": "open.gangtise.com",
+          "name": "HMACCOUNT",
+          "value": "BE0AD5BA6EEF3019",
+          "domain": ".xuangutong.com.cn",
           "path": "/",
-          "expiry": -1,
+          "expires": -1,
           "httpOnly": false,
           "secure": false,
           "sameSite": "Lax"
+        },
+        {
+          "name": "Hm_lvt_5a36d47aea259294d4ceb6ccbb2fa0d9",
+          "value": "1765617709",
+          "domain": ".xuangutong.com.cn",
+          "path": "/",
+          "expires": 1797153722,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "_bl_uid",
+          "value": "zhmpOjvq4b73Ov7e44dwiw7sF8ad",
+          "domain": "xuangutong.com.cn",
+          "path": "/",
+          "expires": 1781169710.500743,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "token",
+          "value": "MnX3+CL99FcyyFPzCHXCSHoD84YhyLjcCtqCtX5orvbYdGrO7MMq3OWCtDgu4qibr1EMU0Gz8WyBEl1rcjhMPkjuAtK2ft54r8EjDUnfbQXd3lrZt2CQzym28t81pNUdbwL9e5wd8yFlkx3ZbZi5Uwk4XVuRq9Ol/rnS93rGWtY7i4KBlVFR9A+nQ1P+UkA9jznfx/8Zw3f4X9sdx772w0EjjIG/Sj88AKui0kESqvIcBOBB/Fb8IJblq5WWw0Dx+AmF68SEkl713wdibXvLJW3kFdH8dOXl44VjBrKiatJl5CqGoiNQiMm2CijtX18riRJ2rPcRn3rBTL1+AlIWnA==",
+          "domain": "xuangutong.com.cn",
+          "path": "/",
+          "expires": 1770801721,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "Hm_lpvt_65002aa893a15114cd9237a6040fee15",
+          "value": "1765617721",
+          "domain": ".xuangutong.com.cn",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "uid",
+          "value": "2578898",
+          "domain": "xuangutong.com.cn",
+          "path": "/",
+          "expires": 1770801722,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "Hm_lpvt_5a36d47aea259294d4ceb6ccbb2fa0d9",
+          "value": "1765617723",
+          "domain": ".xuangutong.com.cn",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        }
+      ],
+      "origins": [
+        {
+          "origin": "https://xuangutong.com.cn",
+          "localStorage": [
+            {
+              "name": "Hm_lvt_5a36d47aea259294d4ceb6ccbb2fa0d9",
+              "value": "1797153722567|1765617709"
+            },
+            {
+              "name": "Hm_lvt_65002aa893a15114cd9237a6040fee15",
+              "value": "1797153721230|1765617707"
+            }
+          ]
         }
       ]
     }
+  },
+  "564b3391-510f-4b50-a038-7df413bec15d": {
   }
 }

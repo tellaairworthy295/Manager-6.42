@@ -496,8 +496,11 @@ else if (matchDomain(nl_dpg_adr_domains.concat(['hln.be']))) {
       }
     }
     let article_divs = document.querySelectorAll(article_src_sel + ' > div');
-    if (article_divs.length < 3)
-      header_nofix(article_sel + ' > header', '', 'BPC > no archive-fix');
+    if (article_divs.length < 3) {
+      let header = document.querySelector(article_sel + ' > header');
+      if (header)
+        header.before(googleSearchToolLink(url));
+    }
   }
   let url = window.location.href;
   let article_sel = 'div#remaining-paid-content';
@@ -588,7 +591,7 @@ else if (matchDomain('telegraaf.nl')) {
   window.setTimeout(function () {
     let paywall_sel = cs_param.paywall_sel || 'div[data-testid="paywall-position-popover"]:not(:empty)';
     let paywall = document.querySelector(paywall_sel);
-    if (paywall) {
+    if (paywall && dompurify_loaded) {
       removeDOMElement(paywall);
       let article = document.querySelector('article');
       if (article) {
@@ -604,7 +607,7 @@ else if (matchDomain('telegraaf.nl')) {
                 let parser = new DOMParser();
                 let doc = parser.parseFromString(DOMPurify.sanitize(html, dompurify_options), 'text/html');
                 let article_new = doc.querySelector('article');
-                if (article_new.querySelector('div[class^="gallery_wrapper"]') || article_new.querySelector('div[id^="player_"]'))
+                if (article_new.querySelector('div[class^="gallery_wrapper"], div[id^="player_"], div[data-testid="social-embed-fallbackmessage"], div[class^="map_"]'))
                   window.location.href = url + url_postfix;
                 else
                   article.parentNode.replaceChild(article_new, article);
@@ -627,14 +630,17 @@ else if (matchDomain('tijd.be')) {
     }
     let pars = document.querySelectorAll('div[itemprop="articleBody"] > div');
     if (pars.length) {
-      if (pars.length < 5)
-        pars[0].before(googleSearchToolLink(url));
+      if (pars.length < 5) {
+        let header = document.querySelector('article header');
+        if (header)
+          header.before(googleSearchToolLink(url));
+      }
     } else {
       let main = document.querySelector('main');
       if (main)
         main.after(googleSearchToolLink(url));
     }
-    document.querySelectorAll('[inert]').forEach(e => e.removeAttribute('inert'));
+    clear_inert();
   }
   if (matchDomain('belegger.tijd.be')) {
     if (window.location.pathname.endsWith('.html')) {
@@ -662,6 +668,10 @@ else if (matchDomain('tijd.be')) {
       }
     }
   }
+  function clear_inert() {
+    document.querySelectorAll('[inert]').forEach(e => e.removeAttribute('inert'));
+  }
+  clear_inert();
 }
 
 else if (matchDomain('vn.nl')) {

@@ -704,14 +704,17 @@ else if (matchDomain('lecho.be')) {
     }
     let pars = document.querySelectorAll('div[itemprop="articleBody"] > div');
     if (pars.length) {
-      if (pars.length < 5)
-        pars[0].before(googleSearchToolLink(url));
+      if (pars.length < 5) {
+        let header = document.querySelector('article header');
+        if (header)
+          header.before(googleSearchToolLink(url));
+      }
     } else {
       let main = document.querySelector('main');
       if (main)
         main.after(googleSearchToolLink(url));
     }
-    document.querySelectorAll('[inert]').forEach(e => e.removeAttribute('inert'));
+    clear_inert();
   }
   if (matchDomain('investisseur.lecho.be')) {
     if (window.location.pathname.endsWith('.html')) {
@@ -739,6 +742,10 @@ else if (matchDomain('lecho.be')) {
       }
     }
   }
+  function clear_inert() {
+    document.querySelectorAll('[inert]').forEach(e => e.removeAttribute('inert'));
+  }
+  clear_inert();
 }
 
 else if (matchDomain('lecourrierdesstrateges.fr')) {

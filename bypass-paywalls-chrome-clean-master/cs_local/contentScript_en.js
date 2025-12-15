@@ -230,7 +230,17 @@ else if (matchDomain('businessdesk.co.nz')) {
 }
 
 else if (matchDomain(['crikey.com.au', 'smartcompany.com.au', 'themandarin.com.au'])) {
-  let ads = 'div.wp-block-pm-ad-placeholder-block';
+  let paywall_sel = 'div#pmc-zephr-paywall';
+  let paywall = document.querySelector(paywall_sel);
+  if (paywall) {
+    let article_sel = 'div.entry-content';
+    let article = document.querySelector(article_sel);
+    if (article) {
+      getJsonUrl(paywall_sel, '', article_sel + ' > p');
+      article.style['max-height'] = 'none';
+    }
+  }
+  let ads = 'div.wp-block-pm-ad-placeholder-block, div[style*="linear-gradient"]';
   hideDOMStyle(ads);
 }
 
@@ -1223,6 +1233,11 @@ else if (matchDomain('adweek.com')) {
   }
 }
 
+else if (matchDomain('aftenposten.no')) {
+  let ads = 'div[class^="advertory-"]';
+  hideDOMStyle(ads);
+}
+
 else if (matchDomain('ajc.com')) {
   let paygate = document.querySelector('div.story-paygate_placeholder');
   if (paygate)
@@ -1665,7 +1680,7 @@ else if (matchDomain(ca_gcm_domains)) {
 }
 
 else if (matchDomain('capital.bg')) {
-  let paywall = document.querySelector(cs_param.paywall_sel || 'section[data-paywall-id]');
+  let paywall = document.querySelector(cs_param.paywall_sel || 'section > article a[href^="/paywall_click/"], section[data-paywall-id]');
   if (paywall) {
     removeDOMElement(paywall);
     let json_script = getArticleJsonScript();
@@ -2737,8 +2752,15 @@ else if (matchDomain('livelaw.in')) {
     let intro = document.querySelector(amp ? 'div.story' : 'div.details-story-wrapper');
     removeDOMElement(paywall, intro);
     let paywall_content = document.querySelector('div.paywall-content.hide');
-    if (paywall_content)
-      paywall_content.className = amp ? '' : 'news_details_page_row2 details-story-wrapper';
+    if (paywall_content) {
+      if (paywall_content.innerText.length) {
+        paywall_content.className = amp ? '' : 'news_details_page_row2 details-story-wrapper';
+      } else if (!amp) {
+        let amphtml = document.querySelector('head > link[rel="amphtml"]');
+        if (amphtml)
+          window.location.href = amphtml.href;
+      }
+    }
   }
   let ads = 'inside-post-ad, amp-ad';
   hideDOMStyle(ads);
@@ -4740,14 +4762,15 @@ else if (matchDomain('wsj.com')) {
       let url = window.location.href;
       let article_sel = 'article section';
       let wsj_pro = paywall.querySelector('a[href^="https://wsjpro.com/"]');
-      if (wsj_pro) {
-        header_nofix(article_sel, paywall_sel);
-      } else {
+      if (wsj_pro)
+        article_sel = 'article';
+      let article = document.querySelector(article_sel);
+      if (article) {
         let video_sel = 'div[data-type="video"]';
         let video = document.querySelector(video_sel);
         let schema_script = document.querySelector('script#articleschema');
         func_post = function () {
-          let pars = document.querySelectorAll(article_sel + ' div[data]');
+          let pars = document.querySelectorAll(article_sel + ' div[style*="font-family:"]');
           if (pars.length < 5)
             header_nofix(article_sel, '', 'BPC > no archive-fix');
           if (video) {
@@ -4791,14 +4814,7 @@ else if (matchDomain('wsj.com')) {
           for (let elem of inline_wrappers)
             removeDOMElement(elem.parentNode);
         }
-        let cn_canonical = document.querySelector('head > link[rel="canonical"][href^="https://cn.wsj.com/"]');
-        if (!cn_canonical)
-          getArchive(url, paywall_sel, '', article_sel);
-        else {
-          removeDOMElement(paywall);
-          if (window.navigator.userAgent.toLowerCase().includes('chrome'))
-            refreshCurrentTab();
-        }
+        getArchive(url, paywall_sel, '', article_sel);
       }
     }
   }

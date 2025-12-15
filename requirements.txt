@@ -6,8 +6,6 @@ selenium-stealth
 requests
 googletrans
 urllib3
-deep_translator
-fastmcp
 fastapi
 celery
 redis
@@ -23,3 +21,4 @@ paddlepaddle-gpu
 openpyxl
 sqlalchemy
 mysql-connector-python
+playwright

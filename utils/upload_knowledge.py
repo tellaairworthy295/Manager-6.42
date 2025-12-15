@@ -1,8 +1,10 @@
-import re
 import requests
 import json
 import time
-from scraper.news_scraper import get_target_articles
+from loguru import logger
+
+# Configure loguru for upload knowledge module
+logger.add("logs/upload_knowledge/upload_knowledge_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
 
 # ============================
 # Configuration
@@ -26,9 +28,9 @@ def list_bases():
     # The API response may return a top-level list (old Dify) or dict with 'data' (new Dify)
     if isinstance(bases, dict) and "data" in bases:
         bases = bases["data"]
-    print(f"📄 Found {len(bases)} Knowledge Base(s):")
+    logger.info(f"📄 Found {len(bases)} Knowledge Base(s):")
     ids = [b.get("id") for b in bases]
-    print("Dataset IDs:", ids)
+    logger.debug(f"Dataset IDs: {ids}")
     return ids
 
 def list_documents():
@@ -48,7 +50,7 @@ def list_documents():
         if len(docs) < limit:
             break
         page += 1
-    print(f"📄 Found {len(all_docs)} existing document(s) across all pages.")
+    logger.info(f"📄 Found {len(all_docs)} existing document(s) across all pages.")
     return all_docs
 
 
@@ -57,9 +59,9 @@ def delete_document(doc_id):
     url = f"{BASE_URL}/v1/datasets/{DATASET_ID}/documents/{doc_id}"
     resp = requests.delete(url, headers=api_headers())
     if resp.status_code == 200:
-        print(f"🗑️ Deleted document: {doc_id}")
+        logger.info(f"🗑️ Deleted document: {doc_id}")
     else:
-        print(f"⚠️ Failed to delete {doc_id}: {resp.text}")
+        logger.warning(f"⚠️ Failed to delete {doc_id}: {resp.text}")
 
 def delete_all_documents():
     """Delete all documents from dataset."""
@@ -67,7 +69,7 @@ def delete_all_documents():
     for doc in docs:
         delete_document(doc["id"])
         time.sleep(1)
-    print("✅ All existing documents removed.")
+    logger.info("✅ All existing documents removed.")
     
 def upload_new_document_by_file(FILE_PATH: str):
     """Upload and index new document file to Dify KB."""
@@ -129,14 +131,14 @@ def upload_new_document_by_file(FILE_PATH: str):
 
             resp = requests.post(url, headers=headers, files=files, data=data)
             resp.raise_for_status()
-            print(f"✅ Uploaded file document: {FILE_PATH}")
+            logger.info(f"✅ Uploaded file document: {FILE_PATH}")
             return resp.json()
     except Exception as e:
-        print(f"❌ Failed to upload {FILE_PATH}: {e}")
+        logger.error(f"❌ Failed to upload {FILE_PATH}: {e}")
         return None
 
 
-def upload_new_document_by_text(name: str, text: str):
+def _upload_new_document_by_text(name: str, text: str):
     """Upload and index new document from raw text."""
     url = f"http://localhost/v1/datasets/{DATASET_ID}/document/create-by-text"
     headers = api_headers()
@@ -155,7 +157,7 @@ def upload_new_document_by_text(name: str, text: str):
                 },
                 "parent_mode": "paragraph",
                 "subchunk_segmentation": {
-                    "separator": "\n\n",
+                    "separator": "\n",
                     "max_tokens": 512
                 }
             },
@@ -193,40 +195,77 @@ def upload_new_document_by_text(name: str, text: str):
     try:
         resp = requests.post(url, headers=headers, json=payload)
         resp.raise_for_status()
-        print(f"✅ Uploaded text document: {name}")
+        logger.info(f"✅ Uploaded text document: {name}")
         return resp.json()
-    except Exception as e:
-        print(f"❌ Failed to upload {name}: {e}")
-        return None
+    except:
+        raise Exception("Error while uploading, retrying")
 
+def _get_document(doc_id):
+    url = f"{BASE_URL}/v1/datasets/{DATASET_ID}/documents/{doc_id}"
+    resp = requests.get(url, headers=api_headers())
+    resp.raise_for_status()
+    return resp.json()
 
-def update_dify_knowledge():
-    print("Starting upload...")
-    titles = []
+def _wait_for_indexing(doc_id, timeout=300, interval=5):
+    import time
+    start = time.time()
+    while time.time() - start < timeout:
+        doc = _get_document(doc_id)
+        if doc["indexing_status"] == "completed":
+            return True
+        elif doc["indexing_status"] == "error":
+            return False
+        time.sleep(interval)
+    return False
+
+import time
+
+def upload_dify_knowledge(all_uploads: list[dict], date_str: str, max_retries: int = 3, retry_delay: int = 5):
     docs = list_documents()
-    articles = get_target_articles()
+    existing_names = {doc["name"] for doc in docs}
+    logger.info("Starting upload...")
 
-    for article in articles:
-        title = sanitize_filename(article.get("title"))
-        content = article.get("content")
-        if title and content:
-            doc_name = f"{title}.txt"
-            titles.append(doc_name)
-            if not any(doc["name"] == doc_name for doc in docs):
-                upload_new_document_by_text(name=doc_name, text=content)
+    for upload in all_uploads:
+        content = "\n\n".join(upload.get("content") or [])
+        title = f"{upload.get('source')}_{date_str}"
+        doc_name = f"{title}.txt"
 
+        if not content or doc_name in existing_names:
+            continue
+
+        retries = 0
+        while retries < max_retries:
+            try:
+                result = _upload_new_document_by_text(name=doc_name, text=content)
+                doc = result.get("document")
+
+                # Poll until indexing completes
+                if _wait_for_indexing(doc["id"]):
+                    break
+                else:
+                    raise Exception("Indexing failed")
+            except Exception as e:
+                retries += 1
+                logger.warning(f"⚠️ Upload failed for {doc_name}, attempt {retries}/{max_retries}: {e}")
+                if retries >= max_retries:
+                    logger.error(f"❌ Giving up on {doc_name} after {max_retries} retries")
+                else:
+                    time.sleep(retry_delay)
+
+def clean_dify_knowledge():
+    docs = list_documents()
+    from datetime import datetime
+    twelve_hours_ago = datetime.now().timestamp() - 12.5 * 3600
     for doc in docs:
-        if doc["name"] not in titles:
+        # Delete docs where indexing failed
+        if doc.get("indexing_status") == "error":
             delete_document(doc["id"])
+        # Delete docs created more than 12 hours ago
+        elif doc.get("created_at") is not None and float(doc["created_at"]) < twelve_hours_ago:
+            delete_document(doc["id"])
+    logger.info("✅ Removal done!")
 
-    print("✅ All done!")
-
-def sanitize_filename(name):
-        # Remove or replace characters not allowed in filenames
-        name = name.strip()
-        name = re.sub(r'[\\/*?:"<>|]', "_", name)
-        return name[:100]  # trim long names to avoid OS issues
 
 if __name__ == "__main__":
     #upload_flow()
-    list_bases()
+    list_documents()

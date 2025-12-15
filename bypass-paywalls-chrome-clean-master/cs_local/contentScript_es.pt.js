@@ -464,6 +464,9 @@ else if (matchDomain('elobservador.com.uy')) {
 }
 
 else if (matchDomain('eltiempo.com')) {
+  let exclusivo = document.querySelector('div.c-articulo-exclusivo');
+  if (exclusivo)
+    exclusivo.classList.remove('c-articulo-exclusivo');
   let modulos = document.querySelector('div.modulos');
   if (modulos)
     modulos.classList.remove('modulos');
@@ -472,11 +475,8 @@ else if (matchDomain('eltiempo.com')) {
 }
 
 else if (matchDomain('eltribuno.com')) {
-  let lazy_images = document.querySelectorAll('img.lazyload[data-src]:not([src])');
-  for (let elem of lazy_images) {
-    elem.src = elem.getAttribute('data-src');
-    elem.classList.remove('lazyload');
-  }
+  let ads = 'div.container-spot, div.anticipo-cont';
+  hideDOMStyle(ads);
 }
 
 else if (matchDomain('eluniversal.com.mx')) {
