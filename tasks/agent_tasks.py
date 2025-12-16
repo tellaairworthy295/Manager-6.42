@@ -2,13 +2,12 @@ import json
 import os
 from datetime import datetime
 import zipfile
-from celery import chord, group
-from celery_app import celery_app
-
+import dramatiq
 from loguru import logger
 from pwright.page_factory import new_stealth_page
 from pwright.context_manager import playwright_context
 
+from pwright.playwright_manager import PlaywrightManager
 from scraper.agent_scraper import process_single_stock
 from utils.agent_limit import release_slot
 from utils.sender import load_email_config_from_json, send_email_with_attachments
@@ -50,68 +49,57 @@ def init_user_dirs(user_id: str):
 # -------------------------------------------------------------
 # Task 1 — Per-site task (website-level retry)
 # -------------------------------------------------------------
-@celery_app.task(
-    bind=True,
+@dramatiq.actor(
+    queue_name="agent",
     max_retries=1,
-    default_retry_delay=5,
-    name="tasks.agent_tasks.process_single_site",
+    retry_when=lambda exc: True,
 )
 def process_single_site(
-    self,
-    stock,
-    user_id,
-    source,
-    site_locators,
-    storage_state,
-    prompt,
+    stock: str,
+    user_id: str,
+    source: str,
+    site_locators: dict,
+    storage_state: dict,
+    prompt: str,
 ):
-    logger.info(f"[{stock}] Processing website = {source}, user={user_id}")
+    logger.info(f"[{stock}] Processing website={source}, user={user_id}")
 
     _, final_docs, _ = get_user_dirs(user_id)
 
     try:
-        with playwright_context(storage_state=storage_state, bypass_ext_path="") as context:
+        with playwright_context(storage_state=storage_state) as context:
             page = new_stealth_page(context)
             final_path = process_single_stock(
-                page, stock, prompt, final_docs, site_locators
+                page,
+                stock,
+                prompt,
+                final_docs,
+                site_locators,
             )
 
-            return {
-                "status": "success",
-                "stock": stock,
-                "user_id": user_id,
-                "site": source,
-                "file": final_path,
-            }
+        return {
+            "status": "success",
+            "stock": stock,
+            "user_id": user_id,
+            "site": source,
+            "file": final_path,
+        }
 
     except Exception as e:
         logger.exception(
             f"❌ Website failed for stock={stock}, site={source}: {e}"
         )
-        if self.request.retries < self.max_retries:
-            raise self.retry(exc=e)
+        # Dramatiq retry is automatic when exception is raised
+        raise
 
-        return {
-            "status": "failed",
-            "stock": stock,
-            "user_id": user_id,
-            "site": source,
-            "error": str(e),
-        }
 
 # -------------------------------------------------------------
 # Task 2 — Final user-level aggregator (zip + email)
 # -------------------------------------------------------------
-@celery_app.task(
-    bind=True,
-    max_retries=1,
-    default_retry_delay=10,
-    name="tasks.agent_tasks.finalize_and_email",
-)
-def finalize_and_email(self, all_site_results):
+@dramatiq.actor(queue_name="agent", max_retries=1)
+def finalize_and_email(all_site_results: list[dict]):
     """
-    all_site_results = list of results from all process_single_site tasks.
-    No stock grouping anymore.
+    all_site_results = list of results from process_single_site
     """
     try:
         if not all_site_results:
@@ -124,46 +112,38 @@ def finalize_and_email(self, all_site_results):
 
         success_files = []
         failed = []
-        failed_details = []
 
-        # collect all TXT files and failures with details
         for result in all_site_results:
-            if result["status"] == "success":
+            if result.get("status") == "success":
                 success_files.append(result["file"])
             else:
-                failed.append(f"{result['stock']} @ {result['site']}")
+                failed.append(
+                    f"{result.get('stock')} @ {result.get('site')}"
+                )
 
         logger.info(
-            f"[finalize] user={user_id}: {len(success_files)} success files, "
-            f"{len(failed)} failures."
+            f"[finalize] user={user_id}: "
+            f"{len(success_files)} success, {len(failed)} failed"
         )
 
         zip_path = os.path.join(output_dir, f"{date}_{user_id}.zip")
 
-        detailed_failures_text = "\n".join(failed) if failed else "无"
-
         if success_files:
-            try:
-                with zipfile.ZipFile(zip_path, "w") as zf:
-                    for f in success_files:
-                        zf.write(f, arcname=os.path.basename(f))
+            with zipfile.ZipFile(zip_path, "w") as zf:
+                for f in success_files:
+                    zf.write(f, arcname=os.path.basename(f))
 
-                config = load_email_config_from_json("json/config.json")
-                config.ATTACHMENTS = [zip_path]
-                config.BODY = (
-                    f"Agent 分析（{date}）\n"
-                    f"成功文件 {len(success_files)} 个。\n"
-                    f"失败 {len(failed)} 个。\n\n"
-                    f"失败详情:\n{detailed_failures_text}\n"
-                )
+            config = load_email_config_from_json("json/config.json")
+            config.ATTACHMENTS = [zip_path]
+            config.BODY = (
+                f"Agent 分析（{date}）\n"
+                f"成功文件 {len(success_files)} 个。\n"
+                f"失败 {len(failed)} 个。\n\n"
+                f"失败详情:\n" + ("\n".join(failed) if failed else "无")
+            )
 
-                send_email_with_attachments(**config.as_dict())
-                logger.info(f"📧 Email sent to user {user_id}")
-
-            except Exception as e:
-                logger.exception(f"❌ Final email failed: {e}")
-                if self.request.retries < self.max_retries:
-                    raise self.retry(exc=e)
+            send_email_with_attachments(**config.as_dict())
+            logger.info(f"📧 Email sent to user {user_id}")
 
         return {
             "user_id": user_id,
@@ -172,42 +152,44 @@ def finalize_and_email(self, all_site_results):
             "zip_file": zip_path,
             "status": "DONE",
         }
+
     finally:
-        # Ensure Playwright browser is torn down once the main agent task finishes
-        from pwright.playwright_manager import PlaywrightManager
+        # IMPORTANT: release global slot
         PlaywrightManager.instance().close_browser()
         release_slot()
+
 
 
 # -------------------------------------------------------------
 # Task 3 — Entry point: create all chords
 # -------------------------------------------------------------
-@celery_app.task(name="tasks.agent_tasks.scrape_agent_task")
-def scrape_agent_task(stocks: list[str], user_id: str, all_cookies):
-
+@dramatiq.actor(queue_name="agent")
+def scrape_agent_task(stocks: list[str], user_id: str, all_cookies: dict):
     with open("json/prompts.json", "r", encoding="utf-8") as f:
         prompt_config = json.load(f)
 
-    with open("json/selectors.json", "r") as f:
+    with open("json/selectors.json", "r", encoding="utf-8") as f:
         s_locators_map = json.load(f)["agent"]
+
     # prepare user dirs
     init_user_dirs(user_id)
 
-    # select prompt list
+    # select prompt
     if user_id in prompt_config and "prompt" in prompt_config[user_id]:
         prompt = prompt_config[user_id]["prompt"]
     else:
         prompt = prompt_config["default"]["prompt"]
 
-    # build ALL website tasks
-    all_tasks = []
+    messages = []
+
     for stock in stocks:
         for source, storage_state in all_cookies.items():
-            locators = s_locators_map.get(source, {})
+            locators = s_locators_map.get(source)
             if not locators:
                 continue
-            all_tasks.append(
-                process_single_site.s(
+
+            messages.append(
+                process_single_site.message(
                     stock,
                     user_id,
                     source,
@@ -217,11 +199,16 @@ def scrape_agent_task(stocks: list[str], user_id: str, all_cookies):
                 )
             )
 
-    # ONE big chord
-    final_job = chord(
-        group(all_tasks),
-        finalize_and_email.s()
-    ).apply_async()
+    if not messages:
+        logger.warning("No tasks created for scrape_agent_task")
+        return
 
-    logger.info(f"Started job={final_job.id}")
-    return {"job_id": final_job.id}
+    # Dramatiq replacement for Celery chord
+    dramatiq.group(messages).then(
+        finalize_and_email.message()
+    ).run()
+
+    logger.info(
+        f"[scrape_agent_task] user={user_id}, "
+        f"tasks={len(messages)} dispatched"
+    )

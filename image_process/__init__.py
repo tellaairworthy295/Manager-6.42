@@ -1,8 +1,6 @@
-
-from image_process import (
-    _preprecess_image,
-    _draw_boxes,
-    ocr_image_safe,
+from .preprocess import _preprecess_image
+from .ocr_api import _draw_boxes, ocr_image_safe
+from .convert_to_excel import (
     _normalize_text,
     _append_to_excel,
     _process_trendings,
@@ -18,3 +16,5 @@ __all__ = [
     "_process_trendings",
     "excel_flow",
 ]
+
+

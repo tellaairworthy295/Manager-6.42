@@ -112,7 +112,7 @@ async def add_users(request: Request):
         return JSONResponse({"error": f"Failed to add user: {e}"}, status_code=500)
 
     
-#========================Celery tasks==========================
+#========================Dramatiq tasks==========================
 @app.post("/api/scrape_news")
 async def scrape_news_api(request: Request):
     data = await request.json() or {}
@@ -120,8 +120,8 @@ async def scrape_news_api(request: Request):
     if not requests:
         return JSONResponse({"error": "No queries or sites provided"}, status_code=400)
     now_str = datetime.now().strftime("%Y%m%d%H%M%S")
-    result = scrape_all_news.delay(requests, now_str)
-    return JSONResponse({"status": "queued", "chord_id": result.id})
+    result = scrape_all_news.send(requests, now_str)
+    return JSONResponse({"status": "queued", "task_id": result.message_id})
     
 
 @app.post("/api/scrape_agent")
@@ -143,14 +143,14 @@ async def scrape_agent_api(request: Request):
             data["credentials"]
         )
 
-        result = scrape_agent_task.delay(
-            data["stocks"],
-            data["user_id"],
-            cks,
-        )
+        result = scrape_agent_task.send(
+                    data["stocks"],
+                    data["user_id"],
+                    cks,
+                )
 
         return JSONResponse(
-            {"status": "accepted", "task_id": result.id}
+            {"status": "accepted", "task_id": result.message_id}
         )
 
     except ValidationError as e:

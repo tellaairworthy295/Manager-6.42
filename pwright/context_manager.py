@@ -6,12 +6,12 @@ from .playwright_manager import PlaywrightManager
 @contextmanager
 def playwright_context(
     storage_state=None,
-    bypass_ext_path="bypass-paywalls-chrome-clean-master",
+    bypass_ext_path=None,
     headless=False,
 ):
     ext_path = os.path.abspath(bypass_ext_path) if bypass_ext_path else None
 
-    args = ["--no-sandbox", "--disable-dev-shm-usage"]
+    args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled", "--disable-infobars"]
 
     if ext_path and os.path.exists(ext_path):
         args += [
@@ -45,4 +45,7 @@ def playwright_context(
     try:
         yield context
     finally:
-        context.close()
+        try:
+            context.close()
+        except Exception:
+            pass

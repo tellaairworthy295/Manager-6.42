@@ -12,12 +12,10 @@ redis
 uvicorn
 asyncio
 matplotlib
-paddleocr
 numpy
 pandas
 python-docx
 loguru
-paddlepaddle-gpu
 openpyxl
 sqlalchemy
 mysql-connector-python

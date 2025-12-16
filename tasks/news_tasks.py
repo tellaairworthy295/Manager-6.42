@@ -1,21 +1,19 @@
 import random
 import time
-from celery_app import celery_app
+import dramatiq
 from loguru import logger
 from scraper.news_scraper import scrape_news, fetch_urls_from_page
 from utils.upload_knowledge import upload_dify_knowledge, clean_dify_knowledge
-from celery import group, chord
 
 # Configure loguru for news tasks module
 logger.add("logs/news_task/news_task_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
 
-@celery_app.task(
-    bind=True,
-    name="tasks.news_tasks.scrape_news_task",
+@dramatiq.actor(
+    queue_name="news",
     max_retries=1,
-    default_retry_delay=5,  # seconds between retries
+    retry_when=lambda exc: True,
 )
-def scrape_news_task(self, query: str, site: str = None, source: str = None):
+def scrape_news_task(query: str, site: str = None, source: str = None):
     """
     Scrape news articles for ONE website.
     Parameters:
@@ -31,9 +29,8 @@ def scrape_news_task(self, query: str, site: str = None, source: str = None):
         urls = fetch_urls_from_page(query, site)
     except Exception as e:
         logger.error(f"Failed to fetch URLs for {source}: {e}")
-        if self.request.retries < self.max_retries:
-            raise self.retry(exc=e)   # retry whole task
-        return {"status": "failed", "source": source, "error": str(e)}
+        # Dramatiq will automatically retry when exception is raised
+        raise
 
     
     if not urls:
@@ -46,7 +43,7 @@ def scrape_news_task(self, query: str, site: str = None, source: str = None):
             "failed_urls": [],
             "message": "No new URLs to scrape"
         }
-        self.update_state(state="SUCCESS", meta=result)
+        logger.info(f"Task completed for {source}: {result}")
         return result
     
     total = len(urls)
@@ -89,7 +86,7 @@ def scrape_news_task(self, query: str, site: str = None, source: str = None):
             total_content.append(content)
         # Small pause between URLs to avoid hammering the target site
         time.sleep(random.uniform(2.0, 4.0))
-        # Update progress after each URL
+        # Log progress after each URL
         progress = {
             "source": source,
             "current": i,
@@ -99,7 +96,7 @@ def scrape_news_task(self, query: str, site: str = None, source: str = None):
             "success_count": success,
             "failed_count": failed,
         }
-        self.update_state(state="PROGRESS", meta=progress)
+        logger.info(f"Progress for {source}: {progress}")
 
     final_result = {
         "source": source,
@@ -110,18 +107,16 @@ def scrape_news_task(self, query: str, site: str = None, source: str = None):
         "failed_urls": failed_urls,
     }
 
-    self.update_state(state="SUCCESS", meta=final_result)
     logger.info(f"Completed scraping task for {source}: {success} success, {failed} failed")
     return final_result
 
 
-@celery_app.task(
-    bind=True,
-    name="tasks.news_tasks.finalize_and_update_dify",
+@dramatiq.actor(
+    queue_name="news",
     max_retries=2,
-    default_retry_delay=10,
+    retry_when=lambda exc: True,
 )
-def finalize_and_update_dify(self, results, now_str):
+def finalize_and_update_dify(results, now_str):
     """
     Callback after all site scraping tasks are done.
     Aggregate results and update Dify KB with retry-aware uploads.
@@ -151,8 +146,8 @@ def finalize_and_update_dify(self, results, now_str):
     except Exception as e:
         # Catastrophic failure: retry the whole task
         logger.error(f"❌ Failed to update Dify KB: {e}")
-        if self.request.retries < self.max_retries:
-            raise self.retry(exc=e)
+        # Dramatiq will automatically retry when exception is raised
+        raise
 
     return {
         "status": "DONE",
@@ -162,18 +157,27 @@ def finalize_and_update_dify(self, results, now_str):
     }
 
 
-@celery_app.task(name="tasks.news_tasks.scrape_all_news")
+@dramatiq.actor(queue_name="news")
 def scrape_all_news(requests: list[dict], now_str):
     """
     Parent task: run scraping subtasks for each site concurrently,
     then update Dify KB once all are finished.
     """
-    job = group(
-        scrape_news_task.s(req.get("query"), req.get("site"), req.get("source"))
+    messages = [
+        scrape_news_task.message(req.get("query"), req.get("site"), req.get("source"))
         for req in requests
         if req.get("query") and req.get("site") and req.get("source")
-    )
+    ]
 
-    result = chord(job)(finalize_and_update_dify.s(now_str))
-    logger.info(f"Started scraping chord: {result.id}")
-    return {"chord_id": result.id}
+    if not messages:
+        logger.warning("No tasks created for scrape_all_news")
+        return {"status": "no_tasks"}
+
+    # Dramatiq replacement for Celery chord
+    # The .then() callback receives results from the group as first argument
+    dramatiq.group(messages).then(
+        lambda results: finalize_and_update_dify.send(results, now_str)
+    ).run()
+
+    logger.info(f"Started scraping group: {len(messages)} tasks dispatched")
+    return {"status": "queued", "task_count": len(messages)}
