@@ -1,24 +1,4 @@
 {
-  "Advance Local": {
-    "domain": "###_usa_adv_local",
-    "group": [
-      "al.com",
-      "cleveland.com",
-      "lehighvalleylive.com",
-      "masslive.com",
-      "mlive.com",
-      "nj.com",
-      "oregonlive.com",
-      "pennlive.com",
-      "silive.com",
-      "syracuse.com"
-    ],
-    "allow_cookies": 1,
-    "block_regex": "\\.sophi\\.io",
-    "cs_code": "[{\"cond\":\".article__paragraph--blur\", \"rm_class\":\"article__paragraph--blur\"}]",
-    "cs_dompurify": 1,
-    "upd_version": "4.2.5.6"
-  },
   "Aftenposten.no": {
     "domain": "aftenposten.no",
     "allow_cookies": 1,
@@ -36,6 +16,12 @@
     "allow_cookies": 1,
     "cs_param": {"paywall_sel": "section>article a[href^='/paywall_click/'],section[data-paywall-id]"},
     "upd_version": "4.2.6.2"
+  },
+  "Dnevnik.bg": {
+    "domain": "dnevnik.bg",
+    "allow_cookies": 1,
+    "useragent_custom": "Mozilla/5.0 (Java) outbrain",
+    "upd_version": "4.2.6.8"
   },
   "El Tiempo": {
     "domain": "eltiempo.com",
@@ -74,30 +60,6 @@
     ],
     "upd_version": "4.2.6.5"
   },
-  "Law.com (refresh; fetch from archive.is)": {
-    "domain": "law.com",
-    "allow_cookies": 1,
-    "ld_archive_is": "div.paywall-container|main:not(:has(main))",
-    "upd_version": "4.2.5.1"
-  },
-  "Le Parisien": {
-    "domain": "leparisien.fr",
-    "allow_cookies": 1,
-    "useragent": "googlebot",
-    "ld_archive_is": "div.paywall|section#left",
-    "upd_version": "4.2.5.4"
-  },
-  "Medium": {
-    "domain": "###_medium",
-    "group": [
-      "medium.com",
-      "betterprogramming.pub",
-      "towardsdatascience.com"
-    ],
-    "allow_cookies": 1,
-    "cs_param": {"ext_domains": "freedium.cfd,freedium-mirror.cfd,readmedium.com,archive.today"},
-    "upd_version": "4.2.5.5"
-  },
   "Newspack (WordPress plugin)": {
     "domain": "###_wp_newspack_gate",
     "allow_cookies": 1,
@@ -132,23 +94,10 @@
     "block_regex": "\\/spacenews\\.com\\/wp-content\\/plugins\\/newspack-plugin\\/dist\\/content-gate-metering\\.js",
     "upd_version": "4.2.6.5"
   },
-  "Standardmedia.co.ke (text only)": {
-    "domain": "standardmedia.co.ke",
+  "War on the Rocks": {
+    "domain": "warontherocks.com",
     "allow_cookies": 1,
-    "ld_json": "div.paywall-container|div.tbl_art>p:not([class])",
-    "upd_version": "4.2.5.2"
-  },
-  "The Observer UK": {
-    "domain": "observer.co.uk",
-    "allow_cookies": 1,
-    "block_regex": "\\.piano\\.io",
-    "upd_version": "4.2.5.9"
-  },
-  "The Times UK": {
-    "domain": "thetimes.com",
-    "allow_cookies": 1,
-    "cs_dompurify": 1,
-    "cs_param": {"article_sel": "article[id]"},
-    "upd_version": "4.2.5.1"
+    "ld_json_url": "a[href^='https://warontherocks.com/membership']|div.tw\\:container.tw\\:mb-20>div",
+    "upd_version": "4.2.7.1"
   }
 }

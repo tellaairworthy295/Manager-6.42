@@ -7,7 +7,6 @@ requests
 googletrans
 urllib3
 fastapi
-celery
 redis
 uvicorn
 asyncio
@@ -20,3 +19,8 @@ openpyxl
 sqlalchemy
 mysql-connector-python
 playwright
+setuptools
+opencv-python
+dramatiq
+filelock
+python-multipart

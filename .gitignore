@@ -5,6 +5,7 @@
 *.txt
 # But keep requirements.txt
 !requirements.txt
+!command.txt
 
 *.jpg
 *.jpeg
@@ -24,6 +25,6 @@ _temp_profiles/
 chrome-linux64/
 logs/
 images/
-alphaStockAnalysis/
+agentStockAnalysis/
 # Ignore any file or directory starting with 'chrome'
 chrome*

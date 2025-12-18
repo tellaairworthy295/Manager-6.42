@@ -981,7 +981,7 @@ ext_api.storage.local.get({
     } else {
       ext_api.management.getSelf(function (result) {
         if ((result.installType === 'development' || (result.installType !== 'development' && !enabledSites.includes('#options_on_update')))) {
-          let new_groups = ['###_dk_berlingske_media', '###_se_bonnier_group'];
+          let new_groups = ['###_uk_iconic_media'];
           let open_options = new_groups.some(group => !enabledSites.includes(group) && grouped_sites[group].some(domain => enabledSites.includes(domain) && !customSites_domains.includes(domain)));
           if (open_options)
             ext_api.runtime.openOptionsPage();
@@ -1007,7 +1007,7 @@ ext_api.storage.local.get({
     sites_custom_ext_json = ext_path + 'sites_custom.json';
   }
   var ext_update_check = items.ext_update_check;
-  if (!ext_update_check || (Date.now() - ext_update_check > 60 * 60 * 1000) || (ext_manifest_version === 2)) {
+  if (!ext_update_check || (Date.now() - ext_update_check > 3 * 60 * 60 * 1000)) {
     if (optin_update)
       check_update();
     check_sites_updated(sites_updated_json, optin_update);

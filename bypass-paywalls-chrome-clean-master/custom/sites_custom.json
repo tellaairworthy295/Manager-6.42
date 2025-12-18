@@ -1,6 +1,6 @@
 {
   "###_remove_sites": {
-    "cs_code": "aftenposten.no, chunichi.co.jp, faz.net, humanite.fr, nypost.com, theinformation.com, timeslive.co.za, tokyo-np.co.jp, truegovnews.com, group_be_mediafin, ###_custom_4.2.5.2",
+    "cs_code": "aftenposten.no, chunichi.co.jp, faz.net, humanite.fr, nypost.com, theinformation.com, timeslive.co.za, tokyo-np.co.jp, truegovnews.com, group_be_mediafin, ###_custom_4.2.5.3",
     "domain": "###"
   },
   "404media.co": {
@@ -317,6 +317,11 @@
     "allow_cookies": 1,
     "domain": "digiday.jp",
     "ld_json_url": "div#piano-paywall|div.piano-paywall-overview"
+  },
+  "Dk-online.de": {
+    "allow_cookies": 1,
+    "domain": "dk-online.de",
+    "useragent": "googlebot"
   },
   "Document.no": {
     "allow_cookies": 1,
@@ -844,6 +849,11 @@
     "allow_cookies": 1,
     "block_regex": "\\.lasvegasadvisor\\.com\\/(opt\\/.+|js\\/access\\.min)\\.js",
     "domain": "lasvegasadvisor.com"
+  },
+  "Lataco.com": {
+    "allow_cookies": 1,
+    "block_regex": "\\/lataco\\.com\\/_next\\/.+\\/%5B\\.\\.\\.slug.+\\.js",
+    "domain": "lataco.com"
   },
   "Lavialibera.it": {
     "allow_cookies": 1,

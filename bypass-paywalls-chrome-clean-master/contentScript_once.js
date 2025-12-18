@@ -153,8 +153,8 @@ window.setTimeout(function () {
     } else if (hostname.match(/\.(co\.uk|scot)$/)) {
       if (matchDomain(['motortransport.co.uk']))
         group = '###_uk_dvv_media';
-      else if (document.querySelector('footer > div a[href^="https://corporate.nationalworld.com"]'))
-        group = '###_uk_nat_world';
+      else if (document.querySelector('footer a[href^="https://www.mediaconcierge.co.uk"]'))
+        group = '###_uk_iconic_media';
       else if (document.querySelector('footer a[href^="https://www.newsquest.co.uk/"]'))
         group = '###_uk_newsquest';
       else if (document.querySelector('div#wrbm-footer-div'))
@@ -211,7 +211,10 @@ window.setTimeout(function () {
           group = '###_fr_groupe_infopro';
         else if (!matchDomain(['delinian.com', 'structuredretailproducts.com']) && document.querySelector('footer a[href^="https://www.delinian.com/privacy-policy"]'))
           group = '###_uk_delinian'; // custom
-        else if (matchDomain(['oed.com']) || (hostname.startsWith('oxford') && document.querySelector('div[id^="footer"] a[href="http://www.oup.com/"]')))
+        else if (document.querySelector('footer a[href^="https://www.lbresearch.com"]')) {
+          group = '###_uk_law_business_research';
+          nofix = 1;
+        } else if (matchDomain(['oed.com']) || (hostname.startsWith('oxford') && document.querySelector('div[id^="footer"] a[href="http://www.oup.com/"]')))
           group = '###_uk_oup';
         else if (document.querySelector('head > meta[property][content^="https://cdn.forumcomm.com/"]'))
           group = '###_usa_forum_comm';

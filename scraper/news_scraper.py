@@ -249,4 +249,5 @@ def scrape_news(url: str, source: str):
         logger.info(f"content length: {len(content)}")
         if content.strip():
             return content.replace('\n\n', '\n').replace('\n', ' ')
-        return content
+        else:
+            raise

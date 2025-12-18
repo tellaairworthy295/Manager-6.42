@@ -1,0 +1,50 @@
+Strictly separate scrape and analysis,
+Design the databse carefully so that it can efficiently fetch the target data.
+Webhook
+Two ways to apply AI (use MCP, maybe need knowledge base):
+1. chatflow (query)
+2. workflow (schedule)
+
+!!!Image OCR!!!
+!!!yield!!!
+!!!Call log:
+  - waiting for locator("textarea.el-textarea__inner").first
+; JS fill: Page.evaluate() takes from 2 to 3 positional arguments but 4 were given
+!!!
+
+CREATE USER 'scraper'@'localhost' IDENTIFIED BY 'strong_password_here';
+GRANT ALL PRIVILEGES ON scraped_data.* TO 'muheng'@'localhost';
+FLUSH PRIVILEGES;
+DROP USER 'scraper'@'localhost';
+
+.\.venv\Scripts\Activate.ps1
+
+dramatiq tasks.news_tasks --queues news --processes 1 --threads 4
+
+dramatiq tasks.agent_tasks --queues agents --processes 1 --threads 8
+
+git ls-files
+git rm -r --cached .
+git add .
+git commit -m "update project"
+git push origin main --force
+git remote add origin git@github.com:zboyl0478-netizen/dify_server.git
+
+curl.exe -X POST http://localhost:5000/api/scrape_alpha
+
+curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: application/json" -d "{\"queries\": [\"site%3Abloomberg.com%2Fnews%2Farticles+China+OR+%22Hong+Kong%22+OR+AI\"]}"
+
+curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: application/json" -d "{\"requests\": [{\"query\": \"site:reuters.com/world\", \"site\": \"www.reuters.com/world\", \"source\": \"reuters\"}]}"
+
+
+curl.exe -X POST "http://localhost:5000/api/scrape_stocks" -H "Content-Type: application/json" -d "{\"days\":10}"
+
+curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: application/json" -d "{\"requests\": [{\"query\": \"site:bloomberg.com/news/articles\", \"site\": \"www.bloomberg.com/news/articles\", \"source\": \"bloomberg\"}]}"
+
+curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: application/json" -d "{\"requests\": [{\"query\": \"site:bbc.com/news/articles\", \"site\": \"www.bbc.com/news/articles\", \"source\": \"bbc\"}]}"
+
+
+ SELECT content FROM news_article WHERE DATE(scraped_at) = CURRENT_DATE
+
+
+ curl.exe -X POST "http://localhost:5000/api/add_user" -H "Content-Type: application/json" -d "{\"user_id\":\"common\",\"email\":\"nan\",\"sites\":[{\"source\":\"jiuyan\",\"phone\":\"18282219269\",\"passwd\":\"a123456BBC\"},{\"source\":\"xuangutong\",\"phone\":\"13651677354\",\"passwd\":\"lmh021152LMH\"},{\"source\":\"gangtise\",\"phone\":\"13651677354\",\"passwd\":\"lmh021152LMH\"}]}"

@@ -1,6 +1,6 @@
 
 from image_process import (
-    _preprecess_image,
+    preprecess_image,
     _draw_boxes,
     ocr_image_safe,
     _normalize_text,
@@ -10,7 +10,7 @@ from image_process import (
 )
 
 __all__ = [
-    "_preprecess_image",
+    "preprecess_image",
     "_draw_boxes",
     "ocr_image_safe",
     "_normalize_text",

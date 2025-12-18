@@ -3,6 +3,7 @@ import json
 import ast
 import pandas as pd
 from fastapi import Request
+
 from .database import get_db_manager, UsersRepository
 
 class ValidationError(Exception):
@@ -50,15 +51,16 @@ async def validate_scrape_agent_request(request: Request):
         raise ValidationError("您的账号还未注册")
 
     # ---------- load agent config ----------
-    with open("json/config.json") as f:
-        agent_site_config = json.load(f)["AgentSitesConfig"]
+    # with open("json/config.json") as f:
+    #     agent_site_config = json.load(f)["AgentSitesConfig"]
 
-    common_sources = {
-        a["site_name"]
-        for a in agent_site_config
-        if a["field"] == "common"
-    }
+    # common_sources = {
+    #     a["site_name"]
+    #     for a in agent_site_config
+    #     if a["field"] == "common"
+    # }
 
+    common_sources = ["gangtise"]
     user_credentials = []
     missing_sources = []
     commons = []
@@ -125,6 +127,7 @@ async def validate_scrape_agent_request(request: Request):
         "user_id": str(user_id),
         "stocks": stocks,
         "credentials": user_credentials,
+        "sources": sources,
         "prompt": prompt,
     }
 
@@ -145,7 +148,7 @@ def save_user_prompt(user_id: str, prompt: str):
         parts = re.split(r'(?<=[。？])|\n', prompt_text)
         return [p.strip() for p in parts if p.strip()]
 
-    with FileLock(lock_path, timeout=10):
+    with FileLock(lock_path, timeout=5):
         if os.path.exists(prompts_path):
             with open(prompts_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -158,3 +161,4 @@ def save_user_prompt(user_id: str, prompt: str):
 
         with open(prompts_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+

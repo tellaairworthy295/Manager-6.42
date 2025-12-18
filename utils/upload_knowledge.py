@@ -138,7 +138,7 @@ def upload_new_document_by_file(FILE_PATH: str):
         return None
 
 
-def _upload_new_document_by_text(name: str, text: str):
+def _upload_new_document_by_text(name: str, text: str, source: str):
     """Upload and index new document from raw text."""
     url = f"http://localhost/v1/datasets/{DATASET_ID}/document/create-by-text"
     headers = api_headers()
@@ -189,7 +189,10 @@ def _upload_new_document_by_text(name: str, text: str):
         "embedding_model": "BAAI/bge-m3",
         "embedding_model_provider": "langgenius/siliconflow/siliconflow",
         "name": name,
-        "text": text
+        "text": text,
+        "doc_metadata": {
+            "site": source
+        }
     }
 
     try:
@@ -227,7 +230,8 @@ def upload_dify_knowledge(all_uploads: list[dict], date_str: str, max_retries: i
 
     for upload in all_uploads:
         content = "\n\n".join(upload.get("content") or [])
-        title = f"{upload.get('source')}_{date_str}"
+        source = upload.get('source')
+        title = f"{source}_{date_str}"
         doc_name = f"{title}.txt"
 
         if not content or doc_name in existing_names:
@@ -236,7 +240,7 @@ def upload_dify_knowledge(all_uploads: list[dict], date_str: str, max_retries: i
         retries = 0
         while retries < max_retries:
             try:
-                result = _upload_new_document_by_text(name=doc_name, text=content)
+                result = _upload_new_document_by_text(name=doc_name, text=content, source=source)
                 doc = result.get("document")
 
                 # Poll until indexing completes

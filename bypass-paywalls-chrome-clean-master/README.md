@@ -556,7 +556,7 @@ Grouped in options:\
 *[FT Specialist Group](https://www.ftspecialist.com)* sites (opt-in to custom sites)\
 *[Haymarket Media Group](https://haymarket.com/brands)* sites (opt-in to custom sites)\
 *[Haymarket Medical Network](https://www.haymarketmedicalnetwork.com)* sites (opt-in to custom sites)\
-*National World Publishing* sites like (opt-in to custom sites for unlisted)\
+*Iconic Media Group* sites like (opt-in to custom sites for unlisted)\
 [The Scotsman](https://www.scotsman.com) -
 [Yorkshire Post](https://www.yorkshirepost.co.uk)\
 *Oxford University Press* sites (opt-in to custom sites)*\

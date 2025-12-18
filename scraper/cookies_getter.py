@@ -61,7 +61,10 @@ class BaseCookies:
                 {"name": "version-market-tip", "value": "1"},
                 {"name": "MODE", "value": "undefined"},
                 {"name": "hasShowpaipaiAnswerRangeGuide", "value": "true"},
-                {"name": "version-social-sub-tip", "value": "1"}
+                {"name": "version-social-sub-tip", "value": "1"},
+                {"name": "hasShowSocialMediaGuide", "value": "1"},
+                {"name": "paipai-agent-fastsheet-us-guide", "value": "true"},
+                {"name": "extension-download-guide", "value": "true"}
             ]
             if "localStorage" not in origins[0] or not isinstance(origins[0]["localStorage"], list):
                 origins[0]["localStorage"] = []
@@ -154,7 +157,6 @@ class GeneralCookies(BaseCookies):
         )
         locs = config.get("locators", {})
         wfd = config.get("wait_for_dynamical", None)
-        self.logger.info(wfd)
         def parse(loc):
             """Convert JSON locator to Playwright locator string."""
             if loc == None:
@@ -265,7 +267,6 @@ class GeneralCookies(BaseCookies):
             self._safe_click(self.submit_locator)
         else:
             raise RuntimeError(f"No submit button locator for site: {self.section_name}")
-
         self.logger.info("Login button clicked, waiting for login success...")
         # 5. Wait login dialog to disappear (if locator defined)
         if self.login_dialog_locator:

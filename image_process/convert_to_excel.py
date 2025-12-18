@@ -7,8 +7,8 @@ import pandas as pd
 from matplotlib import font_manager
 from loguru import logger
 
-from .preprocess import _preprecess_image
-from .ocr_api import ocr_image_safe
+from .preprocess import preprecess_image
+from .ocr_api import ocr_image_safe, _draw_boxes
 
 # Configure loguru for to_excel module
 logger.add("logs/to_excel/to_excel_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
@@ -183,7 +183,7 @@ def excel_flow(date: str, days: int = 5):
         logger.error(f"Image file does not exist: {img_path}")
         return None
     try:
-        path = _preprecess_image(img_path)
+        path = preprecess_image(img_path)
         #_draw_boxes(path)
         rec_texts = ocr_image_safe(path)
         _normalize_text(rec_texts)
@@ -195,4 +195,5 @@ def excel_flow(date: str, days: int = 5):
     except Exception as e:
         logger.error(f"Error while OCR: {e}")
 
-
+if __name__ == "__main__":
+    excel_flow("2025-12-18")

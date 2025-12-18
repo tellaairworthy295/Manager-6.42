@@ -26,7 +26,7 @@ _USER_AGENTS = [
     "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.118 Mobile Safari/537.36",
     "Mozilla/5.0 (Linux; Android 14; Pixel 6 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.76 Mobile Safari/537.36",
     # Generic Chrome and Safari variations
-    "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.207 Safari/537.36"
 ]
 
@@ -48,8 +48,7 @@ def _pick_window_size() -> str:
 
 
 def get_chrome_driver(
-    base_bypass_ext_path: str = "bypass-paywalls-chrome-clean-master",
-    browser_executable_path: str = "chrome-linux64/chrome",
+    base_bypass_ext_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bypass-paywalls-chrome-clean-master"),
     user_agent: str | None = None,
     proxy_url: str | None = None,
 ):
@@ -63,11 +62,10 @@ def get_chrome_driver(
     # Basic performance flags
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--disable-background-networking")
     chrome_options.add_argument("--disable-default-apps")
-    chrome_options.add_argument("--disable-notifications")
-    chrome_options.add_argument("--disable-popup-blocking")
 
     # Viewport
     chrome_options.add_argument(_pick_window_size())
@@ -85,8 +83,8 @@ def get_chrome_driver(
 
     try:
         driver = uc.Chrome(
-            driver_executable_path="chromedriver-linux64/chromedriver",
-            browser_executable_path=browser_executable_path,
+            driver_executable_path="chromedriver-win64/chromedriver.exe",
+            browser_executable_path="chrome-win64/chrome.exe",
             options=chrome_options,
             version_main=143,
             headless=False,
@@ -106,18 +104,6 @@ def get_chrome_driver(
             fix_hairline=False,
             user_agent=ua,
         )
-    except:
-        pass
-
-    # CDP patches
-    try:
-        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-            "source": """
-                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-                Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3]});
-                Object.defineProperty(navigator, 'mimeTypes', {get: () => [1,2,3]});
-        """})
     except:
         pass
 

@@ -8,9 +8,9 @@ from fastapi.responses import JSONResponse
 import uvicorn
 #from fastmcp import FastMCP
 # ===== Local imports =====
+from dramatiq_app import get_redis_client
 from scraper.news_scraper import fetch_news_from_db, save_agent_data
 from scraper.stocks_scraper import main_scraper
-from utils.agent_limit import try_acquire_slot
 from utils.sender import send_email_with_attachments
 from utils.to_excel import excel_flow
 
@@ -26,7 +26,7 @@ from utils.validators import save_user_prompt, validate_scrape_agent_request, Va
 # mcp_app = mcp.http_app(path='/tools')
 # app = FastAPI(title="My Local Dify Server", lifespan=mcp_app.lifespan)
 # app.mount("/mcp", mcp_app)
-
+GLOBAL_LIMIT = 1
 app = FastAPI(title="My Local Dify Server")
 # ================== Health Check ====================
 @app.get("/ping")
@@ -126,33 +126,57 @@ async def scrape_news_api(request: Request):
 
 @app.post("/api/scrape_agent")
 async def scrape_agent_api(request: Request):
-
-    if not try_acquire_slot():
-        return JSONResponse(
-            {"error": "系统繁忙，当前用户过多，请稍后再试"},
-            status_code=503
-        )
-
     try:
         data = await validate_scrape_agent_request(request)
 
-        save_user_prompt(data["user_id"], data["prompt"])
+        user_id = data["user_id"]
+        sources = data["sources"]
+        r = get_redis_client()
+        # 1️⃣ Per-user lock
+        if not r.set(f"agent:lock:user:{user_id}", "1", nx=True, ex=3600):
+            raise ValidationError("您的任务正在处理中，请稍后再试。")
+        # 2️⃣ Global concurrency limit
+        if "gangtise" in sources:
+            current = r.incr("agent:lock:global")
+            if current > GLOBAL_LIMIT:
+                r.decr("agent:lock:global")
+                r.delete(f"agent:lock:user:{user_id}")
+                raise ValidationError("Gangtise賬號被占用，请稍后再试。")
 
-        cks = await asyncio.to_thread(
-            update_agent_cookies,
-            data["credentials"]
-        )
 
-        result = scrape_agent_task.send(
+        try:
+            save_user_prompt(data["user_id"], data["prompt"])
+        except Exception as e:
+            if r.get("agent:lock:global") == 1 and "gangtise" in data["sources"]:
+                r.decr("agent:lock:global")
+            return JSONResponse({"error": f"prompt保存失敗: {e}"}, status_code=500)
+
+        try:
+            cks = await asyncio.to_thread(
+                update_agent_cookies,
+                data["credentials"]
+            )
+        except Exception as e:
+            if r.get("agent:lock:global") == 1 and "gangtise" in data["sources"]:
+                r.decr("agent:lock:global")
+            return JSONResponse({"error": f"cookies更新失敗: {e}"}, status_code=500)
+
+        scrape_agent_task.send(
                     data["stocks"],
                     data["user_id"],
-                    cks,
+                    cks
                 )
 
+        r.incr("agent:global:processing")
+        tasks = int(r.get("agent:global:processing") or 0)
         return JSONResponse(
-            {"status": "accepted", "task_id": result.message_id}
+            {
+                "已有任務": tasks,
+                "detail": "您的任务提交成功，请耐心等待。"
+            },
+            status_code=202,
         )
-
+    
     except ValidationError as e:
         return JSONResponse({"error": e.message}, status_code=e.status_code)
     except Exception as e:
@@ -238,7 +262,7 @@ async def fetch_news():
             combined.append('\n\n'.join(chunk))
         return combined
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to fetch Bloomberg data from database.")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch Bloomberg data from database.{e}")
 
 # =====================================================
 # 🧩 MCP SERVER SECTION (mounted via FastMCP)

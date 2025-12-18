@@ -86,6 +86,19 @@ if (window.location.href === 'https://codebeautify.org/htmlviewer') {
         } else if (matchUrlDomain('nn.de', canonical_url)) {
           hide = 'div.article__ad__container';
         } else if (matchUrlDomain(['noz.de', 'shz.de'], canonical_url)) {
+          let foldable = document.querySelector('div.foldable-content');
+          if (foldable)
+            foldable.classList.remove('foldable-content');
+          let videos = document.querySelectorAll('div.yt_container');
+          for (let video of videos) {
+            if (video.innerHTML.includes('<iframe src="')) {
+              let video_link = document.createElement('a');
+              video_link.href = video_link.innerText = video.innerHTML.split('<iframe src="')[1].split('"')[0].split('?')[0].replace('/embed/', '/watch?v=');
+              video_link.target = '_blank';
+              video_link.style = 'width: 100%;';
+              video.parentNode.replaceChild(video_link, video);
+            }
+          }
           hide = 'div.msn-ads';
         } else if (matchUrlDomain('riffreporter.de', canonical_url)) {
           let header_img = document.querySelector('header img[style]');
@@ -95,6 +108,31 @@ if (window.location.href === 'https://codebeautify.org/htmlviewer') {
           if (article)
             article.style.margin = '20px';
           hide = 'div.MuiTableContainer-root, button.MuiButtonBase-root, footer';
+        } else if (matchUrlDomain('tagesspiegel.de', canonical_url)) {
+          if (matchUrlDomain('interaktiv.tagesspiegel.de', canonical_url)) {
+            document.querySelectorAll('img.tslr-lazy[data-src]').forEach(e => e.src = 'https://interaktiv.tagesspiegel.de' + (e.getAttribute('data-src-l') || e.getAttribute('data-src')).replace(/[\s\r\n]+/, ''));
+            let charts = document.querySelectorAll('div.tslr-figure-graphic__content');
+            for (let elem of charts) {
+              if (elem.innerHTML.includes(' src="https://datawrapper.dwcdn.net/')) {
+                let iframe = document.createElement('iframe');
+                iframe.src = elem.innerHTML.split(' src="')[1].split('"')[0];
+                iframe.style = 'width: 100%;';
+                elem.parentNode.replaceChild(iframe, elem);
+              }
+            }
+          } else {
+            let videos = document.querySelectorAll('div > div.jwplayer');
+            for (let elem of videos) {
+              let video_meta_dom = elem.parentNode.querySelector('meta[name="twitter:player:stream"][content]');
+              if (video_meta_dom) {
+                let video_new = document.createElement('video');
+                video_new.src = video_meta_dom.content;
+                video_new.setAttribute('controls', '');
+                video_new.style = 'width: 100%';
+                elem.parentNode.parentNode.replaceChild(video_new, elem.parentNode);
+              }
+            }
+          }
         } else if (matchUrlDomain('wissenschaft.de', canonical_url)) {
           hide = 'div#lightbox';
         } else if (matchUrlDomain('wiwo.de', canonical_url)) {
@@ -153,7 +191,7 @@ if (window.location.href === 'https://codebeautify.org/htmlviewer') {
                 let json = JSON.parse(json_script.text);
                 if (json[1] && json[1].video && json[1].video.contentURL) {
                   let video_new = document.createElement('video');
-                  video_new.setAttribute('controls', true);
+                  video_new.setAttribute('controls', '');
                   video_new.src = json[1].video.contentURL;
                   video_new.style = 'width: 100%;';
                   video.parentNode.replaceChild(video_new, video);

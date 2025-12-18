@@ -1,13 +1,18 @@
 # playwright_manager.py
 import threading
+import sys
+
+# restore real stdio (critical on Windows)
+sys.stdout = sys.__stdout__
+sys.stderr = sys.__stderr__
 from playwright.sync_api import sync_playwright
 
 class PlaywrightManager:
     _instance = None
     _lock = threading.Lock()
 
-    def __init__(self):
-        self._playwright = None
+    def __init__(self, pw):
+        self._playwright = pw
         self._browser = None
 
     @classmethod
@@ -15,17 +20,8 @@ class PlaywrightManager:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    cls._instance = cls()
+                    cls._instance = cls(sync_playwright().start())
         return cls._instance
-
-    def start(self):
-        """
-        Lazy startup — safe to call many times.
-        Ensures Playwright is started only when needed.
-        """
-        if self._playwright is None:
-            self._playwright = sync_playwright().start()
-        return self._playwright
 
     def get_browser(self, args=None, headless=False):
         """
@@ -33,13 +29,12 @@ class PlaywrightManager:
         Defaults to stealth-friendly flags if none provided.
         """
         if self._browser is None:
-            pw = self.start()
             launch_args = args or [
                 "--disable-blink-features=AutomationControlled",
                 "--disable-infobars",
                 "--no-sandbox",
             ]
-            self._browser = pw.chromium.launch(
+            self._browser = self._playwright.chromium.launch(
                 headless=headless,
                 args=launch_args,
             )

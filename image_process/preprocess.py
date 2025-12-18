@@ -1,7 +1,4 @@
 import os
-import unicodedata
-import re
-
 import cv2
 import numpy as np
 from PIL import Image
@@ -83,7 +80,7 @@ def _is_tall_image(img, ratio=2.0):
     return h / w >= ratio
 
 
-def _preprecess_image(img_path):
+def preprecess_image(img_path):
     img = Image.open(img_path)
     img_array = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
     gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)

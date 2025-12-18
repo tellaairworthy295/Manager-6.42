@@ -18,9 +18,9 @@ logger.add("logs/stocks/stocks_scraper_{time:YYYY-MM-DD}.log", rotation="00:00",
 
 def main_scraper(date):
     # Load selectors and cookies once
-    with open("json/selectors.json", "r") as f:
+    with open("json/selectors.json", "r", encoding="utf-8") as f:
         selectors_map = json.load(f)["stocks"]
-    with open("json/cookies.json", "r") as f:
+    with open("json/cookies.json", "r", encoding="utf-8") as f:
         cookies_map = json.load(f)["common"]
 
     all_records = []
