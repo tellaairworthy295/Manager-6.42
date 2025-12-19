@@ -4,7 +4,7 @@ import random
 import time
 import dramatiq
 from loguru import logger
-from dramatiq_app import get_redis_client
+from utils.redis_utils import get_redis_client
 from scraper.news_scraper import scrape_news, fetch_urls_from_page
 from utils.upload_knowledge import upload_dify_knowledge, clean_dify_knowledge
 

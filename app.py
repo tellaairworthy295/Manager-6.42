@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 #from fastmcp import FastMCP
 # ===== Local imports =====
-from dramatiq_app import get_redis_client
+from utils.redis_utils import get_redis_client
 from scraper.news_scraper import fetch_news_from_db, save_agent_data
 from scraper.stocks_scraper import main_scraper
 from utils.sender import send_email_with_attachments
