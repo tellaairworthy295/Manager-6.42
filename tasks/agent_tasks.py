@@ -3,7 +3,7 @@ import os
 from typing import Any, Dict
 import asyncio
 import redis
-from dramatiq_app import get_redis_client
+from utils.redis_utils import get_redis_client
 import zipfile
 import dramatiq
 from loguru import logger
