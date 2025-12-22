@@ -6,14 +6,13 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import font_manager
 from loguru import logger
-
 from .preprocess import preprecess_image
-from .ocr_api import ocr_image_safe, _draw_boxes
-
+from .ocr_api import ocr_image_safe
+import matplotlib
+matplotlib.use('Agg')
 # Configure loguru for to_excel module
 logger.add("logs/to_excel/to_excel_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
 FONT_PATH = "fonts/NotoSansSC-VariableFont_wght.ttf"
-
 
 def _normalize_text(text: list[str], space: bool = False) -> str:
         """Clean and normalize a label string (Chinese/English mixed)."""
@@ -33,7 +32,7 @@ def _normalize_text(text: list[str], space: bool = False) -> str:
             text[idx] = label.strip()
 
 
-def _append_to_excel(rec_texts, excel_path: str):
+def _append_to_excel(rec_texts: list[str], excel_path: str):
     """
     Save OCR-recognized texts to an Excel file grouped by 8 fields:
     ["Section", "Board", "Code", "Name", "Time", "Market", "Turnover", "Keyword"].
@@ -65,19 +64,25 @@ def _append_to_excel(rec_texts, excel_path: str):
                 # Get 7 items (since Section will be added manually)
                 if i + 7 <= len(rec_texts):
                     chunk = rec_texts[i:i+7]
-                    if chunk[0] == "7":
-                        chunk[0] = "1"
-                    if chunk[-1] == "1":
-                        chunk = [chunk[-1]] + chunk[:-1]
+                    m_0 = re.search(r"^(\d{6})", chunk[0].strip())
+                    if m_0:
+                        chunk = ['1'] + chunk[:-1]
+                        skip = 6
+                    else:
+                        if chunk[0] == "7":
+                            chunk[0] = "1"
+                        if chunk[-1] == "1":
+                            chunk = [chunk[-1]] + chunk[:-1]
+                        skip = 7
                     data.append([section_name] + chunk)
-                    i += 7
+                    i += skip
                 else:
                     break
         else:
             i += 1
 
     if not data:
-        logger.error("⚠️ No valid data to save.")
+        logger.error("No valid data to save.")
         return
 
     # Convert to DataFrame
@@ -88,7 +93,7 @@ def _append_to_excel(rec_texts, excel_path: str):
 
     # Save to Excel
     df.to_excel(save_path, index=False)
-    logger.info(f"✅ Saved {len(df)} rows to {save_path}")
+    logger.info(f"Saved {len(df)} rows to {save_path}")
 
 
 def _process_trendings(date_str: str, summary_text: str, excel_path: str, days: int):
@@ -138,7 +143,10 @@ def _process_trendings(date_str: str, summary_text: str, excel_path: str, days: 
     # Remove any existing entry for this date_str first
     df = df[df["date"].astype(str) != str(date_str)]
     # Append the new_row for current date_str
-    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    if df.empty:
+        df = pd.DataFrame([new_row])
+    else:
+        df.loc[len(df)] = new_row
     df = df.sort_values(by="date").reset_index(drop=True)
     df.to_excel(excel_path, index=False, engine="openpyxl")
     # Always keep last `days` rows INCLUDING current date_str data
@@ -173,7 +181,7 @@ def _process_trendings(date_str: str, summary_text: str, excel_path: str, days: 
         chart_path = os.path.splitext(excel_path)[0] + chart_files[i]
         plt.savefig(chart_path, dpi=160)
         plt.close()
-        logger.info(f"📈 Saved trend chart: {chart_path}")
+        logger.info(f"Saved trend chart: {chart_path}")
 
 
 def excel_flow(date: str, days: int = 5):
@@ -184,7 +192,6 @@ def excel_flow(date: str, days: int = 5):
         return None
     try:
         path = preprecess_image(img_path)
-        #_draw_boxes(path)
         rec_texts = ocr_image_safe(path)
         _normalize_text(rec_texts)
         _append_to_excel(rec_texts, "excel")

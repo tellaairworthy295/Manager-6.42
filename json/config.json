@@ -20,8 +20,8 @@
     "DB_HOST": "localhost",
     "DB_PORT": 3306,
     "DB_USER": "muheng",
-    "DB_PASSWORD": "123456",
-    "DB_NAME": "scraped_data"
+    "DB_PASSWORD": "idempotentTask$",
+    "DB_NAME": "dify_data"
   },
   "AgentSitesConfig":[
     {

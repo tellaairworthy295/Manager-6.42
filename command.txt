@@ -18,9 +18,9 @@ FLUSH PRIVILEGES;
 DROP USER 'scraper'@'localhost';
 
 .\.venv\Scripts\Activate.ps1
-uvicorn app:app --host 0.0.0.0 --port 5000 --workers 2
+uvicorn app:app --host 0.0.0.0 --port 5000 --workers 1
 
-dramatiq tasks.news_tasks --queues news --processes 1 --threads 4
+dramatiq tasks.news_tasks --queues news --processes 1 --threads 2
 
 dramatiq tasks.agent_tasks --queues agents --processes 1 --threads 8
 

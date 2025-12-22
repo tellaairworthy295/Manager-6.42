@@ -1,6 +1,7 @@
 import base64
 import os
 
+import cv2
 import numpy as np
 import requests
 from PIL import Image
@@ -10,7 +11,6 @@ from .preprocess import smart_slice_tall_image, _is_tall_image
 
 API_URL = "https://r499p5s59cg8zev7.aistudio-app.com/ocr"
 API_TOKEN = "3a258219dc655d3bafc108d13cb9ec6230a7ff9a"
-
 
 def _ocr_via_api(
     file_path: str,
@@ -23,7 +23,7 @@ def _ocr_via_api(
     Call PaddleOCR HTTP API on a single image or PDF and return the raw result dict.
     """
     if not API_TOKEN or API_TOKEN == "<access token>":
-        logger.error("🚫 API_TOKEN is not configured. Please set PADDLE_OCR_API_TOKEN env or replace '<access token>'.")
+        logger.error("API_TOKEN is not configured. Please set PADDLE_OCR_API_TOKEN env or replace '<access token>'.")
         return None
 
     try:
@@ -71,37 +71,6 @@ def _ocr_via_api(
 
     return result
 
-
-def _draw_boxes(img_path):
-    """
-    OCR an image via HTTP API, save recognized texts to a txt file.
-
-    The original implementation also drew polygons on the image using local
-    PaddleOCR boxes. The HTTP API example only exposes text and cropped
-    images, so here we focus on text extraction.
-    """
-    api_result = _ocr_via_api(img_path, file_type=1)
-    if not api_result:
-        return [], []
-
-    ocr_results = api_result.get("ocrResults", [])
-    texts = [r.get("prunedResult", "") for r in ocr_results if r.get("prunedResult")]
-
-    # Write texts into a txt file
-    txt_output_path = os.path.splitext(img_path)[0] + "_ocr_texts.txt"
-    with open(txt_output_path, "w", encoding="utf-8") as f:
-        for line in texts:
-            if isinstance(line, str):
-                f.write(line + "\n")
-            elif isinstance(line, list):
-                f.write(" ".join(map(str, line)) + "\n")
-            else:
-                f.write(str(line) + "\n")
-    logger.info(f"✅ Saved OCR texts to: {txt_output_path}")
-
-    # Bounding boxes are not handled here because the public HTTP example
-    # does not document polygon data; keep API usage focused on text.
-    return [], None
 
 
 def _sort_ocr_results(texts, boxes, y_tolerance_ratio=0.6, x_tolerance_ratio=12):
@@ -186,17 +155,19 @@ def ocr_image_safe(
     img = Image.open(img_path)
     all_sorted_texts = []
     if _is_tall_image(img, tall_ratio):
-        logger.info("📐 Tall image detected, slicing before OCR")
+        logger.info("Tall image detected, slicing before OCR")
         slices = smart_slice_tall_image(img)
+        pad_ratio = 0.05
     else:
         slices = [img]
-
+        pad_ratio = 0.02
+        
     img_dir = os.path.dirname(os.path.abspath(img_path))
     for idx, crop in enumerate(slices):
         # Accept PIL.Image input directly to OCR without saving temp files
         img = crop
         w, h = img.size
-        pad = int(min(w, h) * 0.05)
+        pad = int(min(w, h) * pad_ratio)
         # Handle padding for grayscale image
         padded_img = Image.new("L", (w + pad * 2, h + pad * 2), 255)
         padded_img.paste(img, (pad, pad))
@@ -207,7 +178,7 @@ def ocr_image_safe(
         )
         try:
             padded_img.save(padded_img_save_path)
-            logger.info(f"💾 Saved OCR padded image: {padded_img_save_path}")
+            logger.info(f"Saved OCR padded image: {padded_img_save_path}")
         except Exception as e:
             logger.warning(f"Failed to save padded image: {e}")
 
@@ -241,6 +212,15 @@ def ocr_image_safe(
         )
         all_sorted_texts.extend(sorted_texts)
 
+        # img = cv2.imread(padded_img_save_path)
+        # for box in boxes:
+        #     pts = np.array(box, np.int32)
+        #     pts = pts.reshape((-1, 1, 2))
+        #     cv2.polylines(img, [pts], isClosed=True, color=(0, 0, 255), thickness=2)
+
+        # # Save the drawn image
+        # root, ext = os.path.splitext(padded_img_save_path)
+        # drawn_img_path = f"{root}_with_boxes{ext}"
+        # cv2.imwrite(drawn_img_path, img)
+        # logger.info(f"Saved image with drawn boxes to: {drawn_img_path}")
     return all_sorted_texts
-
-

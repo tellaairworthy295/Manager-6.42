@@ -12,7 +12,7 @@ from utils.redis_utils import get_redis_client
 from scraper.news_scraper import fetch_news_from_db, save_agent_data
 from scraper.stocks_scraper import main_scraper
 from utils.sender import send_email_with_attachments
-from utils.to_excel import excel_flow
+from image_process import excel_flow
 
 from tasks.news_tasks import scrape_all_news
 from tasks.agent_tasks import scrape_agent_task

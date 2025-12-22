@@ -64,7 +64,7 @@ async def process_single_stock(page: Page, stock: str, prompt: list[str],
     finish_locator = parse_locators(locators.get("finish_locator"))
     logger.info("Waiting for answer to finish (waiting for download button)...")
     try:
-        await page.wait_for_selector(finish_locator, timeout=360 * 1000, state="visible")
+        await page.wait_for_selector(finish_locator, timeout=900 * 1000, state="visible")
         logger.info("Finish locator appeared — answer finished.")
     except PlaywrightTimeoutError:
         raise PlaywrightTimeoutError("Download button did not appear — answer not finished in time.")

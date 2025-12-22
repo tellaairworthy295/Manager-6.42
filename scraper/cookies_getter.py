@@ -64,7 +64,8 @@ class BaseCookies:
                 {"name": "version-social-sub-tip", "value": "1"},
                 {"name": "hasShowSocialMediaGuide", "value": "1"},
                 {"name": "paipai-agent-fastsheet-us-guide", "value": "true"},
-                {"name": "extension-download-guide", "value": "true"}
+                {"name": "extension-download-guide", "value": "true"},
+                {"name": "paipai_mode-select_task-guide", "value": "1"}
             ]
             if "localStorage" not in origins[0] or not isinstance(origins[0]["localStorage"], list):
                 origins[0]["localStorage"] = []
@@ -269,6 +270,7 @@ class GeneralCookies(BaseCookies):
             raise RuntimeError(f"No submit button locator for site: {self.section_name}")
         self.logger.info("Login button clicked, waiting for login success...")
         # 5. Wait login dialog to disappear (if locator defined)
+        time.sleep(15)
         if self.login_dialog_locator:
             try:
                 self.page.wait_for_selector(

@@ -9,9 +9,9 @@ logger.add("logs/upload_knowledge/upload_knowledge_{time:YYYY-MM-DD}.log", rotat
 # ============================
 # Configuration
 # ============================
-BASE_URL = "http://localhost"   # Dify API backend (adjust if needed)
-API_KEY = "dataset-HtuwAUl1MsXZifu55RyhAzv2"     # Replace with your real API key
-DATASET_ID = "1ab1e0db-09ec-4ee5-b6e6-cf0115295e69"       # Replace with your Knowledge Base (dataset) ID
+BASE_URL = "http://10.25.116.40:7080"   # Dify API backend (adjust if needed)
+API_KEY = "dataset-XS82GQa1J04QacZ5iFl5QHKf"     # Replace with your real API key
+DATASET_ID = "aafc9493-9f65-452a-ad3a-0f140928f21b"       # Replace with your Knowledge Base (dataset) ID
 
 # ============================
 # Helper functions
