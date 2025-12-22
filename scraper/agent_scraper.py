@@ -13,7 +13,7 @@ logger.add("logs/agent_scraper/agent_scraper_{time:YYYY-MM-DD}.log",
 # Wait-for-answer / download button detector
 # -----------------------
 async def process_single_stock(page: Page, stock: str, prompt: list[str],
-                               download_dir: str, locators) -> str:
+                               download_dir: str, locators, source: str) -> str:
     """
     Entire flow for one stock:
       - wait for dynamically loaded content (if any)
@@ -76,7 +76,7 @@ async def process_single_stock(page: Page, stock: str, prompt: list[str],
         element = page.locator(content_locator).first
         await element.wait_for(state="visible", timeout=30_000)
         full_text = await element.inner_text()
-        txt_filename = os.path.join(download_dir, f"{stock}.txt")
+        txt_filename = os.path.join(download_dir, f"{stock}_{source}.txt")
         await asyncio.to_thread(lambda: open(txt_filename, "w", encoding="utf-8").write(full_text))
         result_file = txt_filename
     else:
@@ -84,7 +84,7 @@ async def process_single_stock(page: Page, stock: str, prompt: list[str],
             await async_safe_click(page, finish_locator, max_attempts=3, timeout=3_000)
         download = await download_info.value
         ext = os.path.splitext(download.suggested_filename)[1]
-        dest = os.path.join(download_dir, f"{stock}{ext}")
+        dest = os.path.join(download_dir, f"{stock}_{source}{ext}")
         await download.save_as(dest)
         result_file = dest
 

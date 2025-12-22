@@ -119,6 +119,7 @@ async def _async_process_single_stock_task(*, stock: str, user_id: str, source: 
                 prompt=prompt,
                 download_dir=final_docs,
                 locators=site_locators,
+                source=source,
             )
 
         # ✅ WRITE SUCCESS RESULT
@@ -148,7 +149,7 @@ async def _async_process_single_stock_task(*, stock: str, user_id: str, source: 
 # -------------------------------------------------------------
 @dramatiq.actor(
     queue_name="agents",
-    max_retries=1,
+    max_retries=0,
     min_backoff=5000,
     on_retry_exhausted="handle_failure",
 )
@@ -208,8 +209,9 @@ def finalize_and_email(user_id: str):
         results = [json.loads(x) for x in results_raw]
 
         # Check if any task's site contains 'gangtise', then decr
-        if any('gangtise' in rr.get('site', '') for rr in results) and r.get("agent:lock:global") == 1:
+        if any('gangtise' in rr.get('site', '') for rr in results) and r.get("agent:lock:global") == "1":
             r.decr("agent:lock:global")
+            logger.warning("DECRE GANTISE GLOBAL")
 
         success_files = [rr["file"] for rr in results if rr["status"] == "success"]
         failed = [f"{rr['stock']} @ {rr['site']}" for rr in results if rr["status"] != "success"]

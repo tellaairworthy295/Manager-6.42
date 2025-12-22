@@ -44,6 +44,5 @@ def clean_redis_db(redis_url: str, flush_all: bool = True):
         else:
             # Only clear the single DB index specified in redis_url
             client.flushdb()
-        print("Done")
     except Exception as e:
         print(f"Failed to flush Redis: {e}")

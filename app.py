@@ -147,7 +147,7 @@ async def scrape_agent_api(request: Request):
         try:
             save_user_prompt(data["user_id"], data["prompt"])
         except Exception as e:
-            if r.get("agent:lock:global") == 1 and "gangtise" in data["sources"]:
+            if r.get("agent:lock:global") == "1" and "gangtise" in data["sources"]:
                 r.decr("agent:lock:global")
             return JSONResponse({"error": f"prompt保存失敗: {e}"}, status_code=500)
 
@@ -157,7 +157,7 @@ async def scrape_agent_api(request: Request):
                 data["credentials"]
             )
         except Exception as e:
-            if r.get("agent:lock:global") == 1 and "gangtise" in data["sources"]:
+            if r.get("agent:lock:global") == "1" and "gangtise" in data["sources"]:
                 r.decr("agent:lock:global")
             return JSONResponse({"error": f"cookies更新失敗: {e}"}, status_code=500)
 

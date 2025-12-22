@@ -250,9 +250,9 @@ def upload_dify_knowledge(all_uploads: list[dict], date_str: str, max_retries: i
                     raise Exception("Indexing failed")
             except Exception as e:
                 retries += 1
-                logger.warning(f"⚠️ Upload failed for {doc_name}, attempt {retries}/{max_retries}: {e}")
+                logger.warning(f"Upload failed for {doc_name}, attempt {retries}/{max_retries}: {e}")
                 if retries >= max_retries:
-                    logger.error(f"❌ Giving up on {doc_name} after {max_retries} retries")
+                    logger.error(f"Giving up on {doc_name} after {max_retries} retries")
                 else:
                     time.sleep(retry_delay)
 
