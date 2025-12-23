@@ -1,6 +1,7 @@
 import os
 import json
 import ast
+import re
 import pandas as pd
 from fastapi import Request
 
@@ -133,32 +134,43 @@ async def validate_scrape_agent_request(request: Request):
 
 from filelock import FileLock
 
-def save_user_prompt(user_id: str, prompt: str):
-    if not prompt or not prompt.strip():
-        return
-
+def save_user_prompt(user_id: str, prompt: str) -> str:
     prompts_path = "json/prompts.json"
     lock_path = prompts_path + ".lock"
 
     def split_prompt_to_list(prompt_text: str) -> list[str]:
-        import re
         if not prompt_text or not prompt_text.strip():
             return []
-
         parts = re.split(r'(?<=[。？])|\n', prompt_text)
         return [p.strip() for p in parts if p.strip()]
 
     with FileLock(lock_path, timeout=5):
+        # Load existing data safely
         if os.path.exists(prompts_path):
-            with open(prompts_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            try:
+                with open(prompts_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = {}
         else:
             data = {}
 
+        # If no new prompt provided, return stored one
+        if not prompt or not prompt.strip():
+            stored = data.get(user_id, {}).get("prompt") or data.get("default")
+            if isinstance(stored, list):
+                return " ".join(stored)
+            return stored or ""
+
+        # Update entry for this user
         entry = data.get(user_id, {})
         entry["prompt"] = split_prompt_to_list(prompt)
         data[user_id] = entry
 
+        # Save back to file
         with open(prompts_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+
+    # Always return the raw string prompt
+    return prompt
 

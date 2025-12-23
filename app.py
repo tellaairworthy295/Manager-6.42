@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 from datetime import datetime
+from click import prompt
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -128,7 +129,7 @@ async def scrape_news_api(request: Request):
 async def scrape_agent_api(request: Request):
     try:
         data = await validate_scrape_agent_request(request)
-
+        current_prompt = ""
         user_id = data["user_id"]
         sources = data["sources"]
         r = get_redis_client()
@@ -145,7 +146,7 @@ async def scrape_agent_api(request: Request):
 
 
         try:
-            save_user_prompt(data["user_id"], data["prompt"])
+            current_prompt = save_user_prompt(data["user_id"], data["prompt"])
         except Exception as e:
             if r.get("agent:lock:global") == "1" and "gangtise" in data["sources"]:
                 r.decr("agent:lock:global")
@@ -172,7 +173,8 @@ async def scrape_agent_api(request: Request):
         return JSONResponse(
             {
                 "已有任務": tasks,
-                "detail": "您的任务提交成功，请耐心等待。"
+                "detail": "您的任务提交成功，请耐心等待。",
+                "prompt": current_prompt["prompt"]
             },
             status_code=202,
         )
