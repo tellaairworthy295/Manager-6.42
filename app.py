@@ -3,7 +3,6 @@ import asyncio
 import json
 import os
 from datetime import datetime
-from click import prompt
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 import uvicorn

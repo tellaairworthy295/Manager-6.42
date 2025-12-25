@@ -3,12 +3,12 @@ import json
 import random
 import time
 import dramatiq
-from loguru import logger
 from utils.redis_utils import get_redis_client
 from scraper.news_scraper import scrape_news, fetch_urls_from_page
 from utils.upload_knowledge import upload_dify_knowledge, clean_dify_knowledge
+from utils.logging_config import get_news_task_logger
 
-logger.add("logs/news_task/news_task_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
+logger = get_news_task_logger()
 
 # ================= Main per-site scraping task ==================
 @dramatiq.actor(
@@ -216,4 +216,3 @@ def scrape_all_news(requests: list[dict], now_str):
     dramatiq.group(messages).run()
 
     logger.info(f"[scrape_all_news] {len(messages)} site tasks dispatched, group_key={group_key}")
-    return {"status": "queued", "task_count": len(messages), "group_key": group_key}

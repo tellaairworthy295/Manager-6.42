@@ -7,13 +7,11 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from utils.translation_service import translate_article_to_chinese
-from loguru import logger
 from selen.stealth_driver import get_chrome_driver
 from utils.database import get_db_manager, NewsArticleRepository
-
+from utils.logging_config import get_news_task_logger
 # Configure loguru for news scraper module
-logger.add("logs/news/news_scraper_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
-
+logger = get_news_task_logger()
 
 def _human_pause(min_delay: float = 1.5, max_delay: float = 3.8):
     """Sleep with jitter to mimic human dwell time."""

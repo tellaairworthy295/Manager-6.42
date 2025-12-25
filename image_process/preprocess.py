@@ -2,9 +2,9 @@ import os
 import cv2
 import numpy as np
 from PIL import Image
-from loguru import logger
+from utils.logging_config import get_stock_logger
 
-
+logger = get_stock_logger()
 def horizontal_projection(bin_img):
     """
     bin_img: binary image (text=0, background=255)

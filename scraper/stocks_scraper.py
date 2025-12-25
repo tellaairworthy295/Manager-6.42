@@ -5,7 +5,6 @@ import re
 import aiohttp
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-from loguru import logger
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from pwright.async_pm import AsyncPlaywrightManager
@@ -13,15 +12,9 @@ from pwright.async_cm import PlaywrightContext
 from pwright.async_pf import new_stealth_page
 from utils.database import get_db_manager, StockRepository
 from utils.interactive import async_safe_click
+from utils.logging_config import get_stock_logger
 
-
-logger.add(
-    "logs/stocks/stocks_scraper_{time:YYYY-MM-DD}.log",
-    rotation="00:00",
-    retention="15 days",
-    encoding="utf-8"
-)
-
+logger = get_stock_logger()
 
 async def main_scraper(date: str):
     # Load selectors & cookies once

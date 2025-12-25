@@ -1,13 +1,10 @@
 import os
 import asyncio
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
-from loguru import logger
 from utils.interactive import parse_locators, async_safe_click, async_safe_fill
-
+from utils.logging_config import get_agent_task_logger
 # Configure loguru for agent scraper module
-logger.add("logs/agent_scraper/agent_scraper_{time:YYYY-MM-DD}.log",
-           rotation="00:00", retention="15 days", encoding="utf-8")
-
+logger = get_agent_task_logger()
 
 # -----------------------
 # Wait-for-answer / download button detector

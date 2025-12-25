@@ -6,13 +6,12 @@ import redis
 from utils.redis_utils import get_redis_client
 import zipfile
 import dramatiq
-from loguru import logger
 from pwright.async_pf import new_stealth_page
 from pwright.async_cm import PlaywrightContext
 from pwright.async_pm import AsyncPlaywrightManager
 from scraper.agent_scraper import process_single_stock
 from utils.sender import load_email_config_from_json, send_email_with_attachments
-
+from utils.logging_config import get_agent_task_logger
 
 # Your utilities assumed to exist:
 # - get_redis_client()
@@ -22,7 +21,7 @@ from utils.sender import load_email_config_from_json, send_email_with_attachment
 # - process_single_stock(page, stock, prompt, final_docs, site_locators) -> str (async)
 #   NOTE: If process_single_stock was sync, convert it to async or wrap its blocking parts in run_in_executor.
 
-logger.add("logs/agent_task/agent_task_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
+logger = get_agent_task_logger()
 
 BASE_DIR = os.path.join(os.getcwd(), "agentStockAnalysis")
 

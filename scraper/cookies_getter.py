@@ -1,11 +1,11 @@
 
 import json
 import time
-from loguru import logger
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 from pwright.context_manager import playwright_context
 from pwright.page_factory import new_stealth_page
 from pwright.playwright_manager import PlaywrightManager
+from utils.logging_config import get_agent_task_logger
 
 class BaseCookies:
     """Lightweight base class that provides:
@@ -26,7 +26,7 @@ class BaseCookies:
         self.url = url
         self.section_name = section_name
         self.user_id = user_id  # supports user-specific area
-        self.logger = logger.bind(site=section_name)
+        self.logger = get_agent_task_logger()
         
         self.page = page
 

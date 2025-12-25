@@ -1,10 +1,10 @@
 import requests
 import json
 import time
-from loguru import logger
+from utils.logging_config import get_news_task_logger
 
 # Configure loguru for upload knowledge module
-logger.add("logs/upload_knowledge/upload_knowledge_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
+logger = get_news_task_logger()
 
 # ============================
 # Configuration

@@ -6,8 +6,9 @@ from typing import List, Optional
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from loguru import logger
+from utils.logging_config import get_news_task_logger
 
+logger = get_news_task_logger()
 # Load translation config from config.json
 def _load_translation_config():
     with open("json/config.json", 'r', encoding='utf-8') as f:
@@ -31,9 +32,6 @@ try:
     HAS_GOOGLETRANS = True
 except ImportError:
     HAS_GOOGLETRANS = False
-
-# Configure loguru for translation service module
-logger.add("logs/translation/translation_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
 
 # Simple in-memory cache
 _translation_cache = {}

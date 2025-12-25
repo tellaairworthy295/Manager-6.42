@@ -5,10 +5,11 @@ import cv2
 import numpy as np
 import requests
 from PIL import Image
-from loguru import logger
+from utils.logging_config import get_stock_logger
 
 from .preprocess import smart_slice_tall_image, _is_tall_image
 
+logger = get_stock_logger()
 API_URL = "https://r499p5s59cg8zev7.aistudio-app.com/ocr"
 API_TOKEN = "3a258219dc655d3bafc108d13cb9ec6230a7ff9a"
 

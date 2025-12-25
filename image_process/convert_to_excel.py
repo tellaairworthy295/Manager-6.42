@@ -1,36 +1,18 @@
 import os
 import re
 import unicodedata
-import sys
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import font_manager
-from loguru import logger
 from .preprocess import preprecess_image
 from .ocr_api import ocr_image_safe
 import matplotlib
 matplotlib.use('Agg')
 # Configure loguru for to_excel module
-# 1️⃣ Remove default handler FIRST
-logger.remove()
+from utils.logging_config import get_stock_logger
 
 # 2️⃣ Add file logger (safe, no buffering issues)
-logger.add(
-    "logs/to_excel/to_excel_{time:YYYY-MM-DD}.log",
-    rotation="00:00",
-    retention="15 days",
-    encoding="utf-8",
-    enqueue=False,     # IMPORTANT on Windows workers
-)
-
-# 3️⃣ Add stdout logger (unbuffered + immediate)
-logger.add(
-    sys.stdout,
-    level="INFO",
-    enqueue=False,     # 🚨 CRITICAL on Windows
-    backtrace=True,
-    diagnose=False,
-)
+logger = get_stock_logger()
 
 FONT_PATH = "fonts/NotoSansSC-VariableFont_wght.ttf"
 
