@@ -226,7 +226,6 @@ Grouped in options:\
 [Al-Monitor](https://www.al-monitor.com) -
 [America's Test Kitchen](https://www.americastestkitchen.com) -
 [American Purpose](https://www.americanpurpose.com) -
-[Apollo Magazine](https://www.apollo-magazine.com) -
 [Artforum](https://www.artforum.com) -
 [Artnet](https://www.artnet.com) -
 [Atavist Magazine](https://magazine.atavist.com) -
@@ -275,7 +274,6 @@ Grouped in options:\
 [The New Republic](https://newrepublic.com) -
 [The New York Review of Books](https://www.nybooks.com) -
 [The Point Magazine](https://thepointmag.com) -
-[The Spectator World](https://thespectator.com) -
 [The Week](https://theweek.com) -
 [The Wrap](https://www.thewrap.com) -
 [Vice](https://www.vice.com) -
@@ -541,7 +539,6 @@ Grouped in options:\
 [The New Statesman](https://www.newstatesman.com) -
 [The New World](https://www.thenewworld.co.uk) -
 [The Observer](https://observer.co.uk) -
-[The Spectator](https://www.spectator.co.uk) -
 [The Telegraph](https://www.telegraph.co.uk) -
 [The Times](https://www.thetimes.com) -
 [The Times Literary Supplement](https://www.the-tls.com) -
@@ -564,6 +561,10 @@ Grouped in options:\
 *The Independent Group* sites like\
 [The Independent UK ](https://www.independent.co.uk) -
 [The Independent USA ](https://www.the-independent.com)\
+*The Spectator Group* sites like\
+[The Spectator](https://spectator.com) -
+[The Spectator Australia](https://www.spectator.com.au) -
+[Apollo Magazine](https://apollo-magazine.com)\
 *The Stage Media* sites like:\
 [The Bookseller](https://www.thebookseller.com) -
 [The Stage](https://www.thestage.co.uk)\
@@ -1071,7 +1072,6 @@ Grouped in options:\
 [MacroBusiness](https://www.macrobusiness.com.au) -
 [New Zealand Herald](https://www.nzherald.co.nz) -
 [The Saturday Paper](https://www.thesaturdaypaper.com.au) -
-[The Spectator Australia](https://www.spectator.com.au) -
 [The West Australian (+ regional/opt-in to custom sites)](https://thewest.com.au)
 
 Grouped in options:\

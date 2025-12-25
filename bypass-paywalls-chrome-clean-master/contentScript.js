@@ -11,7 +11,7 @@ var csDone;
 var csDoneOnce;
 var cs_param = {};
 var dompurify_loaded = (typeof DOMPurify === 'function');
-var dompurify_options = {ADD_TAGS: ['amp-img', 'iframe', 'list'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'itemprop', 'layout', 'target']};
+var dompurify_options = {ADD_TAGS: ['amp-img', 'embed', 'iframe', 'list'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'itemprop', 'layout', 'target']};
 
 var usa_mcc_domains = ['bnd.com', 'charlotteobserver.com', 'elnuevoherald.com', 'fresnobee.com', 'kansas.com', 'kansascity.com', 'kentucky.com', 'mcclatchydc.com', 'miamiherald.com', 'newsobserver.com', 'sacbee.com', 'star-telegram.com', 'thestate.com', 'tri-cityherald.com'];
 
@@ -678,6 +678,11 @@ function replaceDomElementExtSrc(url, url_src, html, proxy, base64, selector, te
     }, 200);
   } else {
     replaceTextFail(url, article_link, proxy, url_src ? text_fail.replace(':', no_content_msg) : text_fail);
+    if (!url_src && url.includes('/https://www.thetimes.com/')) {
+      let url_orig = 'https:' + url.split('/https:')[1];
+      if (article_link)
+        article_link.before(externalLink(['clearthis.page'], 'https://clearthis.page/?u={url}', encodeURIComponent(url_orig), 'BPC > Try for full article text:'));
+    }
   }
 }
 

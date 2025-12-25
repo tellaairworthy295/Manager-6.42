@@ -9,7 +9,7 @@ logger.add("logs/upload_knowledge/upload_knowledge_{time:YYYY-MM-DD}.log", rotat
 # ============================
 # Configuration
 # ============================
-BASE_URL = "http://10.25.116.40:7080"   # Dify API backend (adjust if needed)
+BASE_URL = "http://10.25.116.40:7090"   # Dify API backend (adjust if needed)
 API_KEY = "dataset-XS82GQa1J04QacZ5iFl5QHKf"     # Replace with your real API key
 DATASET_ID = "aafc9493-9f65-452a-ad3a-0f140928f21b"       # Replace with your Knowledge Base (dataset) ID
 
@@ -32,7 +32,7 @@ def list_bases():
     ids = [b.get("id") for b in bases]
     logger.debug(f"Dataset IDs: {ids}")
     return ids
-
+    
 def list_documents():
     """Get all documents under the dataset, iterating through all pages."""
     all_docs = []
@@ -73,7 +73,7 @@ def delete_all_documents():
     
 def upload_new_document_by_file(FILE_PATH: str):
     """Upload and index new document file to Dify KB."""
-    url = f"http://localhost/v1/datasets/{DATASET_ID}/document/create-by-file"
+    url = f"{BASE_URL}/v1/datasets/{DATASET_ID}/document/create-by-file"
     headers = api_headers()
 
     # Metadata payload (same structure as text upload)
@@ -91,7 +91,7 @@ def upload_new_document_by_file(FILE_PATH: str):
                 },
                 "parent_mode": "paragraph",
                 "subchunk_segmentation": {
-                    "separator": "\n\n",
+                    "separator": "\n",
                     "max_tokens": 512
                 }
             },
@@ -104,24 +104,24 @@ def upload_new_document_by_file(FILE_PATH: str):
             "reranking_enable": True,
             "reranking_mode": "reranking_model",
             "reranking_model": {
-                "reranking_provider_name": "langgenius/siliconflow/siliconflow",
-                "reranking_model_name": "BAAI/bge-reranker-v2-m3"
+                "reranking_provider_name": "langgenius/tongyi/tongyi",
+                "reranking_model_name": "gte-rerank-v2"
             },
             "weights": {
                 "weight_type": None,
                 "keyword_setting": {"keyword_weight": 0.3},
                 "vector_setting": {
                     "vector_weight": 0.7,
-                    "embedding_model_name": "BAAI/bge-m3",
-                    "embedding_provider_name": "langgenius/siliconflow/siliconflow"
+                    "embedding_model_name": "text-embedding-v4",
+                    "embedding_provider_name": "langgenius/tongyi/tongyi"
                 }
             },
-            "top_k": 4,
+            "top_k": 3,
             "score_threshold_enabled": False,
             "score_threshold": 0.5
         },
-        "embedding_model": "BAAI/bge-m3",
-        "embedding_model_provider": "langgenius/siliconflow/siliconflow"
+        "embedding_model": "text-embedding-v4",
+        "embedding_model_provider": "langgenius/tongyi/tongyi"
     }
 
     try:
@@ -131,16 +131,16 @@ def upload_new_document_by_file(FILE_PATH: str):
 
             resp = requests.post(url, headers=headers, files=files, data=data)
             resp.raise_for_status()
-            logger.info(f"✅ Uploaded file document: {FILE_PATH}")
+            logger.info(f"Uploaded file document: {FILE_PATH}")
             return resp.json()
     except Exception as e:
-        logger.error(f"❌ Failed to upload {FILE_PATH}: {e}")
+        logger.error(f"Failed to upload {FILE_PATH}: {e}")
         return None
 
 
 def _upload_new_document_by_text(name: str, text: str, source: str):
     """Upload and index new document from raw text."""
-    url = f"http://localhost/v1/datasets/{DATASET_ID}/document/create-by-text"
+    url = f"{BASE_URL}/v1/datasets/{DATASET_ID}/document/create-by-text"
     headers = api_headers()
 
     payload = {
@@ -170,27 +170,27 @@ def _upload_new_document_by_text(name: str, text: str, source: str):
             "reranking_enable": True,
             "reranking_mode": "reranking_model",
             "reranking_model": {
-                "reranking_provider_name": "langgenius/siliconflow/siliconflow",
-                "reranking_model_name": "BAAI/bge-reranker-v2-m3"
+                "reranking_provider_name": "langgenius/tongyi/tongyi",
+                "reranking_model_name": "gte-rerank-v2"
             },
             "weights": {
                 "weight_type": None,
                 "keyword_setting": {"keyword_weight": 0.3},
                 "vector_setting": {
                     "vector_weight": 0.7,
-                    "embedding_model_name": "BAAI/bge-m3",
-                    "embedding_provider_name": "langgenius/siliconflow/siliconflow"
+                    "embedding_model_name": "text-embedding-v4",
+                    "embedding_provider_name": "langgenius/tongyi/tongyi"
                 }
             },
             "top_k": 4,
             "score_threshold_enabled": False,
             "score_threshold": 0.5
         },
-        "embedding_model": "BAAI/bge-m3",
-        "embedding_model_provider": "langgenius/siliconflow/siliconflow",
+        "embedding_model": "text-embedding-v4",
+        "embedding_model_provider": "langgenius/tongyi/tongyi",
         "name": name,
         "text": text,
-        "doc_metadata": {
+        "doc_metadata":{
             "site": source
         }
     }
@@ -198,7 +198,7 @@ def _upload_new_document_by_text(name: str, text: str, source: str):
     try:
         resp = requests.post(url, headers=headers, json=payload)
         resp.raise_for_status()
-        logger.info(f"✅ Uploaded text document: {name}")
+        logger.info(f"Uploaded text document: {name}")
         return resp.json()
     except:
         raise Exception("Error while uploading, retrying")
@@ -259,17 +259,17 @@ def upload_dify_knowledge(all_uploads: list[dict], date_str: str, max_retries: i
 def clean_dify_knowledge():
     docs = list_documents()
     from datetime import datetime
-    twelve_hours_ago = datetime.now().timestamp() - 12.5 * 3600
+    twelve_hours_ago = datetime.now().timestamp() - 24.5 * 3600
     for doc in docs:
         # Delete docs where indexing failed
         if doc.get("indexing_status") == "error":
             delete_document(doc["id"])
-        # Delete docs created more than 12 hours ago
+        # Delete docs created more than 24 hours ago
         elif doc.get("created_at") is not None and float(doc["created_at"]) < twelve_hours_ago:
             delete_document(doc["id"])
-    logger.info("✅ Removal done!")
+    logger.info("Removal done!")
 
 
 if __name__ == "__main__":
     #upload_flow()
-    list_bases()
+    print(list_documents())

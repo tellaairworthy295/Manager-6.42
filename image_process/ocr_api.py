@@ -157,10 +157,9 @@ def ocr_image_safe(
     if _is_tall_image(img, tall_ratio):
         logger.info("Tall image detected, slicing before OCR")
         slices = smart_slice_tall_image(img)
-        pad_ratio = 0.05
     else:
         slices = [img]
-        pad_ratio = 0.02
+    pad_ratio = 0.05
         
     img_dir = os.path.dirname(os.path.abspath(img_path))
     for idx, crop in enumerate(slices):

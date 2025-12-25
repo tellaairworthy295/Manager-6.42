@@ -58,13 +58,12 @@ var restrictions = {
   'lopinion.fr': /^((?!\.lopinion\.fr\/lejournal).)*$/,
   'mid-day.com': /^((?!\/epaper\.mid-day\.com\/).)*$/,
   'newyorker.com': /^((?!\/archives\.newyorker\.com\/).)*$/,
-  'nytimes.com': /^((?!\/(help|myaccount|timesmachine)\.nytimes\.com\/).)*$/,
+  'nytimes.com': /^((?!(\/(help|myaccount|timesmachine)\.nytimes\.com\/)|\.nytimes\.com\/games\/).)*$/,
   'nzz.ch': /^((?!\/epaper\.nzz\.ch\/).)*$/,
   'quora.com': /^((?!\.quora\.com\/search\?q=).)*$/,
   'science.org': /^((?!\.science\.org\/doi\/).)*$/,
   'scmp.com': /^((?!\.scmp\.com\/plus).)*$/,
   'sky.it': /\/(sport|tg24)\.sky\.it\//,
-  'spectator.co.uk': /^((?!archive\.spectator\.co\.uk).)*$/,
   'standardmedia.co.ke': /^((?!epaper\.standardmedia\.co\.ke).)*$/,
   'study.com': /\/study\.com\/.+\/lesson\//,
   'sueddeutsche.de': /^((?!zeitung\.sueddeutsche\.de).)*$/,
@@ -981,7 +980,7 @@ ext_api.storage.local.get({
     } else {
       ext_api.management.getSelf(function (result) {
         if ((result.installType === 'development' || (result.installType !== 'development' && !enabledSites.includes('#options_on_update')))) {
-          let new_groups = ['###_uk_iconic_media'];
+          let new_groups = ['###_uk_iconic_media', '###_uk_spectator'];
           let open_options = new_groups.some(group => !enabledSites.includes(group) && grouped_sites[group].some(domain => enabledSites.includes(domain) && !customSites_domains.includes(domain)));
           if (open_options)
             ext_api.runtime.openOptionsPage();

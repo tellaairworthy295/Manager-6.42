@@ -15,6 +15,7 @@ var usa_conde_nast_domains = ['architecturaldigest.com', 'bonappetit.com', 'cntr
 var usa_craincomm_domains = ['360dx.com', 'adage.com', 'autonews.com', 'chicagobusiness.com', 'crainscleveland.com', 'crainsdetroit.com', 'crainsgrandrapids.com', 'crainsnewyork.com', 'european-rubber-journal.com', 'genomeweb.com', 'modernhealthcare.com', 'pionline.com', 'plasticsnews.com', 'precisionmedicineonline.com', 'rubbernews.com', 'sustainableplastics.com', 'tirebusiness.com', 'utech-polyurethane.com'];
 var usa_gannett_domains = ['azcentral.com', 'cincinnati.com', 'commercialappeal.com', 'courier-journal.com', 'democratandchronicle.com', 'desmoinesregister.com', 'detroitnews.com', 'dispatch.com', 'freep.com', 'indystar.com', 'jacksonville.com', 'jsonline.com', 'knoxnews.com', 'news-press.com', 'northjersey.com', 'oklahoman.com', 'palmbeachpost.com', 'tennessean.com'];
 var usa_hearst_comm_domains = ['ctpost.com', 'expressnews.com', 'houstonchronicle.com', 'nhregister.com', 'sfchronicle.com', 'statesman.com', 'timesunion.com'];
+var usa_hearst_comm_mag_domains = ['oprahdaily.com', 'popularmechanics.com'];
 var usa_lee_ent_domains = ['buffalonews.com', 'journalnow.com', 'journalstar.com', 'madison.com', 'nwitimes.com', 'omaha.com', 'richmond.com', 'stltoday.com', 'tucson.com', 'tulsaworld.com'];
 var usa_mcc_domains = ['bnd.com', 'charlotteobserver.com', 'elnuevoherald.com', 'fresnobee.com', 'kansas.com', 'kansascity.com', 'kentucky.com', 'mcclatchydc.com', 'miamiherald.com', 'newsobserver.com', 'sacbee.com', 'star-telegram.com', 'thestate.com', 'tri-cityherald.com'];
 var usa_mng_domains = ['bostonherald.com', 'denverpost.com', 'eastbaytimes.com', 'mercurynews.com', 'ocregister.com', 'pressenterprise.com', 'sandiegouniontribune.com', 'twincities.com'];
@@ -116,6 +117,9 @@ if (matchDomain('afr.com')) {
                               let credit = (item.data.credit && item.data.credit.trim()) || item.data.source;
                               result = '<figure><img src="https://static.ffx.io/images/w_960/' + item.data.fileName + '" style="width: 100%;"><figcaption>' + (item.data.caption ? item.data.caption : '') + (credit ? '<span style="font-weight: bold;">&nbsp;' + credit + '</span>' : '') + '</figcaption></figure>';
                             }
+                          } else if (item.type === 'omny') {
+                            if (item.data.src)
+                              result = '<embed src="' + item.data.src + '/embed" style="width:100%" frameborder="0">';
                           } else if (item.type === 'youtube') {
                             if (item.data.url) {
                               if (item.data.url.includes('watch?v='))
@@ -285,10 +289,6 @@ else if (matchDomain('nzherald.co.nz')) {
   // plus code in contentScript_once_var.js (timing)
   let premium_toaster = '#premium-toaster';
   hideDOMStyle(premium_toaster);
-}
-
-else if (matchDomain('spectator.com.au')) {
-  getJsonUrl('section.paywall', '', 'div.article-body', {art_append: 1});
 }
 
 else if (matchDomain('thesaturdaypaper.com.au')) {
@@ -506,14 +506,9 @@ else {
     csDone = true;
 }
 
-} else if ((window.location.hostname.match(/\.(ie|uk)$/) && !matchDomain(['vogue.co.uk'])) || matchDomain(['apollo-magazine.com', 'autosport.com', 'decanter.com', 'fnlondon.com', 'ft.com', 'gbnews.com', 'granta.com', 'iai.tv', 'irishexaminer.com', 'motorsportmagazine.com', 'newstatesman.com', 'scotsman.com', 'tes.com', 'the-tls.com', 'thelawyer.com', 'thetimes.com', 'unherd.com'])) {//united kingdom/ireland
+} else if ((window.location.hostname.match(/\.(ie|uk)$/) && !matchDomain(['vogue.co.uk'])) || matchDomain(['autosport.com', 'decanter.com', 'fnlondon.com', 'ft.com', 'gbnews.com', 'granta.com', 'iai.tv', 'irishexaminer.com', 'motorsportmagazine.com', 'newstatesman.com', 'scotsman.com', 'tes.com', 'the-tls.com', 'thelawyer.com', 'thetimes.com', 'unherd.com'])) {//united kingdom/ireland
 
-if (matchDomain('apollo-magazine.com')) {
-  let banner = document.querySelector('#subscribe-ribbon');
-  removeDOMElement(banner);
-}
-
-else if (matchDomain('autocar.co.uk')) {
+if (matchDomain('autocar.co.uk')) {
   let paywall = document.querySelector('div.ms-block, div.register-block');
   if (paywall) {
     removeDOMElement(paywall);
@@ -813,17 +808,6 @@ else if (matchDomain('motorsportmagazine.com')) {
 
 else if (matchDomain('newstatesman.com')) {
   let ads = 'div.ad';
-  hideDOMStyle(ads);
-}
-
-else if (matchDomain('spectator.co.uk')) {
-  let paywall_sel = 'section.paywall, div.paywall-magazine';
-  let entry_content = document.querySelector('div.entry-content');
-  if (entry_content)
-    getJsonUrl(paywall_sel, '', 'div.entry-content', {art_append: 1});
-  else
-    getJsonUrl(paywall_sel, '', 'div.entry-content__wrapper', {art_append:1, art_hold:1, art_class: 'entry-content'});
-  let ads = '#subscribe-ribbon, div.ad-slot, div[style*="background-image: linear-gradient"]';
   hideDOMStyle(ads);
 }
 
@@ -2308,7 +2292,7 @@ else if (domain = matchDomain(['haaretz.co.il', 'haaretz.com', 'themarker.com'])
   if (window.location.pathname.match(/\/ty-article/)) {
     let mh = document.querySelector('div[data-test="masthead"]');
     if (!mh) {
-      let article = document.querySelector('main');
+      let article = document.querySelector('main, header#masthead > svg');
       if (article) {
         let mh_new = document.createElement('div');
         mh_new.style = 'font-size: 20px; font-weight: bold; text-align: center; margin: 20px;';
@@ -4169,16 +4153,6 @@ else if (matchDomain('thequint.com')) {
   }, 4000);
 }
 
-else if (matchDomain('thespectator.com')) {
-  let div_hidden = document.querySelector('div.ev-meter-content-class');
-  if (div_hidden)
-    div_hidden.classList.remove('ev-meter-content-class');
-  let newsletter = pageContains('p', /^\[special_offer\]/);
-  removeDOMElement(...newsletter);
-  let ads = 'ins.adsbygoogle';
-  hideDOMStyle(ads);
-}
-
 else if (matchDomain('theweek.com')) {
   let paywall = document.querySelector('div.kiosq-main-layer');
   removeDOMElement(paywall);
@@ -4484,6 +4458,25 @@ else if (matchDomain(usa_craincomm_domains)) {
   }
   let ads = 'div.footer__ads-footer';
   hideDOMStyle(ads);
+}
+
+else if (matchDomain(usa_hearst_comm_mag_domains)) {
+  let audio_tts = document.querySelector('audio[data-media-manager-id^="tts-"][style]');
+  if (audio_tts) {
+    let json_script = document.querySelector('script#__NEXT_DATA__');
+    if (json_script) {
+      try {
+        let json = JSON.parse(json_script.text);
+        let audio_src = findKeyJson(json, 'speech_file_url');
+        if (audio_src) {
+          audio_tts.removeAttribute('style');
+          audio_tts.src = audio_src;
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    }
+  }
 }
 
 else if (matchDomain(usa_nymag_domains)) {

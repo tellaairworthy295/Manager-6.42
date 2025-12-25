@@ -95,7 +95,7 @@ def fetch_urls_from_page(query: str, site: str):
                 pass
 # ============================== Helper Functions ==============================================
 
-def _wait_for_progressive_content(driver, selector, timeout=20, min_paragraphs=5):
+def _wait_for_progressive_content(driver, selector, timeout=15, min_paragraphs=5):
     """Wait for content to load with human-like scrolling behavior."""
     start = time.time()
     last_count = 0
@@ -130,8 +130,6 @@ def _wait_for_progressive_content(driver, selector, timeout=20, min_paragraphs=5
             # At bottom, wait a bit more in case content loads
             _human_pause(2.5, 4.0)
         
-    
-    logger.info(f"content fully loaded: {content_fully_loaded}")
     return content_fully_loaded
 
 def _extract_article_content(soup, selector, unwanted_content=None):
@@ -191,11 +189,22 @@ def scrape_news(url: str, source: str):
         # Wait for progressive content with human-like scrolling
         content_fully_loaded = _wait_for_progressive_content(
             driver,
-            timeout=20,
+            timeout=15,
             min_paragraphs=min_paragraphs,
             selector=selector
         )
-
+        
+        if not content_fully_loaded:
+            logger.info("Content not fully loaded, refreshing page and retrying ...")
+            driver.refresh()
+            _human_pause(2.0,4.0)
+            content_fully_loaded = _wait_for_progressive_content(
+            driver,
+            timeout=15,
+            min_paragraphs=min_paragraphs,
+            selector=selector
+        )
+        
         soup = BeautifulSoup(driver.page_source, "html.parser")
         result = _extract_article_content(soup, selector, unwanted_content)
         result["content_fully_loaded"] = content_fully_loaded

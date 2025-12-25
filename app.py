@@ -167,14 +167,14 @@ async def scrape_agent_api(request: Request):
                     data["user_id"],
                     cks
                 )
-
+        
         r.incr("agent:global:processing")
         tasks = int(r.get("agent:global:processing") or 0)
         return JSONResponse(
             {
                 "已有任務": tasks,
                 "detail": "您的任务提交成功，请耐心等待。",
-                "prompt": current_prompt["prompt"]
+                "prompt": current_prompt,
             },
             status_code=202,
         )
@@ -203,7 +203,8 @@ async def news_analyzer(request: Request):
         with open(txt_path, "w", encoding="utf-8") as f:
             f.write(str(analysis_result))
         config = load_email_config_from_json("json/config.json")
-        config.BODY = "AI分析(Agent)结果见附件。"
+        config.SUBJECT = "【新闻】彭博社最近6小时新闻AI总结"
+        config.BODY = "AI总结结果见附件。"
         config.ATTACHMENTS = [txt_path]
         send_email_with_attachments(**config.as_dict())
     except Exception as e:
@@ -217,7 +218,7 @@ async def scrape_stocks_api(request: Request):
     date = data.get("date") or datetime.today().strftime("%Y-%m-%d")
     days = data.get("days", 10)
     try:
-        await asyncio.to_thread(main_scraper, date)
+        await main_scraper(date)
         await asyncio.to_thread(excel_flow, date, days)
 
         config = load_email_config_from_json("json/config.json")
@@ -232,7 +233,8 @@ async def scrape_stocks_api(request: Request):
             "excel/trendings_trend_even.png",
             "excel/trendings_trend_up.png"
         ]
-        config.BODY = "个股信息和韭研公社涨停简图相关信息，见附件。"
+        config.BODY = "个股信息（已合并韭研和选股通）和韭研公社涨停简图相关信息，见附件。"
+        config.SUBJECT = "【韭研】个股分析与涨停简图"
         await asyncio.to_thread(send_email_with_attachments, **config.as_dict())
         try:
             os.remove(txt_path)

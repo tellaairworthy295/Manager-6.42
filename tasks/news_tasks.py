@@ -13,6 +13,7 @@ logger.add("logs/news_task/news_task_{time:YYYY-MM-DD}.log", rotation="00:00", r
 # ================= Main per-site scraping task ==================
 @dramatiq.actor(
     queue_name="news",
+    time_limit=25*60*1000,
     max_retries=0,  # Fail fast: a failed site is considered failed
 )
 def scrape_news_task(*, query: str, site: str = None, source: str = None, group_key: str = None, now_str: str = None):

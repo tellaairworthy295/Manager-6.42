@@ -132,7 +132,10 @@ window.setTimeout(function () {
       else if (matchDomain(['gazzettadimodena.it', 'gazzettadireggio.it', 'lanuovaferrara.it']))
         group = '###_it_gruppo_sae';
     } else if (hostname.endsWith('.nl') || matchDomain(['bike-eu.com'])) {
-      if (document.querySelector('head > link[href*=".ndcmediagroep.nl/"]'))
+      if (document.querySelector('head > meta[name="twitter:creator"][content="@Agrio"]')) {
+        group = '###_nl_agrio';
+        nofix = 1;
+      } else if (document.querySelector('head > link[href*=".ndcmediagroep.nl/"]'))
         group = '###_nl_mediahuis_noord';
       else if (matchDomain(['gooieneemlander.nl', 'ijmuidercourant.nl']))
         group = '###_nl_mediahuis_region';
@@ -175,7 +178,7 @@ window.setTimeout(function () {
         group = '###_uk_dvv_media';
       else if (matchDomain(['agendanews.com', 'boardiq.com', 'endpoints.news', 'financialadvisoriq.com', 'fundfire.com', 'healthpayerspecialist.com', 'ignites.com', 'ignitesasia.com', 'igniteseurope.com', 'lifeannuityspecialist.com', 'pandcspecialist.com']))
         group = '###_uk_ft_specialist';
-      else if (document.querySelector('footer li > a[href^="https://www.newsquest.co.uk/"]'))
+      else if (document.querySelector('footer a[href^="https://www.newsquest.co.uk/"]'))
         group = '###_uk_newsquest';
       else if (document.querySelector('div#wrbm-footer-div'))
         group = '###_uk_william_reed';

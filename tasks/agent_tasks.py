@@ -150,7 +150,7 @@ async def _async_process_single_stock_task(*, stock: str, user_id: str, source: 
 @dramatiq.actor(
     queue_name="agents",
     max_retries=0,
-    min_backoff=5000,
+    time_limit=60*60*1000,
     on_retry_exhausted="handle_failure",
 )
 def process_single_stock_task(

@@ -1,70 +1,15 @@
 {
-  "Aftenposten.no": {
-    "domain": "aftenposten.no",
+  "Apollo Magazine": {
+    "domain": "apollo-magazine.com",
     "allow_cookies": 1,
-    "useragent": "googlebot",
-    "upd_version": "4.2.6.1"
-  },
-  "Badische Neueste Nachrichten": {
-    "domain": "bnn.de",
-    "allow_cookies": 1,
-    "ld_archive_is": "section.paywall|article",
-    "upd_version": "4.2.6.6"
-  },
-  "Capital.bg": {
-    "domain": "capital.bg",
-    "allow_cookies": 1,
-    "cs_param": {"paywall_sel": "section>article a[href^='/paywall_click/'],section[data-paywall-id]"},
-    "upd_version": "4.2.6.2"
+    "block_regex": "\\.tinypass\\.com",
+    "upd_version": "4.2.7.5"
   },
   "Dnevnik.bg": {
     "domain": "dnevnik.bg",
     "allow_cookies": 1,
     "useragent_custom": "Mozilla/5.0 (Java) outbrain",
     "upd_version": "4.2.6.8"
-  },
-  "El Tiempo": {
-    "domain": "eltiempo.com",
-    "allow_cookies": 1,
-    "block_regex": "\\.tinypass\\.com",
-    "cs_code": "[{\"cond\":\"div.c-articulo-exclusivo\", \"rm_class\":\"c-articulo-exclusivo\"}]",
-    "upd_version": "4.2.6.4"
-  },
-  "El Tribuno": {
-    "domain": "eltribuno.com",
-    "allow_cookies": 1,
-    "block_regex": "\\.ampproject\\.org\\/v0\\/amp-access-.+\\.js",
-    "upd_version": "4.2.6.5"
-  },
-  "FT Specialist Group": {
-    "domain": "###_uk_ft_specialist",
-    "group" : [],
-    "allow_cookies": 1,
-    "block_regex": "\\.ftspecialist-us\\.com\\/pub\\/.+\\/enroll-.+\\.js",
-    "block_host_perm_add": "ftspecialist-us.com",
-    "useragent": "googlebot",
-    "ld_json_next": "div#anonymous-lead-enroll-form|div.article-body>div>p",
-    "cs_code": "[{\"cond\": \"div.article-body\", \"rm_class\": \"one-click\"}, {\"hide_elem\": \"div[id$='ad-header']\"}]",
-    "exception": [{
-        "domain": "endpoints.news",
-        "allow_cookies": 1,
-        "useragent": "googlebot"
-      }, {
-        "domain": "financialadvisoriq.com",
-        "allow_cookies": 1,
-        "block_regex": "\\.ftspecialist-us\\.com\\/pub\\/.+\\/content-.+\\.js",
-        "block_host_perm_add": "ftspecialist-us.com",
-        "ld_json_next": "div#anonymous-lead-enroll-form|div.article-body>div>p",
-        "cs_code": "[{\"cond\": \"div.article-body\", \"rm_class\": \"one-click\"}, {\"hide_elem\": \"div[id$='ad-header']\"}]"
-      }
-    ],
-    "upd_version": "4.2.6.5"
-  },
-  "Newspack (WordPress plugin)": {
-    "domain": "###_wp_newspack_gate",
-    "allow_cookies": 1,
-    "block_regex_general": "\\/wp-content\\/plugins\\/newspack-plugin\\/dist\\/.+-gate-metering\\.js",
-    "upd_version": "4.2.6.3"
   },
   "NOZ/MHN Mediengruppe": {
     "domain": "###_de_noz_mhn",
@@ -76,23 +21,30 @@
     "useragent": "googlebot",
     "upd_version": "4.2.6.7"
   },
-  "Private Media AU": {
-    "domain": "###_au_private_media",
-    "group": [
-      "crikey.com.au",
-      "smartcompany.com.au",
-      "themandarin.com.au"
-    ],
-    "remove_cookies_select_drop": ["blaize_session"],
-    "ld_json_url": "div#pmc-zephr-paywall|div.entry-content",
-    "cs_code": "[{\"hide_elem\":\"div[style*='linear-gradient']\"}]",
-    "upd_version": "4.2.6.1"
-  },
-  "Spacenews": {
-    "domain": "spacenews.com",
+  "Süddeutsche Zeitung": {
+    "domain": "sueddeutsche.de",
     "allow_cookies": 1,
-    "block_regex": "\\/spacenews\\.com\\/wp-content\\/plugins\\/newspack-plugin\\/dist\\/content-gate-metering\\.js",
-    "upd_version": "4.2.6.5"
+    "block_regex": "\\.sueddeutsche\\.de\\/api\\/tinypass\\.min\\.js",
+    "ld_archive_is": "head>meta[content='locked']|div[itemprop='articleBody']",
+    "add_ext_link": "div.offerpage-container,div.offer-page|main",
+    "add_ext_link_type": "archive.is",
+    "cs_block": 1,
+    "upd_version": "4.2.7.3"
+  },
+  "The Spectator Australia": {
+    "domain": "spectator.com.au",
+    "allow_cookies": 1,
+    "block_regex": "\\.tinypass\\.com",
+    "upd_version": "4.2.7.5"
+  },
+  "The Spectator Group (UK)": {
+    "domain": "###_uk_spectator",
+    "group": [
+      "spectator.com"
+    ],
+    "allow_cookies": 1,
+    "block_regex": "\\.tinypass\\.com",
+    "upd_version": "4.2.7.5"
   },
   "War on the Rocks": {
     "domain": "warontherocks.com",

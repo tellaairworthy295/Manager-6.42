@@ -634,8 +634,8 @@
     "*://*.outsideonline.com/*",
     "*://*.ovb-online.de/*",
     "*://*.oxygenmag.com/*",
-    "*://*.paloaltoonline.com/*",
     "*://*.palmbeachpost.com/*",
+    "*://*.paloaltoonline.com/*",
     "*://*.paris-normandie.fr/*",
     "*://*.parismatch.com/*",
     "*://*.parkiet.com/*",
@@ -735,8 +735,8 @@
     "*://*.sofrep.com/*",
     "*://*.sourcingjournal.com/*",
     "*://*.spacenews.com/*",
-    "*://*.spectator.co.uk/*",
     "*://*.spectator.com.au/*",
+    "*://*.spectator.com/*",
     "*://*.spektrum.de/*",
     "*://*.spglobal.com/*",
     "*://*.spiegel.de/*",
@@ -840,7 +840,6 @@
     "*://*.thesaturdaypaper.com.au/*",
     "*://*.thescottishsun.co.uk/*",
     "*://*.thespec.com/*",
-    "*://*.thespectator.com/*",
     "*://*.thestage.co.uk/*",
     "*://*.thestar.com/*",
     "*://*.thestate.com/*",
@@ -989,5 +988,5 @@
     "*://codebeautify.org/*",
     "*://gitflic.ru/*"
   ],
-  "version": "4.2.7.2"
+  "version": "4.2.7.5"
 }
