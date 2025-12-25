@@ -311,6 +311,53 @@ class StockRepository:
     def __init__(self, db_manager):
         self.db_manager = db_manager
 
+    def get_recent_stock_name_code(self, days):
+        """
+        Fetch unique stock names and codes from the database within the past 'days'.
+        Returns a list of dicts: [{"stock": ..., "code": ...}, ...]
+        """
+        cutoff_date = (datetime.now() - timedelta(days=days)).date()
+        with self.db_manager.get_session() as session:
+            stocks = (
+                session.query(Stock.stock, Stock.code)
+                .filter(Stock.date >= cutoff_date)
+                .distinct()
+                .all()
+            )
+            results = []
+            seen = set()
+            for stock, code in stocks:
+                key = stock+code
+                if key not in seen:
+                    results.append(key)
+                    seen.add(key)
+            return results
+
+    def get_analysis_by_stock(self, stocks: list[str], days: int) -> list[dict]:
+        """
+        Fetch date, stock, code, analysis from database based on a list of stocks and days.
+        Returns a list of dicts: [{"date": ..., "stock": ..., "code": ..., "analysis": ...}, ...]
+        """
+        cutoff_date = (datetime.now() - timedelta(days=days)).date()
+        with self.db_manager.get_session() as session:
+            records = (
+                session.query(Stock.date, Stock.stock, Stock.code, Stock.analysis)
+                .filter(
+                    Stock.stock.in_(stocks),
+                    Stock.date >= cutoff_date,
+                )
+                .all()
+            )
+            return [
+                {
+                    "date": record.date,
+                    "stock": record.stock,
+                    "code": record.code,
+                    "analysis": record.analysis,
+                }
+                for record in records
+            ]
+
     def get_today_stocks(self):
         """
         Retrieve today's stocks and their analysis.

@@ -6,7 +6,7 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 import uvicorn
-#from fastmcp import FastMCP
+from fastmcp import FastMCP
 # ===== Local imports =====
 from utils.redis_utils import get_redis_client
 from scraper.news_scraper import fetch_news_from_db, save_agent_data
@@ -18,14 +18,14 @@ from tasks.news_tasks import scrape_all_news
 from tasks.agent_tasks import scrape_agent_task
 from scraper.cookies_getter import update_common_cookies, update_agent_cookies
 from utils.sender import send_email_with_attachments, load_email_config_from_json
-from utils.database import get_db_manager, UsersRepository
+from utils.database import get_db_manager, UsersRepository, StockRepository
 from utils.validators import save_user_prompt, validate_scrape_agent_request, ValidationError
 # ===== Setup =====
 
-# mcp = FastMCP(name="News MCP")
-# mcp_app = mcp.http_app(path='/tools')
-# app = FastAPI(title="My Local Dify Server", lifespan=mcp_app.lifespan)
-# app.mount("/mcp", mcp_app)
+mcp = FastMCP(name="News MCP")
+mcp_app = mcp.http_app(path='/tools')
+app = FastAPI(title="My Local Dify Server", lifespan=mcp_app.lifespan)
+app.mount("/mcp", mcp_app)
 GLOBAL_LIMIT = 1
 app = FastAPI(title="My Local Dify Server")
 # ================== Health Check ====================
@@ -269,15 +269,26 @@ async def fetch_news():
 # =====================================================
 # 🧩 MCP SERVER SECTION (mounted via FastMCP)
 # =====================================================
-# @mcp.tool(name="fetch_data", description="Fetch new articles from local SQLite database")
-# async def fetch_rb_data():
-#     """Fetch Bloomberg articles data from the local SQLite database."""
-#     try:
-#         data = await asyncio.to_thread(fetch_news_from_db)
-#         return {"data": data}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail="Failed to fetch Bloomberg data from database.")
+@mcp.tool(name="fetch_stocks", description="Fetch All stocks in recent days from MySQL database")
+async def fetch_stocks(days: int):
+    try:
+        db_manager = get_db_manager()
+        stock_repo = StockRepository(db_manager)
+        data = await asyncio.to_thread(stock_repo.get_recent_stock_name_code, days)
+        return {"data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to fetch stock name and code from database.")
 
+
+@mcp.tool(name="fetch_stocks_and_analyses", description="Fetch All relevant stocks and their information(date and analysis of that day) in recent days from MySQL database")
+async def fetch_stocks_and_analyses(stocks: list[str], days: int):
+    try:
+        db_manager = get_db_manager()
+        stock_repo = StockRepository(db_manager)
+        data = await asyncio.to_thread(stock_repo.get_analysis_by_stock, stocks, days)
+        return {"data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to fetch stock analysis from database.")
 # =====================================================
 # Entry point
 # =====================================================

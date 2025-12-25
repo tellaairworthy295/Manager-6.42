@@ -162,7 +162,6 @@ def finalize_and_update_dify(group_key: str, now_str: str):
         logger.info(
             f"Dify KB updated: {total_sites} sites, {successes} success, {failures} failed"
         )
-        return {"status": "DONE"}
     except Exception as e:
         logger.exception(f"Aggregator failed: {e}")
     finally:

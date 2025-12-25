@@ -92,7 +92,6 @@ async def main_scraper(date: str):
         )
 
         result = repo.get_today_stocks()
-        logger.info(f"Fetched {len(result)} stocks for today ({date})")
 
         await asyncio.to_thread(_write_analysis_file, result)
 
