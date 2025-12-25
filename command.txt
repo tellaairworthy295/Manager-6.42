@@ -25,6 +25,8 @@ dramatiq dramatiq_app --queues news --processes 1 --threads 2
 
 dramatiq dramatiq_app --queues agents --processes 1 --threads 8
 
+PYTHONUNBUFFERED=1 dramatiq dramatiq_app --queues news --processes 1 --threads 2
+PYTHONUNBUFFERED=1 dramatiq dramatiq_app --queues agents --processes 1 --threads 8
 git ls-files
 git rm -r --cached .
 git add .

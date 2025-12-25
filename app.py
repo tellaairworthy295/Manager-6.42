@@ -82,7 +82,6 @@ async def add_users(request: Request):
     user_id = data.get("user_id")
     email = data.get("email")
     sites = data.get("sites")  # [{"source": "alphapai", "phone": "...", "passwd": "..."}]
-
     if not user_id or not sites:
         return JSONResponse({"error": "user_id and sites are required"}, status_code=400)
     resp = []

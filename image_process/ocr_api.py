@@ -18,6 +18,7 @@ def _ocr_via_api(
     use_doc_orientation_classify: bool = False,
     use_doc_unwarping: bool = False,
     use_textline_orientation: bool = False,
+    retry: int = 3
 ):
     """
     Call PaddleOCR HTTP API on a single image or PDF and return the raw result dict.
@@ -47,16 +48,12 @@ def _ocr_via_api(
         "useDocUnwarping": use_doc_unwarping,
         "useTextlineOrientation": use_textline_orientation,
     }
-
-    try:
-        response = requests.post(API_URL, json=payload, headers=headers, timeout=30)
-    except Exception as e:
-        logger.error(f"HTTP error while calling PaddleOCR API: {e}")
-        return None
-
-    if response.status_code != 200:
-        logger.error(f"PaddleOCR API returned status {response.status_code}: {response.text}")
-        return None
+    for i in range(retry):
+        try:
+            response = requests.post(API_URL, json=payload, headers=headers, timeout=60)
+            break
+        except Exception as e:
+            logger.error(f"HTTP error while calling PaddleOCR API: {e}, retrying...")
 
     try:
         data = response.json()
@@ -150,7 +147,7 @@ def ocr_image_safe(
     img_path,
     y_tolerance_ratio=0.6,
     x_tolerance_ratio=12,
-    tall_ratio=2.0
+    tall_ratio=1.5
 ):
     img = Image.open(img_path)
     all_sorted_texts = []
@@ -211,15 +208,15 @@ def ocr_image_safe(
         )
         all_sorted_texts.extend(sorted_texts)
 
-        # img = cv2.imread(padded_img_save_path)
-        # for box in boxes:
-        #     pts = np.array(box, np.int32)
-        #     pts = pts.reshape((-1, 1, 2))
-        #     cv2.polylines(img, [pts], isClosed=True, color=(0, 0, 255), thickness=2)
+        img = cv2.imread(padded_img_save_path)
+        for box in boxes:
+            pts = np.array(box, np.int32)
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(img, [pts], isClosed=True, color=(0, 0, 255), thickness=2)
 
-        # # Save the drawn image
-        # root, ext = os.path.splitext(padded_img_save_path)
-        # drawn_img_path = f"{root}_with_boxes{ext}"
-        # cv2.imwrite(drawn_img_path, img)
-        # logger.info(f"Saved image with drawn boxes to: {drawn_img_path}")
+        # Save the drawn image
+        root, ext = os.path.splitext(padded_img_save_path)
+        drawn_img_path = f"{root}_with_boxes{ext}"
+        cv2.imwrite(drawn_img_path, img)
+        logger.info(f"Saved image with drawn boxes to: {drawn_img_path}")
     return all_sorted_texts

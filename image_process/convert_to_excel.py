@@ -1,7 +1,7 @@
 import os
 import re
 import unicodedata
-
+import sys
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import font_manager
@@ -11,7 +11,27 @@ from .ocr_api import ocr_image_safe
 import matplotlib
 matplotlib.use('Agg')
 # Configure loguru for to_excel module
-logger.add("logs/to_excel/to_excel_{time:YYYY-MM-DD}.log", rotation="00:00", retention="15 days", encoding="utf-8")
+# 1️⃣ Remove default handler FIRST
+logger.remove()
+
+# 2️⃣ Add file logger (safe, no buffering issues)
+logger.add(
+    "logs/to_excel/to_excel_{time:YYYY-MM-DD}.log",
+    rotation="00:00",
+    retention="15 days",
+    encoding="utf-8",
+    enqueue=False,     # IMPORTANT on Windows workers
+)
+
+# 3️⃣ Add stdout logger (unbuffered + immediate)
+logger.add(
+    sys.stdout,
+    level="INFO",
+    enqueue=False,     # 🚨 CRITICAL on Windows
+    backtrace=True,
+    diagnose=False,
+)
+
 FONT_PATH = "fonts/NotoSansSC-VariableFont_wght.ttf"
 
 def _normalize_text(text: list[str], space: bool = False) -> str:
@@ -196,11 +216,11 @@ def excel_flow(date: str, days: int = 5):
         _normalize_text(rec_texts)
         _append_to_excel(rec_texts, "excel")
         for token in rec_texts:
-            if "涨停" in token and "未开板新股" in token:
+            if "涨停" in token and "跌停" in token:
                 _process_trendings(date, token, "excel/trendings.xlsx", days)
                 break
     except Exception as e:
         logger.error(f"Error while OCR: {e}")
 
 if __name__ == "__main__":
-    excel_flow("2025-12-18")
+    excel_flow("2025-12-25")

@@ -10,11 +10,11 @@ broker = RedisBroker(
 )
 dramatiq.set_broker(broker)
 
-#try:
-#    clean_redis_db("redis://localhost:6379/0")
-#    print("FLUSH DONE")
-#except:
-#    print("FLUSH FAilED")
+try:
+   clean_redis_db("redis://localhost:6379/0")
+   print("FLUSH DONE")
+except:
+   print("FLUSH FAilED")
 # ------------------------------------------------------------
 # Task imports (register actors)
 # ------------------------------------------------------------

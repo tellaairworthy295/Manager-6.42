@@ -50,7 +50,7 @@ def choose_cut_near(cut_lines, target_y, max_shift=200):
 
 def smart_slice_tall_image(
     img,
-    target_height=3600,
+    target_height=3000,
     overlap=0
 ):
     gray = np.array(img)
