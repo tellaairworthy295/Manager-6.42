@@ -1,59 +1,58 @@
 import logging
 import sys
-from logging.handlers import TimedRotatingFileHandler
+import queue
+from logging.handlers import TimedRotatingFileHandler, QueueHandler, QueueListener
 from pathlib import Path
 
 LOG_ROOT = Path("logs")
+_log_queue = queue.Queue()
+_listener = None
 
-def _ensure_log_dir(path: Path):
-    path.mkdir(parents=True, exist_ok=True)
 
-
-def create_logger(
-    *,
-    name: str,
-    log_file: Path,
-    level: int = logging.INFO,
-) -> logging.Logger:
-    """
-    Create or return a named logger with:
-    - console output
-    - daily rotating file
-    - NO duplicate handlers
-    """
+def create_logger(name: str, log_file: Path) -> logging.Logger:
+    global _listener
 
     logger = logging.getLogger(name)
-    logger.setLevel(level)
-    logger.propagate = False  # 🚨 critical to avoid double logs
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
     if logger.handlers:
-        return logger  # already configured
+        return logger
 
-    _ensure_log_dir(log_file.parent)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
     formatter = logging.Formatter(
         "%(asctime)s | %(levelname)s | %(process)d | %(threadName)s | %(name)s | %(message)s"
     )
 
-    # Console handler (respects PYTHONUNBUFFERED=1)
-    console = logging.StreamHandler(sys.stdout)
-    console.setLevel(level)
-    console.setFormatter(formatter)
-
-    # File handler (per-folder)
+    # File handler (ONLY listener touches this)
     file_handler = TimedRotatingFileHandler(
         filename=str(log_file),
         when="midnight",
         backupCount=15,
         encoding="utf-8",
     )
-    file_handler.setLevel(level)
     file_handler.setFormatter(formatter)
 
-    logger.addHandler(console)
-    logger.addHandler(file_handler)
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+
+    # Start listener ONCE per process
+    if _listener is None:
+        _listener = QueueListener(
+            _log_queue,
+            file_handler,
+            console_handler,
+            respect_handler_level=True,
+        )
+        _listener.start()
+
+    # Logger uses queue only
+    logger.addHandler(QueueHandler(_log_queue))
 
     return logger
+
 
 from datetime import datetime
 
