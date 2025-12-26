@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import Field
 import uvicorn
 from fastmcp import FastMCP
 # ===== Local imports =====
@@ -20,14 +21,16 @@ from scraper.cookies_getter import update_common_cookies, update_agent_cookies
 from utils.sender import send_email_with_attachments, load_email_config_from_json
 from utils.database import get_db_manager, UsersRepository, StockRepository
 from utils.validators import save_user_prompt, validate_scrape_agent_request, ValidationError
+from utils.logging_config import get_others_logger
 # ===== Setup =====
+logger = get_others_logger()
 
 mcp = FastMCP(name="News MCP")
 mcp_app = mcp.http_app(path='/tools')
 app = FastAPI(title="My Local Dify Server", lifespan=mcp_app.lifespan)
 app.mount("/mcp", mcp_app)
 GLOBAL_LIMIT = 1
-app = FastAPI(title="My Local Dify Server")
+#app = FastAPI(title="My Local Dify Server")
 # ================== Health Check ====================
 @app.get("/ping")
 async def ping():
@@ -269,9 +272,10 @@ async def fetch_news():
 # =====================================================
 # 🧩 MCP SERVER SECTION (mounted via FastMCP)
 # =====================================================
-@mcp.tool(name="fetch_stocks", description="Fetch All stocks in recent days from MySQL database")
-async def fetch_stocks(days: int):
+@mcp.tool(name="fetch_stocks", description="Fetch stocks(name and code) from past N days.")
+async def fetch_stocks(days: int = Field(gt=0, le=30, description="Number of recent days(1-30) to fetch. (e.g., 7)")):
     try:
+        logger.info(f"fetch_stocks: {days}\n")
         db_manager = get_db_manager()
         stock_repo = StockRepository(db_manager)
         data = await asyncio.to_thread(stock_repo.get_recent_stock_name_code, days)
@@ -280,9 +284,14 @@ async def fetch_stocks(days: int):
         raise HTTPException(status_code=500, detail="Failed to fetch stock name and code from database.")
 
 
-@mcp.tool(name="fetch_stocks_and_analyses", description="Fetch All relevant stocks and their information(date and analysis of that day) in recent days from MySQL database")
-async def fetch_stocks_and_analyses(stocks: list[str], days: int):
+@mcp.tool(
+    name="fetch_stocks_and_analyses",
+    description="Fetch relevant stocks and their per-day analyses for the past N days.",
+)
+async def fetch_stocks_and_analyses(stocks: list[str] = Field(min_length=1, description="List of stock identifiers (names and codes, at least one stock). (e.g., ['中国一重601106','国泰集团603977'])"),
+                                    days: int = Field(ge=0, le=30, description="Number of recent days(1-30) to fetch analyses, e.g., 5")):
     try:
+        logger.info(f"fetch_stocks_and_analyses:\n stocks: {stocks}\n days: {days}\n")
         db_manager = get_db_manager()
         stock_repo = StockRepository(db_manager)
         data = await asyncio.to_thread(stock_repo.get_analysis_by_stock, stocks, days)

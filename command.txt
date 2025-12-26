@@ -5,8 +5,6 @@ Two ways to apply AI (use MCP, maybe need knowledge base):
 1. chatflow (query)
 2. workflow (schedule)
 
-!!!Image OCR!!!
-!!!yield!!!
 !!!Call log:
   - waiting for locator("textarea.el-textarea__inner").first
 ; JS fill: Page.evaluate() takes from 2 to 3 positional arguments but 4 were given

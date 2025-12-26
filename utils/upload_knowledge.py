@@ -28,7 +28,7 @@ def list_bases():
     # The API response may return a top-level list (old Dify) or dict with 'data' (new Dify)
     if isinstance(bases, dict) and "data" in bases:
         bases = bases["data"]
-    logger.info(f"📄 Found {len(bases)} Knowledge Base(s):")
+    logger.info(f"Found {len(bases)} Knowledge Base(s):")
     ids = [b.get("id") for b in bases]
     logger.debug(f"Dataset IDs: {ids}")
     return ids
@@ -50,7 +50,7 @@ def list_documents():
         if len(docs) < limit:
             break
         page += 1
-    logger.info(f"📄 Found {len(all_docs)} existing document(s) across all pages.")
+    logger.info(f"Found {len(all_docs)} existing document(s) across all pages.")
     return all_docs
 
 
@@ -59,9 +59,9 @@ def delete_document(doc_id):
     url = f"{BASE_URL}/v1/datasets/{DATASET_ID}/documents/{doc_id}"
     resp = requests.delete(url, headers=api_headers())
     if resp.status_code == 200:
-        logger.info(f"🗑️ Deleted document: {doc_id}")
+        logger.info(f"Deleted document: {doc_id}")
     else:
-        logger.warning(f"⚠️ Failed to delete {doc_id}: {resp.text}")
+        logger.warning(f"Failed to delete {doc_id}: {resp.text}")
 
 def delete_all_documents():
     """Delete all documents from dataset."""
@@ -69,7 +69,7 @@ def delete_all_documents():
     for doc in docs:
         delete_document(doc["id"])
         time.sleep(1)
-    logger.info("✅ All existing documents removed.")
+    logger.info("All existing documents removed.")
     
 def upload_new_document_by_file(FILE_PATH: str):
     """Upload and index new document file to Dify KB."""
@@ -189,10 +189,7 @@ def _upload_new_document_by_text(name: str, text: str, source: str):
         "embedding_model": "text-embedding-v4",
         "embedding_model_provider": "langgenius/tongyi/tongyi",
         "name": name,
-        "text": text,
-        "doc_metadata":{
-            "site": source
-        }
+        "text": text
     }
 
     try:

@@ -4,6 +4,7 @@ Provides modular, extensible, and maintainable database operations.
 """
 import json
 from datetime import datetime, timedelta
+import re
 from typing import List, Optional, Dict, Any
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
@@ -338,12 +339,21 @@ class StockRepository:
         Fetch date, stock, code, analysis from database based on a list of stocks and days.
         Returns a list of dicts: [{"date": ..., "stock": ..., "code": ..., "analysis": ...}, ...]
         """
+        names=[]
+        codes = []
+        pattern = r'^([\w\s\*\u4e00-\u9fff]+?)(\d+)$'
+        for stock in stocks:
+            match = re.match(pattern, stock)
+            if match:
+                names.append(match.group(1).strip())
+                codes.append(match.group(2).strip())
         cutoff_date = (datetime.now() - timedelta(days=days)).date()
         with self.db_manager.get_session() as session:
             records = (
                 session.query(Stock.date, Stock.stock, Stock.code, Stock.analysis)
                 .filter(
-                    Stock.stock.in_(stocks),
+                    Stock.stock.in_(names),
+                    Stock.code.in_(codes),
                     Stock.date >= cutoff_date,
                 )
                 .all()
