@@ -199,7 +199,10 @@ async def news_analyzer(request: Request):
     await asyncio.to_thread(save_agent_data, analysis_result)
 
     # Write content to a temporary txt file
-    txt_path = "news_analysis.txt"
+    from datetime import datetime
+    now = datetime.now()
+    formatted = now.strftime("%Y-%m-%d-%H")
+    txt_path = f"news_analyses/{formatted}.txt"
     try:
         with open(txt_path, "w", encoding="utf-8") as f:
             f.write(str(analysis_result))
@@ -219,16 +222,18 @@ async def scrape_stocks_api(request: Request):
     date = data.get("date") or datetime.today().strftime("%Y-%m-%d")
     days = data.get("days", 10)
     try:
-        await main_scraper(date)
+        flag = await main_scraper(date)
+        if not flag:
+            return JSONResponse(
+            {"status": "ok", "msg": "Not a new date"}
+        )
         await asyncio.to_thread(excel_flow, date, days)
 
         config = load_email_config_from_json("json/config.json")
-        img_path = f"images/Image.png"
-        txt_path = f"stocks_analysis.txt"
         config.ATTACHMENTS = [
-            f"excel/ImageToExcel.xlsx",
-            txt_path,
-            img_path,
+            f"excel/{date}.xlsx",
+            f"excel/{date}.txt",
+            f"images/Image.png",
             "excel/trendings_trend_break.png",
             "excel/trendings_trend_down.png",
             "excel/trendings_trend_even.png",
@@ -238,7 +243,8 @@ async def scrape_stocks_api(request: Request):
         config.SUBJECT = "【韭研】个股分析与涨停简图"
         await asyncio.to_thread(send_email_with_attachments, **config.as_dict())
         try:
-            os.remove(txt_path)
+            os.remove(f"excel/{date}.xlsx")
+            os.remove(f"excel/{date}.txt")
         except:
             pass
         return JSONResponse(

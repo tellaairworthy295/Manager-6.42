@@ -1,8 +1,9 @@
 import logging
 import sys
 import queue
-from logging.handlers import TimedRotatingFileHandler, QueueHandler, QueueListener
+from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
+from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 LOG_ROOT = Path("logs")
 _log_queue = queue.Queue()
@@ -26,11 +27,13 @@ def create_logger(name: str, log_file: Path) -> logging.Logger:
     )
 
     # File handler (ONLY listener touches this)
-    file_handler = TimedRotatingFileHandler(
+    # 使用并发安全的文件处理器
+    file_handler = ConcurrentRotatingFileHandler(
         filename=str(log_file),
-        when="midnight",
+        maxBytes=1024*1024,  # 1MB
         backupCount=15,
         encoding="utf-8",
+        use_gzip=False,
     )
     file_handler.setFormatter(formatter)
 
@@ -54,32 +57,29 @@ def create_logger(name: str, log_file: Path) -> logging.Logger:
     return logger
 
 
-from datetime import datetime
-
-def _logfile_with_datetime(folder: Path, basename: str) -> Path:
-    timestamp = datetime.now().strftime("%Y%m%d")
-    return folder / f"{basename}_{timestamp}.log"
-
 def get_stock_logger() -> logging.Logger:
     return create_logger(
         name="stock",
-        log_file=_logfile_with_datetime(LOG_ROOT / "stock", "stock"),
+        log_file=LOG_ROOT / "stock" / "stock.log",
     )
+
 
 def get_agent_task_logger() -> logging.Logger:
     return create_logger(
         name="agent_task",
-        log_file=_logfile_with_datetime(LOG_ROOT / "agent_task", "agent_task"),
+        log_file=LOG_ROOT / "agent_task" / "agent_task.log",
     )
+
 
 def get_news_task_logger() -> logging.Logger:
     return create_logger(
         name="news_task",
-        log_file=_logfile_with_datetime(LOG_ROOT / "news_task", "news_task"),
+        log_file=LOG_ROOT / "news_task" / "news_task.log",
     )
+
 
 def get_others_logger() -> logging.Logger:
     return create_logger(
         name="others",
-        log_file=_logfile_with_datetime(LOG_ROOT / "others", "others"),
+        log_file=LOG_ROOT / "others" / "others.log",
     )

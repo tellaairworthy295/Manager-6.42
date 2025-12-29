@@ -34,7 +34,7 @@ def _normalize_text(text: list[str], space: bool = False) -> str:
             text[idx] = label.strip()
 
 
-def _append_to_excel(rec_texts: list[str], excel_path: str):
+def _append_to_excel(rec_texts: list[str], excel_path: str, date:str):
     """
     Save OCR-recognized texts to an Excel file grouped by 8 fields:
     ["Section", "Board", "Code", "Name", "Time", "Market", "Turnover", "Keyword"].
@@ -91,7 +91,7 @@ def _append_to_excel(rec_texts: list[str], excel_path: str):
     df = pd.DataFrame(data, columns=cols)
 
     # Output path for this date
-    save_path = os.path.join(excel_path, f"ImageToExcel.xlsx")
+    save_path = os.path.join(excel_path, f"{date}.xlsx")
 
     # Save to Excel
     df.to_excel(save_path, index=False)
@@ -196,7 +196,7 @@ def excel_flow(date: str, days: int = 5):
         path = preprecess_image(img_path)
         rec_texts = ocr_image_safe(path)
         _normalize_text(rec_texts)
-        _append_to_excel(rec_texts, "excel")
+        _append_to_excel(rec_texts, "excel", date)
         for token in rec_texts:
             if "涨停" in token and "跌停" in token:
                 _process_trendings(date, token, "excel/trendings.xlsx", days)

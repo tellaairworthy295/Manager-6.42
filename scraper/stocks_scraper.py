@@ -16,7 +16,7 @@ from utils.logging_config import get_stock_logger
 
 logger = get_stock_logger()
 
-async def main_scraper(date: str):
+async def main_scraper(date: str) -> bool:
     # Load selectors & cookies once
     with open("json/selectors.json", "r", encoding="utf-8") as f:
         selectors_map = json.load(f)["stocks"]
@@ -54,6 +54,33 @@ async def main_scraper(date: str):
                     )
                     logger.info("Page loaded.")
 
+                    if selectors.get("name") == "jiuyan":
+                        # 获取页面标题
+                        title = await page.title()
+                        
+                        # 从标题中提取日期
+                        title_date_match = re.search(r'(\d{4}-\d{1,2}-\d{1,2})', title)
+                        
+                        if title_date_match:
+                            title_date = title_date_match.group(1)
+                            
+                            # 标准化日期格式（处理可能的月份/日期间位不足问题）
+                            from datetime import datetime
+                            try:
+                                # 尝试解析标题中的日期
+                                title_date_obj = datetime.strptime(title_date, "%Y-%m-%d")
+                                # 解析传入的日期参数
+                                target_date_obj = datetime.strptime(date, "%Y-%m-%d")
+                                
+                                # 比较日期是否匹配
+                                if title_date_obj.date() != target_date_obj.date():
+                                    logger.info(f"页面日期({title_date})与目标日期({date})不匹配")
+                                    return False
+                                    
+                            except ValueError as e:
+                                logger.warning(f"日期解析失败: {e}, 标题: {title}")
+                                # 如果日期解析失败，继续执行
+
                     records = await _scrape_stocks_async(
                         page=page,
                         date=date,
@@ -77,7 +104,6 @@ async def main_scraper(date: str):
 
             except Exception as e:
                 logger.exception(f"Error scraping {url}: {e}")
-
     finally:
         await manager.shutdown()
 
@@ -93,7 +119,9 @@ async def main_scraper(date: str):
 
         result = repo.get_today_stocks()
 
-        await asyncio.to_thread(_write_analysis_file, result)
+        await asyncio.to_thread(_write_analysis_file, result, date)
+
+    return True
 
 async def _scrape_stocks_async(
     *,
@@ -227,8 +255,8 @@ async def _prepare_image_dir(path: str):
                 logger.warning(f"Could not delete {fp}: {e}")
 
 
-def _write_analysis_file(result: list[dict]):
-    with open("stocks_analysis.txt", "w", encoding="utf-8") as f:
+def _write_analysis_file(result: list[dict], date):
+    with open("excel/{date}.txt", "w", encoding="utf-8") as f:
         for item in result:
             f.write(
                 f"{item['stock']}\t{item['code']}\n"
