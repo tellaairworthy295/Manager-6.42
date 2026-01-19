@@ -14,8 +14,6 @@ matplotlib
 numpy
 pandas
 python-docx
-loguru
-openpyxl
 sqlalchemy
 mysql-connector-python
 playwright

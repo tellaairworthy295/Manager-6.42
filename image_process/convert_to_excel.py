@@ -125,10 +125,6 @@ def _get_maxEven_maxBreak(rec_texts: list[str]):
     return maxEven, maxBreak
 
 def _get_trendings(rec_texts: list[str]):
-    """
-    Extract trending stats from summary_text, update Excel file, and generate chart.
-    Uses openpyxl engine to avoid xlrd errors.
-    """
     trendings = {
         "limit_up":  r"涨停(\d+)家",
         "limit_down": r"跌停(\d+)家",

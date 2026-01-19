@@ -20,9 +20,8 @@ env/
 .venv/
 fonts/
 excel/
-chromedriver-linux64/
-_temp_profiles/
-chrome-linux64/
+chromedriver-win64/
+chrome-win64/
 logs/
 images/
 agentStockAnalysis/
