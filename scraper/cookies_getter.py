@@ -1,46 +1,65 @@
 
 import json
-import time
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
-from pwright.context_manager import playwright_context
-from pwright.page_factory import new_stealth_page
-from pwright.playwright_manager import PlaywrightManager
+import os
+import asyncio
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+from pwright.async_cm import PlaywrightContext
+from pwright.async_pf import new_stealth_page           # async version
+from pwright.async_pm import AsyncPlaywrightManager               # async version
 from utils.logging_config import get_agent_task_logger
+from exception.exception_handler import ValidationError
+from utils.interactive import async_safe_click, async_safe_fill
 
-class BaseCookies:
-    """Lightweight base class that provides:
-    - universal browser + URL open
-    - cookie/localstorage extraction
-    - JSON saving (common or user-specific)
-    - overridable login()
+class AsyncCookiesHandler:
+    """
+    Handles browser automation for login, cookie/localStorage extraction, and saving,
+    using locator information from config.
+    Uses async helper functions from interactive.py for robust UI actions.
+    Now supports validation before update, if specified.
     """
 
-    def __init__(self, phone, passwd, url, section_name, page: Page, user_id=None):
-        """
-        phone/passwd/url come from cookies.json
-        section_name: "jiuyan", "xuangutong", "alphapai", etc.
-        user_id: None => common area, otherwise per-user block
-        """
-        self.phone = phone
-        self.passwd = passwd
-        self.url = url
-        self.section_name = section_name
-        self.user_id = user_id  # supports user-specific area
+    def __init__(self, config: dict, user_id: str | None, validate_before_update: bool = False):
+        if not user_id:
+            raise ValidationError("No user_id provided")
+        # Extract core info
+        self.phone = config.get("phone")
+        self.passwd = config.get("passwd")
+        self.url = config.get("url")
+        self.section_name = config.get("name")
+        self.user_id = user_id
         self.logger = get_agent_task_logger()
-        
-        self.page = page
+        self.page = None  # Will be set at runtime
+        self.validate_before_update = validate_before_update
 
-    # -------------------------------------------------------
-    # Fundamental behavior
-    # -------------------------------------------------------
-    def login(self):
-        """Must be implemented by subclass."""
-        raise NotImplementedError("Subclasses must implement login()")
+        # Extract and parse locators
+        locs = config.get("locators", {})
 
-    def open_url(self):
-        self.logger.info(f"Opening URL: {self.url}")
-        self.page.goto(self.url, wait_until="domcontentloaded", timeout=60000)
-        time.sleep(2)
+        def parse(loc):
+            if loc is None or not loc:
+                return None
+            by = loc["by"].lower()
+            value = loc["value"]
+            if by == "css":
+                return value
+            if by == "xpath":
+                return f"xpath={value}"
+            raise ValueError(f"Unknown locator type: {by}")
+
+        self.login_dialog_locator = parse(locs.get("login_dialog"))
+        self.tab_locator = parse(locs.get("tab_switch"))
+        self.phone_locator = parse(locs.get("phone_input"))
+        self.password_locator = parse(locs.get("pwd_input"))
+        self.submit_locator = parse(locs.get("login_btn"))
+        self.optional_open_login_locator = parse(locs.get("open_login_btn"))
+        self.wrong_phone_passwd = parse(locs.get("wrong_phone_passed"))
+        self.check_box_locators = []
+        check_box = locs.get("check_box", [])
+        if check_box:
+            for check_box_locator in check_box:
+                self.check_box_locators.append(parse(check_box_locator))
+
+        # For validation, extract url for checking expired
+        self.validation_url = config.get("url", self.url)
 
     @staticmethod
     def normalize_cookies(cookie_list):
@@ -52,12 +71,13 @@ class BaseCookies:
 
     @staticmethod
     def normalize_local_storage(origins):
+        if not origins:
+            return
         if origins[0].get("origin", "") == "https://alphapai-web.rabyte.cn":
-            # Add specified pairs manually to localStorage for alphapai
             manual_pairs = [
                 {"name": "search-to-paipai-guide", "value": "true"},
                 {"name": "paipai-agent-fastsheet-us-guide", "value": "true"},
-                {"name": "search-to-paipai-guide-date", "value": "1765348801926"},
+                {"name": "search-to-paipai-guide-date", "value": "1767594738604"},
                 {"name": "version-market-tip", "value": "1"},
                 {"name": "MODE", "value": "undefined"},
                 {"name": "hasShowpaipaiAnswerRangeGuide", "value": "true"},
@@ -65,7 +85,8 @@ class BaseCookies:
                 {"name": "hasShowSocialMediaGuide", "value": "1"},
                 {"name": "paipai-agent-fastsheet-us-guide", "value": "true"},
                 {"name": "extension-download-guide", "value": "true"},
-                {"name": "paipai_mode-select_task-guide", "value": "1"}
+                {"name": "paipai_mode-select_task-guide", "value": "1"},
+                {"name": "hasShowPaipaiRecoderGuide", "value": "1"}
             ]
             if "localStorage" not in origins[0] or not isinstance(origins[0]["localStorage"], list):
                 origins[0]["localStorage"] = []
@@ -75,291 +96,189 @@ class BaseCookies:
                 if pair['name'] not in existing_names:
                     origins[0]["localStorage"].append(pair)
         elif origins[0].get("origin", "") == "https://www.jiuyangongshe.com":
-            # Remove all localStorage for this origin
             origins[0]["localStorage"] = []
-            
-    # -------------------------------------------------------
-    # Saving logic
-    # -------------------------------------------------------
-    def save_to_json(self, new_data):
+
+    async def save_to_json(self, new_data):
+        target_dir = f"json/{self.user_id}"
+        os.makedirs(target_dir, exist_ok=True)
         try:
-            with open("json/cookies.json", "r", encoding="utf-8") as f:
+            with open(f"{target_dir}/cookies.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
-        except:
+        except Exception:
             data = {}
-
-        # Write back
-        if self.user_id:
-            data[self.user_id][self.section_name] = new_data
-        else:
-            data["common"][self.section_name] = new_data
-
-        with open("json/cookies.json", "w", encoding="utf-8") as f:
+        data[self.section_name] = new_data
+        with open(f"{target_dir}/cookies.json", "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        self.logger.info(f"Saved cookies + localStorage for {self.user_id} : {self.section_name}")
 
-        self.logger.info(f"Saved cookies + localStorage for {self.section_name}")
-
-    # -------------------------------------------------------
-    # Main workflow
-    # -------------------------------------------------------
-    def run(self):
-        try:
-            self.open_url()
-            self.login()  # implemented in subclass
-            data = self.page.context.storage_state()
-            self.normalize_cookies(data["cookies"])
-            self.normalize_local_storage(data["origins"])
-            if data:
-                self.save_to_json(data)
-
-        finally:
-            try:
-                self.context.close()
-                self.browser.close()
-                self.playwright.stop()
-            except:
-                pass
-    
-    def get_ck(self):
-        try:
-            self.open_url()
-            self.login()  # implemented in subclass
-            data = self.page.context.storage_state()
-            self.normalize_cookies(data["cookies"])
-            self.normalize_local_storage(data["origins"])
-            return data
-        finally:
-            try:
-                self.context.close()
-                self.browser.close()
-                self.playwright.stop()
-            except:
-                pass
-
-class GeneralCookies(BaseCookies):
-    def __init__(self, config: dict, page: Page, user_id: str | None):
-        """
-        config is one entry inside "authen": [...]
-        {
-          "name": "...",
-          "url": "...",
-          "phone": "...",
-          "passwd": "...",
-          "locators": {...}
-        }
-        """
-        super().__init__(
-            phone=config.get("phone"),
-            passwd=config.get("passwd"),
-            url=config.get("url"),
-            section_name=config.get("name"),
-            page = page,
-            user_id=user_id
-        )
-        locs = config.get("locators", {})
-        wfd = config.get("wait_for_dynamical", None)
-        def parse(loc):
-            """Convert JSON locator to Playwright locator string."""
-            if loc == None:
-                return None
-            if not loc:
-                return None
-            by = loc["by"].lower()
-            value = loc["value"]
-            if by == "css":
-                return value  # Playwright accepts CSS selectors directly
-            if by == "xpath":
-                return f"xpath={value}"  # Playwright XPath format
-            raise ValueError(f"Unknown locator type: {by}")
-
-        # Generic locators (now strings instead of tuples)
-        self.login_dialog_locator = parse(locs.get("login_dialog"))
-        self.tab_locator = parse(locs.get("tab_switch"))
-        self.phone_locator = parse(locs.get("phone_input"))
-        self.password_locator = parse(locs.get("pwd_input"))
-        self.submit_locator = parse(locs.get("login_btn"))
-        self.optional_open_login_locator = parse(locs.get("open_login_btn"))
-        self.wait_for_dynamic = parse(wfd)
-        self.check_box_locators = []
-        check_box = locs.get("check_box", [])
-        if check_box:
-            for check_box_locator in locs.get("check_box", []):
-                self.check_box_locators.append(parse(check_box_locator))
-
-    # ---------------------------------------------------------------------
-    # Playwright helper methods
-    # ---------------------------------------------------------------------
-    def _safe_click(self, locator, max_attempts=5, timeout=10000):
-        """Robust click with retries."""
-        last_err = None
-        for attempt in range(1, max_attempts + 1):
-            try:
-                element = self.page.locator(locator).first
-                element.scroll_into_view_if_needed()
-                element.click(timeout=timeout)
-                self.logger.debug(f"Click succeeded on {locator}")
-                return
-            except Exception as e:
-                last_err = e
-                self.logger.warning(f"Click attempt {attempt}/{max_attempts} failed for {locator}: {e}")
-                time.sleep(1 * attempt)
-        raise RuntimeError(f"Failed to click {locator} after {max_attempts} attempts: {last_err}")
-
-    def _safe_send_keys(self, locator, text, max_attempts=5, clear_first=True, timeout=10000):
-        """Robust send keys with retries."""
-        last_err = None
-        for attempt in range(1, max_attempts + 1):
-            try:
-                element = self.page.locator(locator).first
-                element.scroll_into_view_if_needed()
-                if clear_first:
-                    element.clear()
-                element.fill(text)
-                self.logger.debug(f"Send keys succeeded on {locator}")
-                return
-            except Exception as e:
-                last_err = e
-                self.logger.warning(f"Send keys attempt {attempt}/{max_attempts} failed for {locator}: {e}")
-                time.sleep(1 * attempt)
-        raise RuntimeError(f"Failed to send keys to {locator} after {max_attempts} attempts: {last_err}")
-
-    # ---------------------------------------------------------------------
-    # LOGIN LOGIC (only this function is site-specific through JSON)
-    # ---------------------------------------------------------------------
-    def login(self):
+    async def login(self):
         self.logger.info("Starting generic login flow...")
 
+        # 1. Wait for login dialog, or optionally open it
         if self.login_dialog_locator:
             try:
-                self.page.wait_for_selector(self.login_dialog_locator, timeout=8000, state="visible")
+                await self.page.wait_for_selector(self.login_dialog_locator, timeout=2000, state="visible")
                 self.logger.info("Login dialog already visible.")
-            except:
+            except Exception:
                 if self.optional_open_login_locator:
-                    self._safe_click(self.optional_open_login_locator)
-                self.page.wait_for_selector(self.login_dialog_locator, timeout=8000, state="visible")
-        # 2. Switch to phone/password login tab
+                    await async_safe_click(self.page, self.optional_open_login_locator)
+                await self.page.wait_for_selector(self.login_dialog_locator, timeout=2000, state="visible")
+
+        # 2. Optional tab switch
         if self.tab_locator:
+            await async_safe_click(self.page, self.tab_locator)
+            await asyncio.sleep(0.5)
+
+        # 3. Optional checkboxes
+        for check_box_locator in self.check_box_locators:
             try:
-                self._safe_click(self.tab_locator)
-                time.sleep(0.5)
+                await async_safe_click(self.page, check_box_locator)
+                await asyncio.sleep(0.3)
+                self.logger.info("Checked the checkbox as required.")
             except Exception as e:
-                self.logger.warning(f"Tab switch locator exists but could not be clicked: {e}")
+                self.logger.warning(f"Checkbox locator exists but could not be clicked: {e}")
 
-        if self.check_box_locators:
-            for check_box_locator in self.check_box_locators:
-                try:
-                    self._safe_click(check_box_locator)
-                    time.sleep(0.3)
-                    self.logger.info("Checked the checkbox as required.")
-                except Exception as e:
-                    self.logger.warning(f"Checkbox locator exists but could not be clicked: {e}")
-            
-        # 3. Enter credentials
+        # 4. Credentials entering
         if self.phone_locator:
-            self._safe_send_keys(self.phone_locator, self.phone)
-            time.sleep(0.3)
-
+            await async_safe_fill(self.page, self.phone_locator, self.phone, clear_first=True)
+            await asyncio.sleep(0.3)
         if self.password_locator:
-            self._safe_send_keys(self.password_locator, self.passwd)
-            time.sleep(0.3)
+            await async_safe_fill(self.page, self.password_locator, self.passwd, clear_first=True)
+            await asyncio.sleep(0.3)
 
-        # 4. Submit login
+        # 5. Submit login
         if self.submit_locator:
-            self._safe_click(self.submit_locator)
-        else:
-            raise RuntimeError(f"No submit button locator for site: {self.section_name}")
+            await async_safe_click(self.page, self.submit_locator)
         self.logger.info("Login button clicked, waiting for login success...")
-        # 5. Wait login dialog to disappear (if locator defined)
-        #time.sleep(15)
+
+        # 6. Detect wrong phone/passwd (if locator exists)
+        if self.wrong_phone_passwd:
+            try:
+                await self.page.wait_for_selector(self.wrong_phone_passwd, timeout=3000)
+                raise ValidationError(f"{self.section_name}用户名或密码错误，请检查后重试")
+            except Exception:
+                pass  # Timeout means not found (normal)
+
+        import time
+        time.sleep(60)
+        
+        # 7. Wait login dialog to disappear (if locator defined)
         if self.login_dialog_locator:
             try:
-                self.page.wait_for_selector(
+                await self.page.wait_for_selector(
                     self.login_dialog_locator,
                     state="hidden",
-                    timeout=8000
+                    timeout=30000
                 )
                 self.logger.info("Login dialog disappeared — login successful.")
             except PlaywrightTimeoutError:
                 raise RuntimeError("Login dialog did not disappear — login likely failed.")
 
-        if self.wait_for_dynamic:
-            self.page.wait_for_selector(self.wait_for_dynamic, timeout=8000, state="visible")
-            
-        
+    async def update(self):
+        """
+        Integrated validation and update process.
+        """
+        cookies_file_path = f"json/{self.user_id}/cookies.json"
+        prev_storage_state = None
+
+        if os.path.exists(cookies_file_path):
+            try:
+                with open(cookies_file_path, "r", encoding="utf-8") as f:
+                    cookies_json = json.load(f)
+                prev_storage_state = cookies_json.get(self.section_name)
+            except Exception as e:
+                self.logger.warning(f"Could not load previous cookies, will perform fresh login: {e}")
+
+        use_old_state = self.validate_before_update and prev_storage_state is not None
+
+        pw_manager = AsyncPlaywrightManager()
+        await pw_manager.start()
+        result_storage_state = None
+
+        try:
+            async with PlaywrightContext(
+                pw_manager,
+                storage_state=prev_storage_state if use_old_state else None,
+                accept_downloads=True,
+                ignore_https_errors=True,
+            ) as context:
+                page = await new_stealth_page(context)
+                self.page = page
+
+                cookies_valid = False
+
+                if use_old_state:
+                    try:
+                        # 1️⃣ Navigate explicitly
+                        await page.goto(self.validation_url, wait_until="domcontentloaded", timeout=30000)
+
+                        # 2️⃣ Bounded SPA settle window (critical)
+                        await page.wait_for_timeout(5000)
+
+                        # 3️⃣ Decide auth state AFTER settle
+                        if self.login_dialog_locator and await page.is_visible(self.login_dialog_locator):
+                            self.logger.warning("Login dialog still visible after refresh settle window.")
+                            cookies_valid = False
+                        else:
+                            cookies_valid = True
+
+                    except Exception as e:
+                        self.logger.warning(f"Cookie validation failed, will login: {e}")
+                        cookies_valid = False
+
+                    if cookies_valid:
+                        self.logger.info("Cookies valid, no update necessary.")
+                        data = await page.context.storage_state()
+                        self.normalize_cookies(data["cookies"])
+                        self.normalize_local_storage(data["origins"])
+                        if data:
+                            await self.save_to_json(data)
+                        return data
+                    # else → fall through to login
+
+                # 4️⃣ Force real login
+                await self.login()
+
+                # Optional: short settle after login
+                await page.wait_for_timeout(1000)
+
+                # 5️⃣ Save ONLY after confirmed login
+                if self.login_dialog_locator and await page.is_visible(self.login_dialog_locator):
+                    raise RuntimeError("Login failed — refusing to save storage_state")
+
+                data = await page.context.storage_state()
+                self.normalize_cookies(data["cookies"])
+                self.normalize_local_storage(data["origins"])
+                if data:
+                    await self.save_to_json(data)
+                result_storage_state = data
+
+        finally:
+            await pw_manager.shutdown()
+
+        return result_storage_state
+
 
 from utils.database import get_db_manager, UsersRepository
 
-def update_all_cookies():
-    """
-    Updates cookies for all users (including 'common') and all supported sources.
-    - For all users in database (including 'common'), grab their login info and refresh all their cookies.
-    """
-    db = get_db_manager()
-    users_repo = UsersRepository(db)
-    all_users = users_repo.get_all_users()  # List[dict], including "common"
-
-    # index by user_id for loop logic
-    from collections import defaultdict
-
-    with open("json/locators.json", "r", encoding="utf-8") as f:
-        locators_data = json.load(f)
-        
-    users_by_id = defaultdict(list)
-    for row in all_users:
-        users_by_id[row["user_id"]].append(row)
-
-    for user_id, auth_entries in users_by_id.items():
-        for entry in auth_entries:
-            source = entry.get("source")
-            phone = entry.get("phone")
-            password = entry.get("password")
-            email = entry.get("email", None)
-
-            # get locator & site config
-            locator_cfg = locators_data.get(source)
-            if not locator_cfg:
-                continue
-
-            # Prepare auth info (phone, password, etc)
-            auth_entry = {
-                "name": source,
-                "url": locator_cfg.get("url"),
-                "phone": phone,
-                "passwd": password,
-                "email": email,
-                "wait_for_dynamical": locator_cfg.get("wait_for_dynamical"),
-                "locators": locator_cfg.get("locators"),
-            }
-    
-            try:
-                with playwright_context(storage_state=None, bypass_ext_path="") as context:
-                    page = new_stealth_page(context)
-                    scraper = GeneralCookies(auth_entry, page=page, user_id=user_id)
-                    scraper.run()
-            finally:
-                _close_browser_safely()
-
-
-def update_common_cookies(sources: list = None):
+async def update_common_cookies(sources: list = None, validate_before_update: bool = False):
     """
     Updates cookies for a given user and specified sources.
-    - If user_id is None: updates ONLY 'common' user for all sources or limited by sources param.
     - If sources is given: updates only those sites, otherwise updates all sites for the user.
+    - If validate_before_update is True, validates cookies before updating.
     """
     db = get_db_manager()
     users_repo = UsersRepository(db)
 
     with open("json/locators.json", "r", encoding="utf-8") as f:
         locators_data = json.load(f)
-    # Who to update
-    uid = "common"
-    common_auths = [r for r in users_repo.get_all_users() if r["user_id"] == uid and r["source"] in sources]
+
+    common_auths = [r for r in users_repo.get_all_users() if r["user_id"] == "common" and (sources is None or r["source"] in sources)]
 
     for entry in common_auths:
         source = entry.get("source")
         phone = entry.get("phone")
         password = entry.get("password")
-        # get locator & site config
         locator_cfg = locators_data.get(source)
         if not locator_cfg:
             continue
@@ -373,30 +292,34 @@ def update_common_cookies(sources: list = None):
             "locators": locator_cfg.get("locators"),
         }
 
-        try:
-            with playwright_context(storage_state=None, bypass_ext_path="") as context:
-                page = new_stealth_page(context)
-                scraper = GeneralCookies(auth_entry, page=page, user_id=uid)
-                scraper.run()
-        finally:
-            _close_browser_safely()
+        scraper = AsyncCookiesHandler(auth_entry, user_id="common", validate_before_update=validate_before_update)
+        await scraper.update()
 
 
-def update_agent_cookies(user_credentials: list[dict]):
+from utils.redis_utils import get_aioredis_client
+from utils.redis_lock import RedisLock
+
+async def update_agent_cookies(
+    user_credentials: list[dict],
+    user_id: str,
+    validate_before_update: bool = False,
+):
     """
     Accepts a list of user credentials [{"source": ..., "phone": ..., "password": ...}, ...]
     Runs cookie updating logic for each entry.
-    Each dict must have: "source", "phone", "password" (optionally: "email").
     """
     with open("json/locators.json", "r", encoding="utf-8") as f:
         locators_data = json.load(f)
-    
+
+    redis = await get_aioredis_client()
     cks = {}
+
     for cred in user_credentials:
         source = cred.get("source")
         phone = cred.get("phone")
         password = cred.get("password")
         email = cred.get("email", None)
+
         locator_cfg = locators_data.get(source)
         if not locator_cfg:
             continue
@@ -410,21 +333,29 @@ def update_agent_cookies(user_credentials: list[dict]):
             "wait_for_dynamical": locator_cfg.get("wait_for_dynamical"),
             "locators": locator_cfg.get("locators"),
         }
-        try:
-            with playwright_context(storage_state=None, bypass_ext_path="") as context:
-                page = new_stealth_page(context)
-                scraper = GeneralCookies(auth_entry, page=page, user_id=None)
-                ck = scraper.get_ck()
-                cks[source] = ck
-        finally:
-            _close_browser_safely()
+
+        uid = "common_agents" if source == "gangtise" else user_id
+        scraper = AsyncCookiesHandler(
+            auth_entry,
+            user_id=uid,
+            validate_before_update=validate_before_update,
+        )
+
+        # 🔒 Serialize gangtise only
+        if source == "gangtise":
+            lock = RedisLock(
+                redis,
+                key="lock:auth:gangtise",
+                ttl=120,          # long enough for login
+                retry_delay=0.5,
+            )
+            async with lock:
+                ck = await scraper.update()
+        else:
+            ck = await scraper.update()
+
+        cks[source] = ck
 
     return cks
 
 
-def _close_browser_safely():
-    """Ensure singleton Playwright browser is closed to avoid leaks."""
-    try:
-        PlaywrightManager.instance().close_browser()
-    except Exception:
-        pass

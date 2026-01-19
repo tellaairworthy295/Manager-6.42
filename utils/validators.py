@@ -5,13 +5,11 @@ import re
 import pandas as pd
 from fastapi import Request
 
-from .database import get_db_manager, UsersRepository
+from scraper.cookies_getter import update_agent_cookies
+from utils.database import UsersRepository, get_db_manager
 
-class ValidationError(Exception):
-    def __init__(self, message: str, status_code: int = 400):
-        self.message = message
-        self.status_code = status_code
-
+# Use central exception class
+from exception.exception_handler import ValidationError
 
 async def validate_scrape_agent_request(request: Request):
     """
@@ -43,60 +41,6 @@ async def validate_scrape_agent_request(request: Request):
 
     sources = [str(s).strip(" []'\"") for s in sources if s and str(s).strip()]
 
-    # ---------- user checks ----------
-    db_manager = get_db_manager()
-    user_repo = UsersRepository(db_manager)
-
-    user_email = user_repo.get_email_by_user_id(str(user_id))
-    if not user_email:
-        raise ValidationError("您的账号还未注册")
-
-    # ---------- load agent config ----------
-    # with open("json/config.json") as f:
-    #     agent_site_config = json.load(f)["AgentSitesConfig"]
-
-    # common_sources = {
-    #     a["site_name"]
-    #     for a in agent_site_config
-    #     if a["field"] == "common"
-    # }
-
-    common_sources = ["gangtise"]
-    user_credentials = []
-    missing_sources = []
-    commons = []
-
-    for src in sources:
-        if src in common_sources:
-            commons.append(src)
-            continue
-
-        user_entry = user_repo.get_user(str(user_id), str(src))
-        if not user_entry:
-            missing_sources.append(src)
-        else:
-            user_credentials.append({
-                "source": src,
-                "phone": user_entry.get("phone"),
-                "password": user_entry.get("password"),
-            })
-
-    if missing_sources:
-        raise ValidationError(
-            f"您的账号未注册以下Agent来源: {','.join(missing_sources)}"
-        )
-
-    # ---------- common credentials ----------
-    for src in commons:
-        common_entry = user_repo.get_user("common", src)
-        if not common_entry:
-            raise ValidationError(f"系统未配置 {src} 通用账号，请联系管理员")
-        user_credentials.append({
-            "source": src,
-            "phone": common_entry.get("phone"),
-            "password": common_entry.get("password"),
-        })
-
     # ---------- parse stocks ----------
     stocks = []
 
@@ -127,50 +71,77 @@ async def validate_scrape_agent_request(request: Request):
     return {
         "user_id": str(user_id),
         "stocks": stocks,
-        "credentials": user_credentials,
         "sources": sources,
         "prompt": prompt,
     }
 
-from filelock import FileLock
+def split_prompt_to_list(prompt_text: str) -> list[str]:
+    if not prompt_text or not prompt_text.strip():
+        return []
+    parts = re.split(r'(?<=[。？])|\n', prompt_text)
+    return [p.strip() for p in parts if p.strip()]
+
 
 def save_user_prompt(user_id: str, prompt: str) -> str:
-    prompts_path = "json/prompts.json"
-    lock_path = prompts_path + ".lock"
+    # Save each user's prompt in their own json/{user_id}/prompt.json
+    user_dir = os.path.join("json", str(user_id))
+    os.makedirs(user_dir, exist_ok=True)
+    if os.path.exists(f"json/{user_id}/prompt.json"):
+        with open(f"json/{user_id}/prompt.json", "r", encoding="utf-8") as f:
+            prompt_config = json.load(f)
+    else:
+        with open(f"json/common/prompt.json", "r", encoding="utf-8") as f:
+            prompt_config = json.load(f)
 
-    def split_prompt_to_list(prompt_text: str) -> list[str]:
-        if not prompt_text or not prompt_text.strip():
-            return []
-        parts = re.split(r'(?<=[。？])|\n', prompt_text)
-        return [p.strip() for p in parts if p.strip()]
+    # If no new prompt provided, return stored prompt, fallback to "default" if present in this file
+    if not prompt or not prompt.strip():
+        return prompt_config['prompt']
 
-    with FileLock(lock_path, timeout=5):
-        # Load existing data safely
-        if os.path.exists(prompts_path):
-            try:
-                with open(prompts_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except Exception:
-                data = {}
-        else:
-            data = {}
+    # Update key for this user (just set 'prompt' key)
+    prompt_config["prompt"] = split_prompt_to_list(prompt)
+    with open(f"json/{user_id}/prompt.json", "w", encoding="utf-8") as f:
+        json.dump(prompt_config, f, ensure_ascii=False, indent=2)
 
-        # If no new prompt provided, return stored one
-        if not prompt or not prompt.strip():
-            stored = data.get(user_id, {}).get("prompt") or data.get("default")
-            if isinstance(stored, list):
-                return " ".join(stored)
-            return stored or ""
+    return prompt_config["prompt"]
 
-        # Update entry for this user
-        entry = data.get(user_id, {})
-        entry["prompt"] = split_prompt_to_list(prompt)
-        data[user_id] = entry
+async def validate_and_prepare_cookies(user_id:str, sources: list[str], validation: bool = False):
+        db_manager = get_db_manager()
+        user_repo = UsersRepository(db_manager)
 
-        # Save back to file
-        with open(prompts_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        user_email = user_repo.get_email_by_user_id(user_id)
+        if not user_email:
+            print(user_id)
+            raise ValidationError("error: 您的账号还未注册(no email), http://localhost/explore/installed/b0a8a438-af97-489d-8810-7eb916135547")
+        
+        user_credentials = []
+        for source in sources:
+            if source == "gangtise":
+                user_entry = user_repo.get_user("common", "gangtise")
+            else:
+                user_entry = user_repo.get_user(user_id, source)
 
-    # Always return the raw string prompt
-    return prompt
+            if not user_entry:
+                print(user_entry)
+                raise ValidationError("error: 您的账号还未注册(no entry), http://localhost/explore/installed/b0a8a438-af97-489d-8810-7eb916135547")
+            else:
+                user_credentials.append({
+                    "source": source,
+                    "phone": user_entry.get("phone"),
+                    "password": user_entry.get("password"),
+                })
 
+        all_cookies = await update_agent_cookies(user_credentials, user_id, validation)
+        return all_cookies
+
+# def redis_validation(user_id: str, sources: list[str]):
+#     r = get_redis_client()
+#     # 1️⃣ Per-user lock
+#     if not r.set(f"agent:lock:user:{user_id}", "1", nx=True, ex=3600):
+#         raise ValidationError("您的任务正在处理中，请稍后再试。")
+#     # 2️⃣ Global concurrency limit
+#     if "gangtise" in sources:
+#         current = r.incr("agent:lock:global")
+#         if current > GLOBAL_LIMIT:
+#             r.decr("agent:lock:global")
+#             r.delete(f"agent:lock:user:{user_id}")
+#             raise ValidationError("Gangtise賬號被占用，请稍后再试。")

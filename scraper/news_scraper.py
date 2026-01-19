@@ -11,7 +11,7 @@ from utils.translation_service import translate_article_to_chinese
 from selen.stealth_driver import get_chrome_driver
 from utils.database import get_db_manager, NewsArticleRepository
 from utils.logging_config import get_news_task_logger
-# Configure loguru for news scraper module
+
 logger = get_news_task_logger()
 
 def _human_pause(min_delay: float = 1.5, max_delay: float = 3.8):
@@ -134,7 +134,6 @@ def _wait_for_progressive_content(driver, selector, timeout=15, min_paragraphs=5
 def _extract_article_content(soup, selector, unwanted_content=None):
     paragraphs = []
     
-    # Handle simple selector-based extraction (most common case)
     paragraphs_elements = soup.select(selector)
     paragraphs = [p.get_text(" ", strip=True) for p in paragraphs_elements if p.get_text(strip=True)]
 

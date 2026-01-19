@@ -3,23 +3,15 @@ import os
 from typing import Any, Dict
 import asyncio
 import redis
-from utils.redis_utils import get_redis_client
+from utils.redis_utils import close_loop_redis, get_redis_client
 import zipfile
 import dramatiq
 from pwright.async_pf import new_stealth_page
 from pwright.async_cm import PlaywrightContext
 from pwright.async_pm import AsyncPlaywrightManager
-from scraper.agent_scraper import process_single_stock
+from scraper.agent_scraper import display_agent, process_single_stock
 from utils.sender import load_email_config_from_json, send_email_with_attachments
 from utils.logging_config import get_agent_task_logger
-
-# Your utilities assumed to exist:
-# - get_redis_client()
-# - send_email_with_attachments(...)
-# - load_email_config_from_json(...)
-# - new_stealth_page(context) -> Page (async version expected)
-# - process_single_stock(page, stock, prompt, final_docs, site_locators) -> str (async)
-#   NOTE: If process_single_stock was sync, convert it to async or wrap its blocking parts in run_in_executor.
 
 logger = get_agent_task_logger()
 
@@ -55,11 +47,11 @@ def init_user_dirs(user_id: str):
 # -------------------------------------------------------------
 # handle_failure
 # -------------------------------------------------------------
-@dramatiq.actor(queue_name="agents", max_retries=0)
 def handle_failure(message_data: Dict[str, Any], exception_data: Dict[str, Any]):
     """
     Called ONCE when retries are exhausted for process_single_site.
     Safe for concurrent workers.
+    This should be a normal function—not a dramatiq actor.
     """
     kwargs = message_data.get("kwargs", {})
     stock = kwargs.get("stock")
@@ -147,7 +139,7 @@ async def _async_process_single_stock_task(*, stock: str, user_id: str, source: 
 # Task 1 — Per-site task (website-level retry)
 # -------------------------------------------------------------
 @dramatiq.actor(
-    queue_name="agents",
+    queue_name="stocks",
     max_retries=0,
     time_limit=60*60*1000,
     on_retry_exhausted="handle_failure",
@@ -165,24 +157,19 @@ def process_single_stock_task(
     Dramatiq actor stays sync; we run the async Playwright flow inside asyncio.run
     to avoid greenlet/thread issues.
     """
-    try:
-        asyncio.run(_async_process_single_stock_task(
-            stock=stock,
-            user_id=user_id,
-            source=source,
-            site_locators=site_locators,
-            storage_state=storage_state,
-            prompt=prompt,
-        ))
-    except Exception:
-        logger.exception(f"❌ Website failed for stock={stock}, site={source}")
-        # Re-raise to let Dramatiq apply retry policy and eventually call handle_failure
-        raise
+    asyncio.run(_async_process_single_stock_task(
+        stock=stock,
+        user_id=user_id,
+        source=source,
+        site_locators=site_locators,
+        storage_state=storage_state,
+        prompt=prompt,
+    ))
 
 # -------------------------------------------------------------
 # Task 2 — Final user-level aggregator (zip + email)
 # -------------------------------------------------------------
-@dramatiq.actor(queue_name="agents", max_retries=0)
+@dramatiq.actor(queue_name="stocks", max_retries=0)
 def finalize_and_email(user_id: str):
     r = None
     base_key = f"agent:{user_id}"
@@ -206,11 +193,6 @@ def finalize_and_email(user_id: str):
         flag = True
         results_raw = r.lrange(f"{base_key}:results", 0, -1)
         results = [json.loads(x) for x in results_raw]
-
-        # Check if any task's site contains 'gangtise', then decr
-        if any('gangtise' in rr.get('site', '') for rr in results) and r.get("agent:lock:global") == "1":
-            r.decr("agent:lock:global")
-            logger.warning("DECRE GANTISE GLOBAL")
 
         success_files = [rr["file"] for rr in results if rr["status"] == "success"]
         failed = [f"{rr['stock']} @ {rr['site']}" for rr in results if rr["status"] != "success"]
@@ -260,25 +242,13 @@ def finalize_and_email(user_id: str):
 # -------------------------------------------------------------
 # Task 3 — Entry point: create all chords
 # -------------------------------------------------------------
-@dramatiq.actor(queue_name="agents", max_retries=0)
-def scrape_agent_task(stocks: list[str], user_id: str, all_cookies: dict):
-    with open("json/prompts.json", "r", encoding="utf-8") as f:
-        prompt_config = json.load(f)
-
-    with open("json/selectors.json", "r", encoding="utf-8") as f:
-        s_locators_map = json.load(f)["agent"]
+@dramatiq.actor(queue_name="stocks", max_retries=0)
+def scrape_agent_task(*, stocks: list[str], user_id: str, prompt: list[str], all_cookies: dict, s_locators_map: dict):
 
     # prepare user dirs
     init_user_dirs(user_id)
 
-    # select prompt
-    if user_id in prompt_config and "prompt" in prompt_config[user_id]:
-        prompt = prompt_config[user_id]["prompt"]
-    else:
-        prompt = prompt_config["default"]["prompt"]
-
     messages = []
-
     for stock in stocks:
         for source, storage_state in all_cookies.items():
             locators = s_locators_map.get(source)
@@ -313,3 +283,104 @@ def scrape_agent_task(stocks: list[str], user_id: str, all_cookies: dict):
     dramatiq.group(messages).run()
     logger.info(f"[scrape_agent_task] user={user_id}, tasks={len(messages)} dispatched")
     logger.info(f"current tasks: {int(r.get("agent:global:processing"))}")
+
+#===============================Task 4=========================================
+@dramatiq.actor(queue_name="agents", max_retries=0)
+def display_agent_task_main(
+    *,
+    user_id: str,
+    prompt: list[str],
+    all_cookies: dict,
+    s_locators_map: dict,
+    conversation_id: str,
+    dia_count: int
+):
+    """
+    One dramatiq task = one prompt, sources in asyncio.gather().
+    """
+    dir_path = os.path.join("snapshoots", user_id)
+    os.makedirs(dir_path, exist_ok=True)
+
+    # Run the actual async logic with asyncio.run to combine sources
+    asyncio.run(_gather_display_agent_sources(
+        user_id=user_id,
+        prompt=prompt,
+        all_cookies=all_cookies,
+        s_locators_map=s_locators_map,
+        conversation_id=conversation_id,
+        dia_count=dia_count,
+    ))
+
+
+async def _process_one_source(
+    *,
+    source: str,
+    storage_state: dict,
+    site_locators: dict,
+    user_id: str,
+    prompt: list[str],
+    conversation_id: str,
+    dia_count: int,
+):
+    logger.info(f"Processing website={source} for displaying in iframe, user={user_id}")
+
+    manager = AsyncPlaywrightManager()
+    await manager.start()
+    try:
+        async with PlaywrightContext(
+            manager,
+            storage_state=storage_state,
+            accept_downloads=True,
+            ignore_https_errors=True,
+        ) as context:
+            page = await new_stealth_page(context)
+            await display_agent(
+                page=page,
+                user_id=user_id,
+                prompt=prompt,
+                locators=site_locators,
+                source=source,
+                conversation_id=conversation_id,
+                dia_count=dia_count
+            )
+    finally:
+        await manager.shutdown()
+        await close_loop_redis()
+
+
+async def _gather_display_agent_sources(
+    *,
+    user_id: str,
+    prompt: list[str],
+    all_cookies: dict,
+    s_locators_map: dict,
+    conversation_id: str,
+    dia_count: int,
+):
+    """
+    Run display_agent for all sources concurrently.
+    """
+    tasks = []
+    for source, storage_state in all_cookies.items():
+        site_locators = s_locators_map.get(source)
+        if not site_locators:
+            logger.warning(f"No site locators for source={source}")
+            continue
+        tasks.append(
+            _process_one_source(
+                source=source,
+                storage_state=storage_state,
+                site_locators=site_locators,
+                user_id=user_id,
+                prompt=prompt,
+                conversation_id=conversation_id,
+                dia_count=dia_count,
+            )
+        )
+
+    if not tasks:
+        logger.warning("No tasks created for display_agent_task_main")
+        return
+
+    logger.info(f"[display_agent_task_main] user={user_id}, tasks={len(tasks)} dispatched")
+    await asyncio.gather(*tasks)

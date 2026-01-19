@@ -27,7 +27,8 @@
           "login_btn": {
             "by": "css",
             "value": "div#pane-accounts button.el-button--primary"
-          }
+          },
+          "wrong_phone_passwd": null
         }
       },
     "xuangutong":  {
@@ -58,7 +59,8 @@
           "login_btn": {
             "by": "css",
             "value": "button.submit[type='submit']"
-          }
+          },
+          "wrong_phone_passwd": null
         }
       },
     "gangtise":  {
@@ -96,7 +98,8 @@
           "login_btn": {
             "by": "xpath",
             "value": "//div[contains(@class,'login-button') and normalize-space(text())='登录']"
-          }
+          },
+          "wrong_phone_passwd": null
         }
       },
 
@@ -125,6 +128,10 @@
           "login_btn": {
             "by": "xpath",
             "value": "//div[contains(text(),'登录') or contains(text(),'登 录')]"
+          },
+          "wrong_phone_passwd": {
+            "by": "xpath",
+            "value": "//div[contains(@class,'toast') and contains(text(),'登录失败')]"
           }
         }
       }

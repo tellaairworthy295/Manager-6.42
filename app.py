@@ -1,40 +1,191 @@
 import ast
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import os
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from pathlib import Path
+import re
+import shutil
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import Field
 import uvicorn
 from fastmcp import FastMCP
+import redis.asyncio as aioredis
 # ===== Local imports =====
-from utils.redis_utils import get_redis_client
+from exception.exception_handler import NetworkException, ValidationError, generic_exception_handler, validation_exception_handler, network_exception_handler
 from scraper.news_scraper import fetch_news_from_db, save_agent_data
 from scraper.stocks_scraper import main_scraper
 from utils.sender import send_email_with_attachments
 from image_process import excel_flow
 
 from tasks.news_tasks import scrape_all_news
-from tasks.agent_tasks import scrape_agent_task
+from tasks.agent_tasks import display_agent_task_main, scrape_agent_task
 from scraper.cookies_getter import update_common_cookies, update_agent_cookies
 from utils.sender import send_email_with_attachments, load_email_config_from_json
 from utils.database import get_db_manager, UsersRepository, StockRepository
-from utils.validators import save_user_prompt, validate_scrape_agent_request, ValidationError
+from utils.validators import save_user_prompt, split_prompt_to_list, validate_and_prepare_cookies, validate_scrape_agent_request
 from utils.logging_config import get_others_logger
+from utils.redis_utils import create_aioredis, close_loop_redis, get_aioredis_client, get_redis_client
+from fastapi.middleware.cors import CORSMiddleware
 # ===== Setup =====
 logger = get_others_logger()
 
+# === MCP integration ===
 mcp = FastMCP(name="News MCP")
-mcp_app = mcp.http_app(path='/tools')
-app = FastAPI(title="My Local Dify Server", lifespan=mcp_app.lifespan)
+mcp_app = mcp.http_app(path="/tools")
+
+# --- Lifespan handler: combine MCP lifespan + Redis lifecycle ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Run MCP startup first
+    async with mcp_app.lifespan(app):
+        # Startup: create Redis client
+        create_aioredis()
+        yield
+        await close_loop_redis()
+
+
+# --- Create app with combined lifespan ---
+app = FastAPI(title="My Local Dify Server", lifespan=lifespan)
+
+# Mount MCP app
 app.mount("/mcp", mcp_app)
-GLOBAL_LIMIT = 1
-#app = FastAPI(title="My Local Dify Server")
+
+# Allow your Next.js frontend (localhost:3000) to call FastAPI (localhost:5000)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # or ["*"] for all origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.add_exception_handler(ValidationError, validation_exception_handler)
+app.add_exception_handler(NetworkException, network_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
+# ====================================================
+
+# --- Helper to get global Redis client ---
+async def get_redis():
+    return get_aioredis_client()
+# --- SSE router ---
+router = APIRouter(prefix="/sse", tags=["Real-time"])
+
+@router.get("/{channel}")
+async def sse_stream(
+    channel: str,
+    redis: aioredis.Redis = Depends(get_redis),
+):
+    async def event_gen():
+        last_id = "$"  # IMPORTANT: start from latest
+
+        try:
+            while True:
+                entries = await redis.xread(
+                    {f"sse:{channel}": last_id},
+                    block=1000,   # ⬅️ shorter block
+                    count=10,
+                )
+                for _, messages in entries:
+                    for msg_id, fields in messages:
+                        last_id = msg_id
+                        payload = fields.get("data")
+                        if not payload:
+                            continue
+
+                        logger.info("RECEIVE %s", payload[:20])
+
+                        event_type = "final" if '"file"' in payload else "text"
+                        yield f"event: {event_type}\ndata: {payload}\n\n"
+
+                # ⬅️ heartbeat keeps connection alive
+                yield ": ping\n\n"
+
+        except asyncio.CancelledError:
+            logger.info("SSE client disconnected")
+
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+# Mount the SSE router
+app.include_router(router)
+
 # ================== Health Check ====================
 @app.get("/ping")
 async def ping():
     return {"status": "pong"}
+#==============================APP===================================================
+# NEW: list all html files for toggle
+@app.get("/list/{user}/{conversation_id}")
+async def list_html_files(user: str, conversation_id: str):
+    html_dir_alpha = Path("snapshoots") / user / conversation_id / "alphapai"
+    html_dir_gangtise = Path("snapshoots") / user / conversation_id / "gangtise"
+
+    # Both do not exist
+    if not html_dir_alpha.exists() and not html_dir_gangtise.exists():
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    def sort_key_by_number(f):
+        # Extract the trailing number before .html at the end, after underscore
+        m = re.search(r'_(\d+)\.html', f.name)
+        return int(m.group(1)) if m else -1
+
+    html_files_alpha = list(html_dir_alpha.glob("*.html")) if html_dir_alpha.exists() else []
+    html_files_gangtise = list(html_dir_gangtise.glob("*.html")) if html_dir_gangtise.exists() else []
+    html_files_alpha = sorted(html_files_alpha, key=sort_key_by_number)
+    html_files_gangtise = sorted(html_files_gangtise, key=sort_key_by_number)
+
+    # If no html files in both
+    if not html_files_alpha and not html_files_gangtise:
+        raise HTTPException(status_code=404, detail="No HTML file found")
+
+    files_alpha = []
+    files_gangtise = []
+    for f in html_files_alpha:
+        files_alpha.append({
+            "name": f.name,
+            "src": f"/preview/{user}/{conversation_id}/alphapai/{f.name}"
+        })
+    for f in html_files_gangtise:
+        files_gangtise.append({
+            "name": f.name,
+            "src": f"/preview/{user}/{conversation_id}/gangtise/{f.name}"
+        })
+
+    return JSONResponse(content=[files_alpha, files_gangtise])
+
+# UPDATED: allow selecting specific file
+@app.get("/preview/{user}/{conversation_id}/{source}/{filename}")
+async def preview_file(user: str, conversation_id: str, source: str, filename: str):
+    html_path = Path("snapshoots") / user / conversation_id / source / filename
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(html_path, media_type="text/html")
+
+@app.delete("/delete/{user}/{conversation_id}")
+async def delete_html_dir(user: str, conversation_id: str):
+    html_dir = Path("snapshoots") / user / conversation_id
+
+    if not html_dir.exists():
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    try:
+        # Use shutil.rmtree to delete the directory and all its contents
+        shutil.rmtree(html_dir)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting directory: {str(e)}")
+
+    return JSONResponse(content={"status": "deleted"})
 
 # ================== Cookies Update ==================
 @app.post("/api/refresh_cookies")
@@ -56,12 +207,41 @@ async def refresh_cookies(request: Request):
     sources = [str(s).strip(" []'\"") for s in sources if s and str(s).strip()]
     if not sources:
         return JSONResponse({"error": "sources are required"}, status_code=400)
-    
-    try:
-        await asyncio.to_thread(update_common_cookies, sources)
-    except Exception as e:
-        return JSONResponse({"error": "common cookies failed: {e}"}, status_code=400) 
+    await update_common_cookies(sources, False)
     return {"status": "done"}
+
+
+@app.post("/api/agent_cookies")
+async def refresh_agent_cookies(request: Request):
+    data = await request.json()
+    user_id = data.get("user_id")
+    sources = data.get("sources")
+    
+    if isinstance(sources, str):
+        try:
+            sources = json.loads(sources)
+        except Exception:
+            try:
+                sources = ast.literal_eval(sources)
+            except Exception:
+                sources = sources.replace("，", ",").split(",")
+
+    sources = [str(s).strip(" []'\"") for s in sources if s and str(s).strip()]
+    await validate_and_prepare_cookies(user_id, sources, False)
+    return JSONResponse("ok")
+
+
+#===================================User Operation=============================================
+@app.post("/api/lookup_user")
+async def lookup_user(request: Request):
+    db_manager = get_db_manager()
+    user_repo = UsersRepository(db_manager)
+    data = await request.json()
+    email = data.get("email")
+    if not email:
+        return JSONResponse({"error": "email is required"}, status_code=400)
+    user_id = user_repo.get_user_id_by_email(email)
+    return {"status": "200", "user_id": user_id}
 
 @app.post("/api/add_user")
 async def add_users(request: Request):
@@ -87,31 +267,35 @@ async def add_users(request: Request):
     if not user_id or not sites:
         return JSONResponse({"error": "user_id and sites are required"}, status_code=400)
     resp = []
-    try:
-        for site in sites:
-            source = site.get("source")
-            phone = site.get("phone")
-            passwd = site.get("passwd") or site.get("password")  # support both keys
-            if not source:
-                continue
-            user_repo.insert_or_update_user(
-                user_id=user_id,
-                source=source,
-                email=email,
-                phone=phone,
-                password=passwd,
-            )
-            # Only include basic response info
-            resp.append({
-                "source": source,
-                "user_id": user_id,
-                "email": email,
-                "phone": phone,
-                "status": "ok"
-            })
-        return {"status": "ok", "users_added": resp}
-    except Exception as e:
-        return JSONResponse({"error": f"Failed to add user: {e}"}, status_code=500)
+    for site in sites:
+        source = site.get("source")
+        phone = site.get("phone")
+        passwd = site.get("passwd") or site.get("password")  # support both keys
+        if not source:
+            continue
+        user_credentials = [{
+            "source": source,
+            "phone": phone,
+            "password": passwd
+        }]
+        await update_agent_cookies(user_credentials, user_id, False)
+
+        user_repo.insert_or_update_user(
+            user_id=user_id,
+            source=source,
+            email=email,
+            phone=phone,
+            password=passwd,
+        )
+        # Only include basic response info
+        resp.append({
+            "source": source,
+            "user_id": user_id,
+            "email": email,
+            "phone": phone,
+            "status": "ok"
+        })
+    return {"status": "ok", "users_added": resp}
 
     
 #========================Dramatiq tasks==========================
@@ -128,73 +312,78 @@ async def scrape_news_api(request: Request):
 
 @app.post("/api/scrape_agent")
 async def scrape_agent_api(request: Request):
-    try:
-        data = await validate_scrape_agent_request(request)
-        current_prompt = ""
-        user_id = data["user_id"]
-        sources = data["sources"]
-        r = get_redis_client()
-        # 1️⃣ Per-user lock
-        if not r.set(f"agent:lock:user:{user_id}", "1", nx=True, ex=3600):
-            raise ValidationError("您的任务正在处理中，请稍后再试。")
-        # 2️⃣ Global concurrency limit
-        if "gangtise" in sources:
-            current = r.incr("agent:lock:global")
-            if current > GLOBAL_LIMIT:
-                r.decr("agent:lock:global")
-                r.delete(f"agent:lock:user:{user_id}")
-                raise ValidationError("Gangtise賬號被占用，请稍后再试。")
-
-
-        try:
-            current_prompt = save_user_prompt(data["user_id"], data["prompt"])
-        except Exception as e:
-            if r.get("agent:lock:global") == "1" and "gangtise" in data["sources"]:
-                r.decr("agent:lock:global")
-            return JSONResponse({"error": f"prompt保存失敗: {e}"}, status_code=500)
-
-        try:
-            cks = await asyncio.to_thread(
-                update_agent_cookies,
-                data["credentials"]
-            )
-        except Exception as e:
-            if r.get("agent:lock:global") == "1" and "gangtise" in data["sources"]:
-                r.decr("agent:lock:global")
-            return JSONResponse({"error": f"cookies更新失敗: {e}"}, status_code=500)
-
-        scrape_agent_task.send(
-                    data["stocks"],
-                    data["user_id"],
-                    cks
-                )
-        
-        r.incr("agent:global:processing")
-        tasks = int(r.get("agent:global:processing") or 0)
-        return JSONResponse(
-            {
-                "已有任務": tasks,
-                "detail": "您的任务提交成功，请耐心等待。",
-                "prompt": current_prompt,
-            },
-            status_code=202,
-        )
+    data = await validate_scrape_agent_request(request)
+    current_prompt = None
+    user_id = data["user_id"]
+    sources = data["sources"]
+    stocks = data["stocks"]
+    prompt = data["prompt"]
     
-    except ValidationError as e:
-        return JSONResponse({"error": e.message}, status_code=e.status_code)
+    r = get_redis_client()
+    # 1️⃣ Per-user lock
+    if not r.set(f"agent:lock:user:{user_id}", "1", nx=True, ex=3600):
+        raise ValidationError("您的任务正在处理中，请稍后再试。")
+
+    current_prompt = save_user_prompt(user_id, prompt)
+    with open("json/selectors.json", "r", encoding="utf-8") as f:
+        s_locators_map = json.load(f)["agent"]
+    all_cookies = await validate_and_prepare_cookies(user_id.split("_")[-1], sources, True)
+    scrape_agent_task.send(
+        stocks=stocks,
+        user_id=user_id,
+        prompt=current_prompt,
+        all_cookies=all_cookies,
+        s_locators_map=s_locators_map
+    )
+    
+    r.incr("agent:global:processing")
+    tasks = int(r.get("agent:global:processing") or 0)
+    return JSONResponse(
+        {
+            "已有任務": tasks,
+            "detail": "您的任务提交成功，请耐心等待。",
+            "prompt": current_prompt,
+        },
+        status_code=202,
+    )
+
+@app.post("/api/display_agent")
+async def display_agent_api(request: Request):
+    try:
+        form = await request.form()
+        prompt = form.get("query")
+        user_id = form.get("user_id")
+        sources = form.get("sources")
+        conversation_id = form.get("conversation_id")
+        dia_count = form.get("dia_count")
     except Exception as e:
-        return JSONResponse({"error": f"系统错误: {e}"}, status_code=500)
+        raise ValidationError(f"Form parsing failed: {e}")
+    # ---------- normalize sources ----------
+    if isinstance(sources, str):
+        try:
+            sources = json.loads(sources)
+        except Exception:
+            try:
+                sources = ast.literal_eval(sources)
+            except Exception:
+                sources = sources.replace("，", ",").split(",")
+
+    sources = [str(s).strip(" []'\"") for s in sources if s and str(s).strip()]
+    prompt_list = split_prompt_to_list(prompt)
+    with open("json/selectors.json", "r", encoding="utf-8") as f:
+        s_locators_map = json.load(f)["agent"]
+    all_cookies = await validate_and_prepare_cookies(user_id.split("_")[-1], sources, True)
+    display_agent_task_main.send(user_id=user_id, prompt=prompt_list, 
+                                    all_cookies=all_cookies, s_locators_map=s_locators_map, 
+                                    conversation_id=conversation_id, dia_count=dia_count)
 
 @app.post("/api/news_analysis")
 async def news_analyzer(request: Request):
     # Receive form-data with a "result" key
-    try:
-        form = await request.form()
-        analysis_result = form.get("result")
-        if analysis_result is None:
-            return JSONResponse({"error": "No 'result' field found in form-data."}, status_code=400)
-    except Exception as e:
-        return JSONResponse({"error": f"Form parsing failed: {e}"}, status_code=400)
+    form = await request.form()
+    analysis_result = form.get("result")
+    if analysis_result is None:
+        return JSONResponse({"error": "No 'result' field found in form-data."}, status_code=400)
 
     await asyncio.to_thread(save_agent_data, analysis_result)
 
@@ -203,16 +392,13 @@ async def news_analyzer(request: Request):
     now = datetime.now()
     formatted = now.strftime("%Y-%m-%d-%H")
     txt_path = f"news_analyses/{formatted}.txt"
-    try:
-        with open(txt_path, "w", encoding="utf-8") as f:
-            f.write(str(analysis_result))
-        config = load_email_config_from_json("json/config.json")
-        config.SUBJECT = "【新闻】彭博社最近6小时新闻AI总结"
-        config.BODY = "AI总结结果见附件。"
-        config.ATTACHMENTS = [txt_path]
-        send_email_with_attachments(**config.as_dict())
-    except Exception as e:
-        return JSONResponse({"error": f"Failed to write or send: {e}"}, status_code=500)
+    with open(txt_path, "w", encoding="utf-8") as f:
+        f.write(str(analysis_result))
+    config = load_email_config_from_json("json/config.json")
+    config.SUBJECT = "【新闻】彭博社最近6小时新闻AI总结"
+    config.BODY = "AI总结结果见附件。"
+    config.ATTACHMENTS = [txt_path]
+    send_email_with_attachments(**config.as_dict())
 
     return JSONResponse({"status": "200", "message": "Sent results successfully."})
 
@@ -220,38 +406,33 @@ async def news_analyzer(request: Request):
 async def scrape_stocks_api(request: Request):
     data = await request.json()
     date = data.get("date") or datetime.today().strftime("%Y-%m-%d")
-    days = data.get("days", 10)
-    try:
-        flag = await main_scraper(date)
-        if not flag:
-            return JSONResponse(
-            {"status": "ok", "msg": "Not a new date"}
-        )
-        await asyncio.to_thread(excel_flow, date, days)
-
-        config = load_email_config_from_json("json/config.json")
-        config.ATTACHMENTS = [
-            f"excel/{date}.xlsx",
-            f"excel/{date}.txt",
-            f"images/Image.png",
-            "excel/trendings_trend_break.png",
-            "excel/trendings_trend_down.png",
-            "excel/trendings_trend_even.png",
-            "excel/trendings_trend_up.png"
-        ]
-        config.BODY = "个股信息（已合并韭研和选股通）和韭研公社涨停简图相关信息，见附件。"
-        config.SUBJECT = "【韭研】个股分析与涨停简图"
-        await asyncio.to_thread(send_email_with_attachments, **config.as_dict())
-        try:
-            os.remove(f"excel/{date}.xlsx")
-            os.remove(f"excel/{date}.txt")
-        except:
-            pass
+    days = data.get("days", 90)
+    flag, market_number = await main_scraper(date)
+    if not flag:
         return JSONResponse(
-            {"status": "ok", "date": date}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        {"status": "ok", "msg": "Not a new date"}
+    )
+    await asyncio.to_thread(excel_flow, market_number, date, days)
+
+    config = load_email_config_from_json("json/config.json")
+    config.ATTACHMENTS = [
+        f"excel/{date}.xlsx",
+        f"excel/{date}.txt",
+        f"images/Image.png",
+        "excel/市场统计趋势.png",
+        "excel/破板率趋势.png",
+    ]
+    config.BODY = "个股信息（已合并韭研和选股通）和韭研公社涨停简图相关信息，见附件。"
+    config.SUBJECT = "【韭研】个股分析与涨停简图"
+    await asyncio.to_thread(send_email_with_attachments, **config.as_dict())
+    try:
+        os.remove(f"excel/{date}.xlsx")
+        os.remove(f"excel/{date}.txt")
+    except Exception:
+        pass
+    return JSONResponse(
+        {"status": "ok", "date": date}
+    )
 
 @app.get("/api/get_news")
 async def fetch_news():
@@ -259,35 +440,30 @@ async def fetch_news():
     Fetch Bloomberg articles data from the local SQLite database.
     Returns a list[str], each string combines 5 articles (url/title/content, one per line).
     """
-    try:
-        data = await asyncio.to_thread(fetch_news_from_db)  # list[dict] with keys: url, title, content
-        combined = []
-        chunk = []
-        for i, article in enumerate(data):
-            block = f"url: {article.get('url', '')}\ntitle: {article.get('title', '')}\ncontent: {article.get('content', '')}"
-            chunk.append(block)
-            if len(chunk) == 10:
-                combined.append('\n\n'.join(chunk))
-                chunk = []
-        if chunk:
+    data = await asyncio.to_thread(fetch_news_from_db)  # list[dict] with keys: url, title, content
+    combined = []
+    chunk = []
+    for _, article in enumerate(data):
+        block = f"url: {article.get('url', '')}\ntitle: {article.get('title', '')}\ncontent: {article.get('content', '')}"
+        chunk.append(block)
+        if len(chunk) == 15:
             combined.append('\n\n'.join(chunk))
-        return combined
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch Bloomberg data from database.{e}")
+            chunk = []
+    if chunk:
+        combined.append('\n\n'.join(chunk))
+    return combined
+
 
 # =====================================================
 # 🧩 MCP SERVER SECTION (mounted via FastMCP)
 # =====================================================
 @mcp.tool(name="fetch_stocks", description="Fetch stocks(name and code) from past N days.")
 async def fetch_stocks(days: int = Field(gt=0, le=30, description="Number of recent days(1-30) to fetch. (e.g., 7)")):
-    try:
-        logger.info(f"fetch_stocks: {days}\n")
-        db_manager = get_db_manager()
-        stock_repo = StockRepository(db_manager)
-        data = await asyncio.to_thread(stock_repo.get_recent_stock_name_code, days)
-        return {"data": data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to fetch stock name and code from database.")
+    logger.info(f"fetch_stocks: {days}\n")
+    db_manager = get_db_manager()
+    stock_repo = StockRepository(db_manager)
+    data = await asyncio.to_thread(stock_repo.get_recent_stock_name_code, days)
+    return {"data": data}
 
 
 @mcp.tool(
@@ -296,14 +472,12 @@ async def fetch_stocks(days: int = Field(gt=0, le=30, description="Number of rec
 )
 async def fetch_stocks_and_analyses(stocks: list[str] = Field(min_length=1, description="List of stock identifiers (names and codes, at least one stock). (e.g., ['中国一重601106','国泰集团603977'])"),
                                     days: int = Field(ge=0, le=30, description="Number of recent days(1-30) to fetch analyses, e.g., 5")):
-    try:
-        logger.info(f"fetch_stocks_and_analyses:\n stocks: {stocks}\n days: {days}\n")
-        db_manager = get_db_manager()
-        stock_repo = StockRepository(db_manager)
-        data = await asyncio.to_thread(stock_repo.get_analysis_by_stock, stocks, days)
-        return {"data": data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to fetch stock analysis from database.")
+    logger.info(f"fetch_stocks_and_analyses:\n stocks: {stocks}\n days: {days}\n")
+    db_manager = get_db_manager()
+    stock_repo = StockRepository(db_manager)
+    data = await asyncio.to_thread(stock_repo.get_analysis_by_stock, stocks, days)
+    return {"data": data}
+
 # =====================================================
 # Entry point
 # =====================================================

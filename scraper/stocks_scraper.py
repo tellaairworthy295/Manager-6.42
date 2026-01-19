@@ -1,3 +1,4 @@
+
 import json
 import os
 import asyncio
@@ -7,6 +8,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from exception.exception_handler import NetworkException
 from pwright.async_pm import AsyncPlaywrightManager
 from pwright.async_cm import PlaywrightContext
 from pwright.async_pf import new_stealth_page
@@ -21,11 +23,11 @@ async def main_scraper(date: str) -> bool:
     with open("json/selectors.json", "r", encoding="utf-8") as f:
         selectors_map = json.load(f)["stocks"]
 
-    with open("json/cookies.json", "r", encoding="utf-8") as f:
-        cookies_map = json.load(f)["common"]
+    with open("json/common/cookies.json", "r", encoding="utf-8") as f:
+        cookies_map = json.load(f)
 
     all_records: list[dict] = []
-
+    market_number = None
     manager = AsyncPlaywrightManager()
     await manager.start()
 
@@ -47,41 +49,13 @@ async def main_scraper(date: str) -> bool:
                 ) as context:
                     page = await new_stealth_page(context)
 
-                    await page.goto(
-                        url,
-                        wait_until="domcontentloaded",
-                        timeout=100_000,
-                    )
+                    try:
+                        await page.goto(url, wait_until="domcontentloaded", timeout=50000)
+                    except Exception as e:
+                        raise NetworkException(f"Network Error. Failed to load {url}: {str(e)}")
                     logger.info("Page loaded.")
 
-                    if selectors.get("name") == "jiuyan":
-                        # 获取页面标题
-                        title = await page.title()
-                        
-                        # 从标题中提取日期
-                        title_date_match = re.search(r'(\d{4}-\d{1,2}-\d{1,2})', title)
-                        
-                        if title_date_match:
-                            title_date = title_date_match.group(1)
-                            
-                            # 标准化日期格式（处理可能的月份/日期间位不足问题）
-                            from datetime import datetime
-                            try:
-                                # 尝试解析标题中的日期
-                                title_date_obj = datetime.strptime(title_date, "%Y-%m-%d")
-                                # 解析传入的日期参数
-                                target_date_obj = datetime.strptime(date, "%Y-%m-%d")
-                                
-                                # 比较日期是否匹配
-                                if title_date_obj.date() != target_date_obj.date():
-                                    logger.info(f"页面日期({title_date})与目标日期({date})不匹配")
-                                    return False
-                                    
-                            except ValueError as e:
-                                logger.warning(f"日期解析失败: {e}, 标题: {title}")
-                                # 如果日期解析失败，继续执行
-
-                    records = await _scrape_stocks_async(
+                    data = await _scrape_stocks_async(
                         page=page,
                         date=date,
                         click_selector=selectors.get("click_selector"),
@@ -89,14 +63,16 @@ async def main_scraper(date: str) -> bool:
                         name_selector=selectors["name_selector"],
                         code_selector=selectors["code_selector"],
                         analysis_selector=selectors["analysis_selector"],
+                        market_number_selector=selectors["market_number"]
                     )
-
-                    if records:
-                        all_records.extend(records)
-                        logger.info(f"Scraped {len(records)} records from {url}")
+                    if data and data["records"]:
+                        all_records.extend(data["records"])
+                        logger.info(f"Scraped {len(data["records"])} records from {url}")
                     else:
                         logger.warning(f"No records scraped from {url}")
+                        return False, market_number
 
+                    market_number = data["market_number"] if data["market_number"] else market_number
                     # Optional image scraping
                     if selectors.get("image"):
                         await _prepare_image_dir("images")
@@ -118,10 +94,9 @@ async def main_scraper(date: str) -> bool:
         )
 
         result = repo.get_today_stocks()
-
         await asyncio.to_thread(_write_analysis_file, result, date)
 
-    return True
+    return True, market_number
 
 async def _scrape_stocks_async(
     *,
@@ -132,6 +107,7 @@ async def _scrape_stocks_async(
     name_selector: str,
     code_selector: str,
     analysis_selector: str,
+    market_number_selector: dict | None
 ) -> list[dict] | None:
     try:
         if click_selector:
@@ -141,8 +117,7 @@ async def _scrape_stocks_async(
                 timeout=5_000,
                 max_attempts=3,
             )
-
-        # Wait for rows to appear
+        # Wait for rows and the first .market-color--red within #fluctuation-title
         await page.wait_for_selector(
             row_selector,
             state="attached",
@@ -151,6 +126,28 @@ async def _scrape_stocks_async(
 
         html = await page.content()
         soup = BeautifulSoup(html, "html.parser")
+
+        market_number = {}
+        if market_number_selector:
+            for label, selector in market_number_selector.items():
+                await page.wait_for_selector(
+                    selector,
+                    state="visible",
+                    timeout=15_000,
+                )
+                elements = soup.select(selector)
+                # Extract the plain number (text) from the first matching element,
+                # or None if not found.
+                if elements and elements[0]:
+                    text = elements[0].get_text(strip=True)
+                    # Try to extract int, fallback to text if not possible.
+                    try:
+                        number = int(re.sub(r"[^\d]", "", text))
+                    except Exception:
+                        number = text
+                    market_number[label] = number
+                else:
+                    market_number[label] = None
 
         rows = soup.select(row_selector)
         records: list[dict] = []
@@ -179,7 +176,10 @@ async def _scrape_stocks_async(
                 }
             )
 
-        return records or None
+        return {
+            "market_number": market_number,
+            "records": records
+        }
 
     except Exception as e:
         logger.exception(f"Error scraping stocks: {e}")
@@ -256,7 +256,7 @@ async def _prepare_image_dir(path: str):
 
 
 def _write_analysis_file(result: list[dict], date):
-    with open("excel/{date}.txt", "w", encoding="utf-8") as f:
+    with open(f"excel/{date}.txt", "w", encoding="utf-8") as f:
         for item in result:
             f.write(
                 f"{item['stock']}\t{item['code']}\n"

@@ -1,15 +1,9 @@
-Strictly separate scrape and analysis,
-Design the databse carefully so that it can efficiently fetch the target data.
-Webhook
-Two ways to apply AI (use MCP, maybe need knowledge base):
-1. chatflow (query)
-2. workflow (schedule)
 
-!!!Call log:
-  - waiting for locator("textarea.el-textarea__inner").first
-; JS fill: Page.evaluate() takes from 2 to 3 positional arguments but 4 were given
-!!!
-
+!!!streaming lags!!!
+!!!concurrency!!!
+!!!delete lags dify slept maybe!!!
+!!! one frame !!!
+!!! switch continue!!!
 CREATE USER 'scraper'@'localhost' IDENTIFIED BY 'strong_password_here';
 GRANT ALL PRIVILEGES ON scraped_data.* TO 'muheng'@'localhost';
 FLUSH PRIVILEGES;
@@ -21,7 +15,7 @@ uvicorn app:app --host 0.0.0.0 --port 5000
 
 dramatiq dramatiq_app --queues news --processes 1 --threads 2
 
-dramatiq dramatiq_app --queues agents --processes 1 --threads 8
+dramatiq dramatiq_app --queues agents --processes 2 --threads 8
 
 PYTHONUNBUFFERED=1 dramatiq dramatiq_app --queues news --processes 1 --threads 2
 PYTHONUNBUFFERED=1 dramatiq dramatiq_app --queues agents --processes 1 --threads 8
@@ -39,7 +33,7 @@ curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: appli
 curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: application/json" -d "{\"requests\": [{\"query\": \"site:reuters.com/world\", \"site\": \"www.reuters.com/world\", \"source\": \"reuters\"}]}"
 
 
-curl.exe -X POST "http://localhost:5000/api/scrape_stocks" -H "Content-Type: application/json" -d "{\"days\":10}"
+curl.exe -X POST "http://localhost:5000/api/scrape_stocks" -H "Content-Type: application/json" -d "{\"days\":90}"
 
 curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: application/json" -d "{\"requests\": [{\"query\": \"site:bloomberg.com/news/articles\", \"site\": \"www.bloomberg.com/news/articles\", \"source\": \"bloomberg\"}]}"
 

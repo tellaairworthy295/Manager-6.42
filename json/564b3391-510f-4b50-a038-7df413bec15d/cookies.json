@@ -1,0 +1,85 @@
+{
+  "alphapai": {
+    "cookies": [
+      {
+        "name": "sensorsdata2015jssdkcross",
+        "value": "%7B%22distinct_id%22%3A%221163481096134852608%22%2C%22first_id%22%3A%2219bb50ce2ad581-04c1e9f25ff0448-26061a51-921600-19bb50ce2ae1420%22%2C%22props%22%3A%7B%22%24latest_traffic_source_type%22%3A%22%E7%9B%B4%E6%8E%A5%E6%B5%81%E9%87%8F%22%2C%22%24latest_search_keyword%22%3A%22%E6%9C%AA%E5%8F%96%E5%88%B0%E5%80%BC_%E7%9B%B4%E6%8E%A5%E6%89%93%E5%BC%80%22%2C%22%24latest_referrer%22%3A%22%22%7D%2C%22identities%22%3A%22eyIkaWRlbnRpdHlfY29va2llX2lkIjoiMTliYjUwY2UyYWQ1ODEtMDRjMWU5ZjI1ZmYwNDQ4LTI2MDYxYTUxLTkyMTYwMC0xOWJiNTBjZTJhZTE0MjAiLCIkaWRlbnRpdHlfbG9naW5faWQiOiIxMTYzNDgxMDk2MTM0ODUyNjA4In0%3D%22%2C%22history_login_id%22%3A%7B%22name%22%3A%22%24identity_login_id%22%2C%22value%22%3A%221163481096134852608%22%7D%2C%22%24device_id%22%3A%2219bb50ce2ad581-04c1e9f25ff0448-26061a51-921600-19bb50ce2ae1420%22%7D",
+        "domain": ".rabyte.cn",
+        "path": "/",
+        "expires": 1803364728.435972,
+        "httpOnly": false,
+        "secure": false,
+        "sameSite": "Lax"
+      },
+      {
+        "name": "SERVERCORSID",
+        "value": "af0c002de304807a30661279d2d228a5|1768804728|1768804450",
+        "domain": "rabytetech.datasink.sensorsdata.cn",
+        "path": "/",
+        "expires": -1,
+        "httpOnly": false,
+        "secure": true,
+        "sameSite": "None"
+      }
+    ],
+    "origins": [
+      {
+        "origin": "https://alphapai-web.rabyte.cn",
+        "localStorage": [
+          {
+            "name": "USER_AUTH_TOKEN",
+            "value": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxMTYzNDgxMDk2MTM0ODUyNjA4Iiwic3ViIjoie1wiaW50ZXJuYWxcIjpmYWxzZSxcImxvZ2luVGltZVwiOlwiMjAyNi0wMS0xM1QwOTo1MToyMy42NjNcIixcInBsYXRmb3JtXCI6XCJ3ZWJcIixcInVpZFwiOlwiMTE2MzQ4MTA5NjEzNDg1MjYwOFwifSIsImlzcyI6InJhYnl0ZSIsImlhdCI6MTc2ODI2OTA4MywiZXhwIjoxNzcwODYxMDgzfQ.sb5usWvGwe8-cwGH77r_ngB4VWR1OlduIj9aEtmDRIk"
+          },
+          {
+            "name": "extension-download-guide",
+            "value": "true"
+          },
+          {
+            "name": "hasShowPaipaiRecoderGuide",
+            "value": "1"
+          },
+          {
+            "name": "hasShowSocialMediaGuide",
+            "value": "1"
+          },
+          {
+            "name": "pc-admin-side-adv-modal-storage",
+            "value": "{\"dateOflastTime\":\"2026-01-19\",\"flag\":\"18516208815\"}"
+          },
+          {
+            "name": "paipai-agent-fastsheet-us-guide",
+            "value": "true"
+          },
+          {
+            "name": "version-market-tip",
+            "value": "1"
+          },
+          {
+            "name": "version-social-sub-tip",
+            "value": "1"
+          },
+          {
+            "name": "hasShowpaipaiAnswerRangeGuide",
+            "value": "true"
+          },
+          {
+            "name": "search-to-paipai-guide",
+            "value": "true"
+          },
+          {
+            "name": "paipai_mode-select_task-guide",
+            "value": "1"
+          },
+          {
+            "name": "search-to-paipai-guide-date",
+            "value": "1767594738604"
+          },
+          {
+            "name": "MODE",
+            "value": "undefined"
+          }
+        ]
+      }
+    ]
+  }
+}

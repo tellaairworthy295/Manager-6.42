@@ -1,0 +1,161 @@
+{
+  "gangtise": {
+    "cookies": [
+      {
+        "name": "HWWAFSESID",
+        "value": "3ca7173edbd11b0741",
+        "domain": "open.gangtise.com",
+        "path": "/",
+        "expires": -1,
+        "httpOnly": false,
+        "secure": false,
+        "sameSite": "Lax"
+      },
+      {
+        "name": "HWWAFSESTIME",
+        "value": "1768456091740",
+        "domain": "open.gangtise.com",
+        "path": "/",
+        "expires": -1,
+        "httpOnly": false,
+        "secure": false,
+        "sameSite": "Lax"
+      }
+    ],
+    "origins": [
+      {
+        "origin": "https://open.gangtise.com",
+        "localStorage": [
+          {
+            "name": "G_username",
+            "value": "13651677354"
+          },
+          {
+            "name": "G_UID",
+            "value": "25960"
+          },
+          {
+            "name": "G_cnfr_uid",
+            "value": "25960"
+          },
+          {
+            "name": "G_isPamirs",
+            "value": ""
+          },
+          {
+            "name": "G_renewExpress",
+            "value": "[{\"express\":\"1/19/2026\",\"uid\":25960,\"tenantId\":1855}]"
+          },
+          {
+            "name": "G_pamirsAuthUser",
+            "value": "false"
+          },
+          {
+            "name": "G_showTheme",
+            "value": "light"
+          },
+          {
+            "name": "G_pm5",
+            "value": "bG1oMDIxMTUyTE1I"
+          },
+          {
+            "name": "G_aLFlag",
+            "value": "true"
+          },
+          {
+            "name": "G_regionCode",
+            "value": "+86"
+          },
+          {
+            "name": "G_GangtiseLogConfig",
+            "value": "{\"waitCount\":10,\"waitTIme\":60000,\"sendOnClose\":true,\"urlPrefix\":\"/application/log/log-service/api/behaviorLog/\",\"url\":\"/application/log-service/api/behaviorLog/singleReceive\",\"authUrl\":\"singleReceive\",\"visitorUrl\":\"externalReceive\",\"userId\":\"929101509502930944\",\"uid\":25960,\"timeDiff\":0,\"deviceCode\":\"1\",\"productCode\":10018,\"productVersion\":\"v2.7.24\",\"ipaddr\":\"39.144.106.136\",\"tenant_id\":1855,\"clientType\":\"\"}"
+          },
+          {
+            "name": "G_detailOnly",
+            "value": "false"
+          },
+          {
+            "name": "G_rPFlag",
+            "value": "true"
+          },
+          {
+            "name": "G_cnfr_user_name",
+            "value": "李沐恒"
+          },
+          {
+            "name": "G_userCategory",
+            "value": "1"
+          },
+          {
+            "name": "G_user",
+            "value": "{\"access_token\":\"3af43b75-f077-40c9-a449-43de7ced1725\",\"expires_in\":10800,\"user_id\":\"929101509502930944\",\"uid\":25960,\"identifier\":\"13651677354\",\"user_name\":\"李沐恒\",\"user_key\":\"f1e7fecaf460480693e4abb50132bfcf\",\"user_category\":1,\"user_level\":0,\"ipaddr\":\"39.144.106.136\",\"tenant_id\":1855,\"product_code\":10018,\"product_type\":null,\"client_category\":1,\"version\":\"1.0.0\",\"time\":1768804766,\"long_term\":0}"
+          },
+          {
+            "name": "tab",
+            "value": "{\"tabs\":[{\"code\":\"20088\",\"name\":\"首页\",\"value\":\"home\",\"alive\":\"home\",\"mod_id\":\"\",\"func_id\":\"\",\"keep\":true,\"time\":1768804767036}],\"activeTab\":{\"code\":\"20088\",\"name\":\"首页\",\"value\":\"home\",\"alive\":\"home\",\"mod_id\":\"\",\"func_id\":\"\",\"keep\":true,\"time\":1768804767036,\"routePath\":\"home\"},\"tabTempParams\":{\"home\":\"\"},\"backTabList\":[{}],\"saveTabs\":false}"
+          },
+          {
+            "name": "G_remberPassword",
+            "value": "true"
+          },
+          {
+            "name": "G_USER_ID",
+            "value": "929101509502930944"
+          },
+          {
+            "name": "G_PM5",
+            "value": "bG1oMDIxMTUyTE1I"
+          },
+          {
+            "name": "G_noChangeProduct",
+            "value": "1"
+          },
+          {
+            "name": "G_region",
+            "value": "+86"
+          },
+          {
+            "name": "G_userPrivacyPolicy",
+            "value": "true"
+          },
+          {
+            "name": "G_activeProduct",
+            "value": "{\"productCode\":10018,\"productName\":\"云投研买方版\",\"productType\":2,\"tenantId\":1855,\"tenantCode\":\"T00013631\",\"tenantName\":\"中泰证券（自营）\",\"comboId\":661,\"endValid\":1771603199000,\"tenantIpaddrControl\":null,\"pickerName\":\"中泰证券（自营）云投研\"}"
+          },
+          {
+            "name": "G_tenantId",
+            "value": "1855"
+          },
+          {
+            "name": "G_timeDiff",
+            "value": "0"
+          },
+          {
+            "name": "G_cnfr_phone",
+            "value": "13651677354"
+          },
+          {
+            "name": "G_token",
+            "value": "3af43b75-f077-40c9-a449-43de7ced1725"
+          },
+          {
+            "name": "G_fingerprintId",
+            "value": "d206bd0f520382446e30aa48779f45b9"
+          },
+          {
+            "name": "G_loginPhone",
+            "value": "13651677354"
+          },
+          {
+            "name": "G_user_key",
+            "value": "f1e7fecaf460480693e4abb50132bfcf"
+          },
+          {
+            "name": "G_autoLogin",
+            "value": "true"
+          }
+        ]
+      }
+    ]
+  }
+}

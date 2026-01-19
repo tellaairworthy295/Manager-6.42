@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timedelta
 import re
 from typing import List, Optional, Dict, Any
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, UniqueConstraint
+from sqlalchemy import Float, create_engine, Column, Integer, String, Text, DateTime, Boolean, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from sqlalchemy.pool import QueuePool
@@ -75,6 +75,19 @@ class Stock(Base):
             "analysis": self.analysis,
         }
 
+class StockStats(Base):
+    __tablename__ = "stock_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(String(20), nullable=False, index=True)
+    up = Column(Integer, nullable=False)
+    down = Column(Integer, nullable=False)
+    even = Column(Integer, nullable=False)
+    break_rate = Column(Float, nullable=False)
+    up_number = Column(Integer, nullable=False)
+    down_number = Column(Integer, nullable=False)
+    max_even = Column(Integer, nullable=False)
+    max_break = Column(Integer, nullable=False)
 
 class NewsAnalysis(Base):
     """Model for news analysis table."""
@@ -99,7 +112,7 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String(64), nullable=False)
-    email = Column(String(254))
+    email = Column(String(254), unique=True, nullable=False)
     source = Column(String(100), nullable=False)
     phone = Column(String(40))
     password = Column(String(128))
@@ -377,14 +390,14 @@ class StockRepository:
         with self.db_manager.get_session() as session:
             stocks = (
                 session.query(Stock)
-                .filter(Stock.date == today)
+                .filter(Stock.date == str(today))
                 .all()
             )
             result = [
                 {
                     "stock": s.stock,
                     "code": s.code,
-                    "analysis": s.analysis
+                    "analysis": s.analysis,
                 }
                 for s in stocks
             ]
@@ -434,6 +447,75 @@ class StockRepository:
 
             session.commit()
             return count
+
+class StockStatsRepository:
+    """Repository for stock operations with safe upsert."""
+
+    def __init__(self, db_manager):
+        self.db_manager = db_manager
+    
+    def add_market_stats(self, market_stats: dict):
+        """
+        Insert or update a row in the stock_stats table for a given date. 
+        If the row for date exists, update fields. If not, insert new.
+        `market_stats` must include: date, up, down, even, break_rate, up_number, down_number, max_even, max_break
+        """
+        with self.db_manager.get_session() as session:
+            date = str(market_stats.get("date"))
+            existing = (
+                session.query(StockStats)
+                .filter(StockStats.date == date)
+                .first()
+            )
+            if existing:
+                # Update fields
+                existing.up = market_stats.get("up")
+                existing.down = market_stats.get("down")
+                existing.even = market_stats.get("even")
+                existing.break_rate = market_stats.get("break_rate")
+                existing.up_number = market_stats.get("up_number")
+                existing.down_number = market_stats.get("down_number")
+                existing.max_even = market_stats.get("max_even")
+                existing.max_break = market_stats.get("max_break")
+            else:
+                # Insert new
+                new_stats = StockStats(
+                    date = market_stats.get("date"),
+                    up = market_stats.get("up"),
+                    down = market_stats.get("down"),
+                    even = market_stats.get("even"),
+                    break_rate = market_stats.get("break_rate"),
+                    up_number = market_stats.get("up_number"),
+                    down_number = market_stats.get("down_number"),
+                    max_even = market_stats.get("max_even"),
+                    max_break = market_stats.get("max_break"),
+                )
+                session.add(new_stats)
+            session.commit()
+    
+    def get_market_stats(self, days: int):
+        with self.db_manager.get_session() as session:
+            all_stats = (
+                session.query(StockStats)
+                .order_by(StockStats.date.asc())
+                .limit(days)
+                .all()
+            )
+            # 转成字典列表，避免 detached instance
+            return [
+                {
+                    "date": s.date,
+                    "up": s.up,
+                    "down": s.down,
+                    "even": s.even,
+                    "break_rate": s.break_rate,
+                    "up_number": s.up_number,
+                    "down_number": s.down_number,
+                    "max_even": s.max_even,
+                    "max_break": s.max_break,
+                }
+                for s in all_stats
+            ]
 
 
 class NewsAnalysisRepository:
@@ -516,22 +598,33 @@ class UsersRepository:
     def get_email_by_user_id(self, user_id: str) -> Optional[str]:
         """
         Get a valid email address for a specific user_id.
-        Returns the first non-empty, non-null, non-NaN email found for the user_id.
+        Since email is unique, return the first valid one for the user_id.
         """
         with self.db_manager.get_session() as session:
-            users = (
+            user = (
                 session.query(User)
                 .filter(User.user_id == user_id)
-                .all()
+                .first()
             )
-            for user in users:
+            if user:
                 email = getattr(user, "email", None)
-                if email is not None:
-                    email_str = str(email).strip()
-                    if email_str and email_str.lower() not in {"null", "nan"}:
-                        return email_str
+                if email and email.strip() and email.lower() not in {"null", "nan"}:
+                    return email
             return None
-
+    
+    def get_user_id_by_email(self, email: str) -> Optional[str]:
+        with self.db_manager.get_session() as session:
+            user = (
+                session.query(User)
+                .filter(User.email == email)
+                .first()
+            )
+            if user:
+                user_id = getattr(user, "user_id", None)
+                if user_id and user_id.strip() and email.lower() not in {"null", "nan"}:
+                    return user_id
+            return None
+            
     def get_all_users(self) -> List[Dict[str, Any]]:
         """Get all users."""
         with self.db_manager.get_session() as session:
@@ -557,3 +650,4 @@ class UsersRepository:
                     seen.add(email_str)
                     filtered_emails.append(email_str)
             return filtered_emails
+

@@ -28,7 +28,8 @@
         "code_selector": ".fs12-bold-ash",
         "analysis_selector": "pre",
         "image": true,
-        "cookies": true
+        "cookies": true,
+        "market_number": null
       },
       "https://xuangutong.com.cn/dingpan": {
         "name": "xuangutong",
@@ -38,7 +39,9 @@
         "code_selector": ".stock-title a",
         "analysis_selector": ".stock-reason span.line-clamp",
         "image": false,
-        "cookies": true
+        "cookies": true,
+        "market_number": {"up": "#fluctuation-title .-market-color--red",
+                          "down": "#fluctuation-title .-market-color--green"}
       }
     },
   "agent": {

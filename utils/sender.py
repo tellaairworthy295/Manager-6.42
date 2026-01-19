@@ -5,9 +5,12 @@ from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
 import json
+import time
 
 # --- Import DB layer for accessing emails by user_id or globally ---
 from utils.database import get_db_manager, UsersRepository
+from utils.logging_config import get_others_logger
+logger = get_others_logger()
 
 class EmailConfig:
     """
@@ -116,11 +119,17 @@ def send_email_with_attachments(
             )
             msg.attach(part)
 
-    # --- Send via SMTP ---
-    try:
-        server = smtplib.SMTP_SSL(smtp_server, smtp_port)
-        server.login(sender_email, sender_password)
-        server.send_message(msg, from_addr=sender_email, to_addrs=receivers)
-        server.quit()
-    except Exception as e:
-        pass
+    # --- Send via SMTP with retry and logging ---
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+            server.login(sender_email, sender_password)
+            server.send_message(msg, from_addr=sender_email, to_addrs=receivers)
+            server.quit()
+            break  # Success; exit the retry loop
+        except Exception as e:
+            if attempt < max_attempts - 1:
+                time.sleep(5)  # Wait before retrying
+            else:
+                logger.error(f"Failed to send email after {max_attempts} attempts: {e}")
