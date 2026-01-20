@@ -1,15 +1,10 @@
 import os
 import re
 import unicodedata
-import matplotlib.pyplot as plt
 import pandas as pd
-from matplotlib import font_manager
-
 from utils.database import StockStatsRepository, get_db_manager
 from .preprocess import preprecess_image
 from .ocr_api import ocr_image_safe
-import matplotlib
-matplotlib.use('Agg')
 # Configure loguru for to_excel module
 from utils.logging_config import get_stock_logger
 
@@ -158,12 +153,12 @@ def draw_and_save(rec_texts: list[str], market_number: dict, date: str, days: in
         - 涨停数、跌停数、连板数、破板数共用一个y轴（左），上涨家数/下跌家数共用一个y轴（右）
     2. 新数据写入数据库表 stock_stats
     """
-    # === 字体管理 ===
-    try:
-        my_font = font_manager.FontProperties(fname=FONT_PATH)
-    except Exception as e:
-        logger.warning(f"Failed to load FONT_PATH '{FONT_PATH}': {e}, using default font.")
-        my_font = None
+    # # === 字体管理 ===
+    # try:
+    #     my_font = font_manager.FontProperties(fname=FONT_PATH)
+    # except Exception as e:
+    #     logger.warning(f"Failed to load FONT_PATH '{FONT_PATH}': {e}, using default font.")
+    #     my_font = None
 
     # 数据抽取
     max_even, max_break = _get_maxEven_maxBreak(rec_texts)
@@ -175,106 +170,107 @@ def draw_and_save(rec_texts: list[str], market_number: dict, date: str, days: in
 
     new_stats = {
         "date": date,
-        "up": trendings["up"],
-        "down": trendings["down"],
+        "up_limit": trendings["up"],
+        "down_limit": trendings["down"],
         "even": trendings["even"],
         "break_rate": trendings["break_rate"],
-        "up_number": int(market_number.get("up") or 0),
-        "down_number": int(market_number.get("down") or 0),
+        "up_fluctuation": int(market_number.get("up_limit") or 0),
+        "down_fluctuation": int(market_number.get("down_limit") or 0),
+        "up_limit_st": int(market_number.get("up_limit_st") or 0),
+        "down_limit_st": int(market_number.get("down_limit_st") or 0),
         "max_even": int(max_even),
         "max_break": int(max_break),
     }
     repo.add_market_stats(new_stats)
 
-    # === [1] 查询最近90天数据绘图 ===
-    df_records = repo.get_market_stats(days)
-    if not df_records:
-        logger.error("No stock_stats historical data found, not drawing charts.")
-        return
+    # # ===查询最近90天数据绘图 ===
+    # df_records = repo.get_market_stats(days)
+    # if not df_records:
+    #     logger.error("No stock_stats historical data found, not drawing charts.")
+    #     return
 
-    # 转为DataFrame
-    df = pd.DataFrame(df_records)
-    df = df.sort_values("date")  # 保证升序，日期从旧到新
+    # # 转为DataFrame
+    # df = pd.DataFrame(df_records)
+    # df = df.sort_values("date")  # 保证升序，日期从旧到新
 
-    # ---- 画破板率 ----
-    fig1, ax1 = plt.subplots(figsize=(8, 4))
-    ax1.plot(df["date"], df["break_rate"], marker='o', color='orange', label="破板率(%)")
-    ax1.set_ylabel("破板率(%)", fontproperties=my_font)
-    ax1.set_xlabel("日期", fontproperties=my_font)
-    ax1.set_title("破板率趋势", fontproperties=my_font)
-    ax1.legend(loc="upper left", prop=my_font)
+    # # ---- 画破板率 ----
+    # fig1, ax1 = plt.subplots(figsize=(8, 4))
+    # ax1.plot(df["date"], df["break_rate"], marker='o', color='orange', label="破板率(%)")
+    # ax1.set_ylabel("破板率(%)", fontproperties=my_font)
+    # ax1.set_xlabel("日期", fontproperties=my_font)
+    # ax1.set_title("破板率趋势", fontproperties=my_font)
+    # ax1.legend(loc="upper left", prop=my_font)
 
-    # 设置X轴刻度
-    xticks_idx = []
-    n = len(df["date"])
-    max_show = 7 if n > 7 else n
-    if n > max_show:
-        xticks_idx = [i for i in range(0, n, max(n // (max_show-1), 1))]
-        # always ensure last label shows
-        if xticks_idx[-1] != n-1:
-            xticks_idx.append(n-1)
-    else:
-        xticks_idx = list(range(n))
-    ax1.set_xticks([df.index[i] for i in xticks_idx])
-    ax1.set_xticklabels([df["date"].iloc[i] for i in xticks_idx], rotation=90, fontproperties=my_font if my_font else None)
+    # # 设置X轴刻度
+    # xticks_idx = []
+    # n = len(df["date"])
+    # max_show = 7 if n > 7 else n
+    # if n > max_show:
+    #     xticks_idx = [i for i in range(0, n, max(n // (max_show-1), 1))]
+    #     # always ensure last label shows
+    #     if xticks_idx[-1] != n-1:
+    #         xticks_idx.append(n-1)
+    # else:
+    #     xticks_idx = list(range(n))
+    # ax1.set_xticks([df.index[i] for i in xticks_idx])
+    # ax1.set_xticklabels([df["date"].iloc[i] for i in xticks_idx], rotation=90, fontproperties=my_font if my_font else None)
 
-    for label in ax1.get_xticklabels():
-        if my_font:
-            label.set_fontproperties(my_font)
-    for label in ax1.get_yticklabels():
-        if my_font:
-            label.set_fontproperties(my_font)
-    plt.tight_layout()
-    plt.savefig("excel/破板率趋势.png")
-    plt.close(fig1)
+    # for label in ax1.get_xticklabels():
+    #     if my_font:
+    #         label.set_fontproperties(my_font)
+    # for label in ax1.get_yticklabels():
+    #     if my_font:
+    #         label.set_fontproperties(my_font)
+    # plt.tight_layout()
+    # plt.savefig("excel/break_rate.png")
+    # plt.close(fig1)
 
-    # ---- 多数据共图 ----
-    fig2, ax_left = plt.subplots(figsize=(12, 5))
-    # 左轴
-    ax_left.plot(df["date"], df["up"], label="涨停家数", marker='o')
-    ax_left.plot(df["date"], df["down"], label="跌停家数", marker='o')
-    ax_left.plot(df["date"], df["even"], label="连板家数", marker='o')
-    ax_left.plot(df["date"], df["max_even"], label="最高连板", linestyle="--", marker='x')
-    ax_left.plot(df["date"], df["max_break"], label="最高断板", linestyle="--", marker='x')
-    ax_left.set_ylabel("个数", fontproperties=my_font)
-    ax_left.set_xlabel("日期", fontproperties=my_font)
+    # # ---- 多数据共图 ----
+    # fig2, ax_left = plt.subplots(figsize=(12, 5))
+    # # 左轴
+    # ax_left.plot(df["date"], df["up_limit"], label="涨停家数", marker='o')
+    # ax_left.plot(df["date"], df["down_limit"], label="跌停家数", marker='o')
+    # ax_left.plot(df["date"], df["even"], label="连板家数", marker='o')
+    # ax_left.plot(df["date"], df["max_even"], label="最高连板", linestyle="--", marker='x')
+    # ax_left.plot(df["date"], df["max_break"], label="最高断板", linestyle="--", marker='x')
+    # ax_left.set_ylabel("个数", fontproperties=my_font)
+    # ax_left.set_xlabel("日期", fontproperties=my_font)
 
-    # 右轴
-    ax_right = ax_left.twinx()
-    ax_right.plot(df["date"], df["up_number"], label="上涨家数", color="#1e90ff", alpha=0.5, marker='s')
-    ax_right.plot(df["date"], df["down_number"], label="下跌家数", color="#dc143c", alpha=0.5, marker='s')
-    ax_right.set_ylabel("上涨/下跌家数", fontproperties=my_font)
+    # # 右轴
+    # ax_right = ax_left.twinx()
+    # ax_right.plot(df["date"], df["up_fluctuation"], label="上涨家数", color="#1e90ff", alpha=0.5, marker='s')
+    # ax_right.set_ylabel("上涨家数", fontproperties=my_font)
 
-    # 设置X轴刻度（双轴保证一致）
-    n = len(df["date"])
-    max_show = 7 if n > 7 else n
-    if n > max_show:
-        xticks_idx = [i for i in range(0, n, max(n // (max_show-1), 1))]
-        if xticks_idx[-1] != n-1:
-            xticks_idx.append(n-1)
-    else:
-        xticks_idx = list(range(n))
-    ax_left.set_xticks([df.index[i] for i in xticks_idx])
-    ax_left.set_xticklabels([df["date"].iloc[i] for i in xticks_idx], rotation=90, fontproperties=my_font if my_font else None)
+    # # 设置X轴刻度（双轴保证一致）
+    # n = len(df["date"])
+    # max_show = 7 if n > 7 else n
+    # if n > max_show:
+    #     xticks_idx = [i for i in range(0, n, max(n // (max_show-1), 1))]
+    #     if xticks_idx[-1] != n-1:
+    #         xticks_idx.append(n-1)
+    # else:
+    #     xticks_idx = list(range(n))
+    # ax_left.set_xticks([df.index[i] for i in xticks_idx])
+    # ax_left.set_xticklabels([df["date"].iloc[i] for i in xticks_idx], rotation=90, fontproperties=my_font if my_font else None)
 
-    # X/Y轴刻度字体
-    for label in ax_left.get_xticklabels() + ax_left.get_yticklabels():
-        if my_font:
-            label.set_fontproperties(my_font)
-    for label in ax_right.get_yticklabels():
-        if my_font:
-            label.set_fontproperties(my_font)
+    # # X/Y轴刻度字体
+    # for label in ax_left.get_xticklabels() + ax_left.get_yticklabels():
+    #     if my_font:
+    #         label.set_fontproperties(my_font)
+    # for label in ax_right.get_yticklabels():
+    #     if my_font:
+    #         label.set_fontproperties(my_font)
 
-    # 图例合并（左右y轴）
-    handles_left, labels_left = ax_left.get_legend_handles_labels()
-    handles_right, labels_right = ax_right.get_legend_handles_labels()
-    ax_left.legend(handles_left + handles_right, labels_left + labels_right, loc="best", prop=my_font)
-    ax_left.set_title("市场关键统计走势(近90天)", fontproperties=my_font)
-    plt.tight_layout()
-    plt.savefig("excel/市场统计趋势.png")
-    plt.close(fig2)
+    # # 图例合并（左右y轴）
+    # handles_left, labels_left = ax_left.get_legend_handles_labels()
+    # handles_right, labels_right = ax_right.get_legend_handles_labels()
+    # ax_left.legend(handles_left + handles_right, labels_left + labels_right, loc="best", prop=my_font)
+    # ax_left.set_title("市场关键统计走势(近90天)", fontproperties=my_font)
+    # plt.tight_layout()
+    # plt.savefig("excel/market_stats.png")
+    # plt.close(fig2)
 
-    logger.info("Charts saved to excel/破板率趋势.png and excel/市场统计趋势.png")
+    # logger.info("Charts saved to excel/break_rate.png and excel/market_stats.png")
 
 def excel_flow(market_number: dict, date: str, days: int = 5):
     scraped_dir = "images"

@@ -40,8 +40,12 @@
         "analysis_selector": ".stock-reason span.line-clamp",
         "image": false,
         "cookies": true,
-        "market_number": {"up": "#fluctuation-title .-market-color--red",
-                          "down": "#fluctuation-title .-market-color--green"}
+        "market_number": {
+          "up_limit": "#limit-title .-market-color--red", 
+          "up_fluctuation_st": "#fluctuation-title .-market-color--red",
+          "down_limit": "#limit-title .-market-color--green",
+          "down_fluctuation_st": "#fluctuation-title .-market-color--green"
+        }
       }
     },
   "agent": {

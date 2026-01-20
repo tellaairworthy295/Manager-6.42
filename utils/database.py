@@ -80,12 +80,14 @@ class StockStats(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(String(20), nullable=False, index=True)
-    up = Column(Integer, nullable=False)
-    down = Column(Integer, nullable=False)
+    up_limit = Column(Integer, nullable=False)
+    down_limit = Column(Integer, nullable=False)
+    up_limit_st = Column(Integer, nullable=False)
+    down_limit_st = Column(Integer, nullable=False)
     even = Column(Integer, nullable=False)
     break_rate = Column(Float, nullable=False)
-    up_number = Column(Integer, nullable=False)
-    down_number = Column(Integer, nullable=False)
+    up_fluctuation = Column(Integer, nullable=False)
+    down_fluctuation = Column(Integer, nullable=False)
     max_even = Column(Integer, nullable=False)
     max_break = Column(Integer, nullable=False)
 
@@ -449,16 +451,17 @@ class StockRepository:
             return count
 
 class StockStatsRepository:
-    """Repository for stock operations with safe upsert."""
+    """Repository for stock_stats operations with safe upsert."""
 
     def __init__(self, db_manager):
         self.db_manager = db_manager
-    
+
     def add_market_stats(self, market_stats: dict):
         """
-        Insert or update a row in the stock_stats table for a given date. 
+        Insert or update a row in the stock_stats table for a given date.
         If the row for date exists, update fields. If not, insert new.
-        `market_stats` must include: date, up, down, even, break_rate, up_number, down_number, max_even, max_break
+        `market_stats` must include: date, up_limit, down_limit, up_limit_st,
+        down_limit_st, even, break_rate, up_fluctuation, down_fluctuation, max_even, max_break
         """
         with self.db_manager.get_session() as session:
             date = str(market_stats.get("date"))
@@ -468,49 +471,53 @@ class StockStatsRepository:
                 .first()
             )
             if existing:
-                # Update fields
-                existing.up = market_stats.get("up")
-                existing.down = market_stats.get("down")
+                existing.up_limit = market_stats.get("up_limit")
+                existing.down_limit = market_stats.get("down_limit")
+                existing.up_limit_st = market_stats.get("up_limit_st")
+                existing.down_limit_st = market_stats.get("down_limit_st")
                 existing.even = market_stats.get("even")
                 existing.break_rate = market_stats.get("break_rate")
-                existing.up_number = market_stats.get("up_number")
-                existing.down_number = market_stats.get("down_number")
+                existing.up_fluctuation = market_stats.get("up_fluctuation")
+                existing.down_fluctuation = market_stats.get("down_fluctuation")
                 existing.max_even = market_stats.get("max_even")
                 existing.max_break = market_stats.get("max_break")
             else:
-                # Insert new
                 new_stats = StockStats(
-                    date = market_stats.get("date"),
-                    up = market_stats.get("up"),
-                    down = market_stats.get("down"),
-                    even = market_stats.get("even"),
-                    break_rate = market_stats.get("break_rate"),
-                    up_number = market_stats.get("up_number"),
-                    down_number = market_stats.get("down_number"),
-                    max_even = market_stats.get("max_even"),
-                    max_break = market_stats.get("max_break"),
+                    date=market_stats.get("date"),
+                    up_limit=market_stats.get("up_limit"),
+                    down_limit=market_stats.get("down_limit"),
+                    up_limit_st=market_stats.get("up_limit_st"),
+                    down_limit_st=market_stats.get("down_limit_st"),
+                    even=market_stats.get("even"),
+                    break_rate=market_stats.get("break_rate"),
+                    up_fluctuation=market_stats.get("up_fluctuation"),
+                    down_fluctuation=market_stats.get("down_fluctuation"),
+                    max_even=market_stats.get("max_even"),
+                    max_break=market_stats.get("max_break"),
                 )
                 session.add(new_stats)
             session.commit()
-    
+
     def get_market_stats(self, days: int):
         with self.db_manager.get_session() as session:
             all_stats = (
-                session.query(StockStats)
-                .order_by(StockStats.date.asc())
-                .limit(days)
-                .all()
+                session.query(StockStats) \
+                .order_by(StockStats.date.desc()) \
+                .limit(days) \
+                .all()[::-1]
             )
             # 转成字典列表，避免 detached instance
             return [
                 {
                     "date": s.date,
-                    "up": s.up,
-                    "down": s.down,
+                    "up_limit": s.up_limit,
+                    "down_limit": s.down_limit,
+                    "up_limit_st": s.up_limit_st,
+                    "down_limit_st": s.down_limit_st,
                     "even": s.even,
                     "break_rate": s.break_rate,
-                    "up_number": s.up_number,
-                    "down_number": s.down_number,
+                    "up_fluctuation": s.up_fluctuation,
+                    "down_fluctuation": s.down_fluctuation,
                     "max_even": s.max_even,
                     "max_break": s.max_break,
                 }

@@ -24,7 +24,7 @@ from tasks.news_tasks import scrape_all_news
 from tasks.agent_tasks import display_agent_task_main, scrape_agent_task
 from scraper.cookies_getter import update_common_cookies, update_agent_cookies
 from utils.sender import send_email_with_attachments, load_email_config_from_json
-from utils.database import get_db_manager, UsersRepository, StockRepository
+from utils.database import StockStatsRepository, get_db_manager, UsersRepository, StockRepository
 from utils.validators import save_user_prompt, split_prompt_to_list, validate_and_prepare_cookies, validate_scrape_agent_request
 from utils.logging_config import get_others_logger
 from utils.redis_utils import create_aioredis, close_loop_redis, get_aioredis_client, get_redis_client
@@ -124,6 +124,14 @@ app.include_router(router)
 async def ping():
     return {"status": "pong"}
 #==============================APP===================================================
+@app.get("/api/trendings")
+def fetch_market_stats(days: int = 30):
+    db_manager = get_db_manager()
+    repo = StockStatsRepository(db_manager)
+    df_records = repo.get_market_stats(days)
+    return df_records
+
+
 # NEW: list all html files for toggle
 @app.get("/list/{user}/{conversation_id}")
 async def list_html_files(user: str, conversation_id: str):
