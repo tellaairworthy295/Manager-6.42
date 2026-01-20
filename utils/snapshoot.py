@@ -56,7 +56,7 @@ UNIFIED_STREAM_OBSERVER_JS = r"""
     timer = setTimeout(() => {
       rebuildBuffer();
       timer = null;
-    }, 120);
+    }, 500);
   };
 
   refreshTargets();
@@ -95,7 +95,7 @@ async def stream_dom_text(
 ):
     last_text = ""
     stable_rounds = 0
-    sleep = 0.3
+    sleep = 0.5
 
     while not finished_flag.is_set():
         text = await page.evaluate(
@@ -105,7 +105,7 @@ async def stream_dom_text(
         if text and len(text) - len(last_text) > 20:
             last_text = text
             stable_rounds = 0
-            sleep = 0.3
+            sleep = 0.5
 
             await redis.xadd(
                 f"sse:{user_id}_{conversation_id}_{source}",
@@ -195,7 +195,7 @@ async def stream_via_selector_polling(
     MAX_WAIT_SECONDS = 15 * 60
     asyncio.create_task(wait_for_finish_selector(page, finish_locator, MAX_WAIT_SECONDS, finished_event))
     stable_rounds = 0
-    sleep = 0.3
+    sleep = 0.5
     while not finished_event.is_set():
         text = await page.eval_on_selector_all( 
             "div.flex.flex-col.agent-share_wrapper_inner", 
@@ -221,7 +221,7 @@ async def stream_via_selector_polling(
         if stable_rounds > 4:
             sleep = min(0.8, sleep * 1.25)
         else:
-            sleep = 0.3
+            sleep = 0.5
 
         await asyncio.sleep(sleep)
 

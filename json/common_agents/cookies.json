@@ -44,7 +44,7 @@
           },
           {
             "name": "G_renewExpress",
-            "value": "[{\"express\":\"1/19/2026\",\"uid\":25960,\"tenantId\":1855}]"
+            "value": "[{\"express\":\"1/20/2026\",\"uid\":25960,\"tenantId\":1855}]"
           },
           {
             "name": "G_pamirsAuthUser",
@@ -68,7 +68,7 @@
           },
           {
             "name": "G_GangtiseLogConfig",
-            "value": "{\"waitCount\":10,\"waitTIme\":60000,\"sendOnClose\":true,\"urlPrefix\":\"/application/log/log-service/api/behaviorLog/\",\"url\":\"/application/log-service/api/behaviorLog/singleReceive\",\"authUrl\":\"singleReceive\",\"visitorUrl\":\"externalReceive\",\"userId\":\"929101509502930944\",\"uid\":25960,\"timeDiff\":0,\"deviceCode\":\"1\",\"productCode\":10018,\"productVersion\":\"v2.7.24\",\"ipaddr\":\"39.144.106.136\",\"tenant_id\":1855,\"clientType\":\"\"}"
+            "value": "{\"waitCount\":10,\"waitTIme\":60000,\"sendOnClose\":true,\"urlPrefix\":\"/application/log/log-service/api/behaviorLog/\",\"url\":\"/application/log-service/api/behaviorLog/singleReceive\",\"authUrl\":\"singleReceive\",\"visitorUrl\":\"externalReceive\",\"userId\":\"929101509502930944\",\"uid\":25960,\"timeDiff\":\"0\",\"deviceCode\":\"1\",\"productCode\":10018,\"productVersion\":\"v2.7.24\",\"ipaddr\":\"39.144.106.136\",\"tenant_id\":1855,\"clientType\":\"\"}"
           },
           {
             "name": "G_detailOnly",
@@ -88,11 +88,11 @@
           },
           {
             "name": "G_user",
-            "value": "{\"access_token\":\"3af43b75-f077-40c9-a449-43de7ced1725\",\"expires_in\":10800,\"user_id\":\"929101509502930944\",\"uid\":25960,\"identifier\":\"13651677354\",\"user_name\":\"李沐恒\",\"user_key\":\"f1e7fecaf460480693e4abb50132bfcf\",\"user_category\":1,\"user_level\":0,\"ipaddr\":\"39.144.106.136\",\"tenant_id\":1855,\"product_code\":10018,\"product_type\":null,\"client_category\":1,\"version\":\"1.0.0\",\"time\":1768804766,\"long_term\":0}"
+            "value": "{\"access_token\":\"f6273b9a-a0e6-49d0-804f-700783feea4b\",\"expires_in\":10377,\"user_id\":\"929101509502930944\",\"uid\":25960,\"identifier\":\"13651677354\",\"user_name\":\"李沐恒\",\"user_key\":\"f1e7fecaf460480693e4abb50132bfcf\",\"user_category\":1,\"user_level\":0,\"ipaddr\":\"39.144.106.136\",\"tenant_id\":1855,\"product_code\":10018,\"product_type\":null,\"client_category\":1,\"version\":\"1.0.0\",\"time\":1768879281,\"long_term\":0}"
           },
           {
             "name": "tab",
-            "value": "{\"tabs\":[{\"code\":\"20088\",\"name\":\"首页\",\"value\":\"home\",\"alive\":\"home\",\"mod_id\":\"\",\"func_id\":\"\",\"keep\":true,\"time\":1768804767036}],\"activeTab\":{\"code\":\"20088\",\"name\":\"首页\",\"value\":\"home\",\"alive\":\"home\",\"mod_id\":\"\",\"func_id\":\"\",\"keep\":true,\"time\":1768804767036,\"routePath\":\"home\"},\"tabTempParams\":{\"home\":\"\"},\"backTabList\":[{}],\"saveTabs\":false}"
+            "value": "{\"tabs\":[{\"code\":\"20088\",\"name\":\"首页\",\"value\":\"home\",\"alive\":\"home\",\"mod_id\":\"\",\"func_id\":\"\",\"keep\":true,\"time\":1768879282190}],\"activeTab\":{\"code\":\"20088\",\"name\":\"首页\",\"value\":\"home\",\"alive\":\"home\",\"mod_id\":\"\",\"func_id\":\"\",\"keep\":true,\"routePath\":\"home\",\"time\":1768879282190},\"tabTempParams\":{\"home\":{\"code\":\"20088\",\"name\":\"首页\",\"value\":\"home\",\"alive\":\"home\",\"mod_id\":\"\",\"func_id\":\"\",\"keep\":true,\"time\":1768879282190,\"routePath\":\"home\"}},\"backTabList\":[],\"saveTabs\":false}"
           },
           {
             "name": "G_remberPassword",
@@ -136,7 +136,7 @@
           },
           {
             "name": "G_token",
-            "value": "3af43b75-f077-40c9-a449-43de7ced1725"
+            "value": "f6273b9a-a0e6-49d0-804f-700783feea4b"
           },
           {
             "name": "G_fingerprintId",

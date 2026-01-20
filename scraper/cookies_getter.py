@@ -77,7 +77,7 @@ class AsyncCookiesHandler:
             manual_pairs = [
                 {"name": "search-to-paipai-guide", "value": "true"},
                 {"name": "paipai-agent-fastsheet-us-guide", "value": "true"},
-                {"name": "search-to-paipai-guide-date", "value": "1767594738604"},
+                {"name": "search-to-paipai-guide-date", "value": "1768879342565"},
                 {"name": "version-market-tip", "value": "1"},
                 {"name": "MODE", "value": "undefined"},
                 {"name": "hasShowpaipaiAnswerRangeGuide", "value": "true"},
@@ -181,7 +181,7 @@ class AsyncCookiesHandler:
         cookies_file_path = f"json/{self.user_id}/cookies.json"
         prev_storage_state = None
 
-        if os.path.exists(cookies_file_path):
+        if os.path.exists(cookies_file_path) and self.validate_before_update:
             try:
                 with open(cookies_file_path, "r", encoding="utf-8") as f:
                     cookies_json = json.load(f)
@@ -206,12 +206,11 @@ class AsyncCookiesHandler:
                 self.page = page
 
                 cookies_valid = False
+                # 1️⃣ Navigate explicitly
+                await page.goto(self.validation_url, wait_until="domcontentloaded", timeout=30000)
 
                 if use_old_state:
                     try:
-                        # 1️⃣ Navigate explicitly
-                        await page.goto(self.validation_url, wait_until="domcontentloaded", timeout=30000)
-
                         # 2️⃣ Bounded SPA settle window (critical)
                         await page.wait_for_timeout(5000)
 

@@ -43,7 +43,7 @@ async def display_agent(page: Page, user_id: str, prompt: list[str], locators, s
     await page.keyboard.press("Enter")
 
     finish_locator = parse_locators(locators.get("finish_locator"))
-    logger.info("Waiting for answer to finish (waiting for download button)...")
+    logger.info(f"Waiting for answer to finish ({source})...")
     if source == 'alphapai':
         await stream_via_mutation_observer(page, source, user_id, conversation_id, finish_locator, dia_count, prompt[0])
     else:
