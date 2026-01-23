@@ -56,7 +56,7 @@ UNIFIED_STREAM_OBSERVER_JS = r"""
     timer = setTimeout(() => {
       rebuildBuffer();
       timer = null;
-    }, 500);
+    }, 600);
   };
 
   refreshTargets();
@@ -107,21 +107,20 @@ async def stream_dom_text(
             stable_rounds = 0
             sleep = 0.5
 
-            await redis.xadd(
-                f"sse:{user_id}_{conversation_id}_{source}",
-                {
-                    "data": json.dumps({
-                        "content": text,
-                        "dia_count": dia_count,
-                    }),
-                },
-                maxlen=1000,
-            )
+            await publish_sse(
+                            redis,
+                            f"sse:{user_id}_{conversation_id}_{source}",
+                            {
+                                "content": text,
+                                "dia_count": dia_count,
+                            }
+                        )
+
             logger.info("PUBLISH %s chars (%s)", len(text), source)
         elif text:
             stable_rounds += 1
-            if stable_rounds > 4:
-                sleep = min(sleep * 1.25, 0.8)
+            if stable_rounds > 3:
+                sleep = 1.5
 
         await asyncio.sleep(sleep)
 
@@ -197,29 +196,31 @@ async def stream_via_selector_polling(
     stable_rounds = 0
     sleep = 0.5
     while not finished_event.is_set():
-        text = await page.eval_on_selector_all( 
-            "div.flex.flex-col.agent-share_wrapper_inner", 
-            "els => els.map(el => el.textContent).join('\\n\\n')" )
+        text = await page.eval_on_selector_all(
+            "div.flex.flex-col.agent-share_wrapper_inner",
+            """
+            (els) => els[els.length - 1]?.textContent || ""
+            """
+        )
 
         if text and len(text) - len(last_text) > 20:
             last_text = text
             stable_rounds = 0
-            await redis.xadd(
-                f"sse:{user_id}_{conversation_id}_{source}",
-                {
-                    "data": json.dumps({
-                        "content": text,
-                        "dia_count": dia_count,
-                    }),
-                },
-                maxlen=1000,
-            )
+            await publish_sse(
+                            redis,
+                            f"sse:{user_id}_{conversation_id}_{source}",
+                            {
+                                "content": text,
+                                "dia_count": dia_count,
+                            }
+                        )
+
             logger.info("PUBLISH %s chars (%s)", len(text), source)
         elif text:
             stable_rounds += 1
 
-        if stable_rounds > 4:
-            sleep = min(0.8, sleep * 1.25)
+        if stable_rounds > 3:
+            sleep = 1.5
         else:
             sleep = 0.5
 
@@ -303,15 +304,25 @@ async def snapshot_dom_state(
     """
 
     snapshot_path.write_text(html_doc, encoding="utf-8")
+    await publish_sse(
+                    redis,
+                    f"sse:{user_id}_{conversation_id}_{source}",
+                    {
+                        "file": f"{source}_{dia_count}.html",
+                        "dia_count": dia_count,
+                    }
+                )
 
-    await redis.xadd(
-        f"sse:{user_id}_{conversation_id}_{source}",
-        {
-            "data": json.dumps({
-                "file": f"{source}_{dia_count}.html",
-                "dia_count": dia_count,
-            }),
-        },
-        maxlen=1000,
-    )
     logger.info("html saved")
+
+
+async def publish_sse(redis, key: str, data: dict, ttl=1800):
+    async with redis.pipeline(transaction=False) as pipe:
+        await pipe.xadd(
+            key,
+            {"data": json.dumps(data)},
+            maxlen=1000,
+            approximate=True,
+        )
+        await pipe.expire(key, ttl)
+        await pipe.execute()

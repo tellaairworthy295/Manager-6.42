@@ -42,9 +42,9 @@
         "cookies": true,
         "market_number": {
           "up_limit": "#limit-title .-market-color--red", 
-          "up_fluctuation_st": "#fluctuation-title .-market-color--red",
+          "up_fluctuation": "#fluctuation-title .-market-color--red",
           "down_limit": "#limit-title .-market-color--green",
-          "down_fluctuation_st": "#fluctuation-title .-market-color--green"
+          "down_fluctuation": "#fluctuation-title .-market-color--green"
         }
       }
     },

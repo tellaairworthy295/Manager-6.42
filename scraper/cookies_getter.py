@@ -77,7 +77,7 @@ class AsyncCookiesHandler:
             manual_pairs = [
                 {"name": "search-to-paipai-guide", "value": "true"},
                 {"name": "paipai-agent-fastsheet-us-guide", "value": "true"},
-                {"name": "search-to-paipai-guide-date", "value": "1768879342565"},
+                {"name": "search-to-paipai-guide-date", "value": "1768962236148"},
                 {"name": "version-market-tip", "value": "1"},
                 {"name": "MODE", "value": "undefined"},
                 {"name": "hasShowpaipaiAnswerRangeGuide", "value": "true"},

@@ -78,16 +78,41 @@ async def sse_stream(
     channel: str,
     redis: aioredis.Redis = Depends(get_redis),
 ):
-    async def event_gen():
-        last_id = "$"  # IMPORTANT: start from latest
+    stream_key = f"sse:{channel}"
 
+    async def event_gen():
+        last_id = "$"  # live-only tail mode
+        logger.info("SSE connected: %s", stream_key)
+
+        # adaptive blocking parameters
+        block_ms = 1000
+        max_block_ms = 5000
+        idle_rounds = 0
+        backoff_threshold = 3
+        task = asyncio.current_task()
+        
         try:
-            while True:
+            while not task.cancelled():
                 entries = await redis.xread(
-                    {f"sse:{channel}": last_id},
-                    block=1000,   # ⬅️ shorter block
-                    count=10,
+                    {stream_key: last_id},
+                    block=block_ms,
+                    count=50,
                 )
+
+                if not entries:
+                    # idle: back off gradually
+                    idle_rounds += 1
+                    if idle_rounds >= backoff_threshold:
+                        block_ms = min(block_ms * 2, max_block_ms)
+
+                    # SSE heartbeat
+                    yield ": ping\n\n"
+                    continue
+
+                # data arrived → reset to low latency
+                idle_rounds = 0
+                block_ms = 1000
+
                 for _, messages in entries:
                     for msg_id, fields in messages:
                         last_id = msg_id
@@ -98,14 +123,15 @@ async def sse_stream(
                         logger.info("RECEIVE %s", payload[:20])
 
                         event_type = "final" if '"file"' in payload else "text"
-                        yield f"event: {event_type}\ndata: {payload}\n\n"
 
-                # ⬅️ heartbeat keeps connection alive
-                yield ": ping\n\n"
+                        yield (
+                            f"id: {msg_id}\n"
+                            f"event: {event_type}\n"
+                            f"data: {payload}\n\n"
+                        )
 
-        except asyncio.CancelledError:
-            logger.info("SSE client disconnected")
-
+        finally:
+            logger.info("SSE disconnected: %s", stream_key)
 
     return StreamingResponse(
         event_gen(),
@@ -116,6 +142,7 @@ async def sse_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
 # Mount the SSE router
 app.include_router(router)
 
@@ -318,42 +345,42 @@ async def scrape_news_api(request: Request):
     return JSONResponse({"status": "queued", "task_id": result.message_id})
     
 
-@app.post("/api/scrape_agent")
-async def scrape_agent_api(request: Request):
-    data = await validate_scrape_agent_request(request)
-    current_prompt = None
-    user_id = data["user_id"]
-    sources = data["sources"]
-    stocks = data["stocks"]
-    prompt = data["prompt"]
+# @app.post("/api/scrape_agent")
+# async def scrape_agent_api(request: Request):
+#     data = await validate_scrape_agent_request(request)
+#     current_prompt = None
+#     user_id = data["user_id"]
+#     sources = data["sources"]
+#     stocks = data["stocks"]
+#     prompt = data["prompt"]
     
-    r = get_redis_client()
-    # 1️⃣ Per-user lock
-    if not r.set(f"agent:lock:user:{user_id}", "1", nx=True, ex=3600):
-        raise ValidationError("您的任务正在处理中，请稍后再试。")
+#     r = get_redis_client()
+#     # 1️⃣ Per-user lock
+#     if not r.set(f"agent:lock:user:{user_id}", "1", nx=True, ex=3600):
+#         raise ValidationError("您的任务正在处理中，请稍后再试。")
 
-    current_prompt = save_user_prompt(user_id, prompt)
-    with open("json/selectors.json", "r", encoding="utf-8") as f:
-        s_locators_map = json.load(f)["agent"]
-    all_cookies = await validate_and_prepare_cookies(user_id.split("_")[-1], sources, True)
-    scrape_agent_task.send(
-        stocks=stocks,
-        user_id=user_id,
-        prompt=current_prompt,
-        all_cookies=all_cookies,
-        s_locators_map=s_locators_map
-    )
+#     current_prompt = save_user_prompt(user_id, prompt)
+#     with open("json/selectors.json", "r", encoding="utf-8") as f:
+#         s_locators_map = json.load(f)["agent"]
+#     all_cookies = await validate_and_prepare_cookies(user_id.split("_")[-1], sources, True)
+#     scrape_agent_task.send(
+#         stocks=stocks,
+#         user_id=user_id,
+#         prompt=current_prompt,
+#         all_cookies=all_cookies,
+#         s_locators_map=s_locators_map
+#     )
     
-    r.incr("agent:global:processing")
-    tasks = int(r.get("agent:global:processing") or 0)
-    return JSONResponse(
-        {
-            "已有任務": tasks,
-            "detail": "您的任务提交成功，请耐心等待。",
-            "prompt": current_prompt,
-        },
-        status_code=202,
-    )
+#     r.incr("agent:global:processing")
+#     tasks = int(r.get("agent:global:processing") or 0)
+#     return JSONResponse(
+#         {
+#             "已有任務": tasks,
+#             "detail": "您的任务提交成功，请耐心等待。",
+#             "prompt": current_prompt,
+#         },
+#         status_code=202,
+#     )
 
 @app.post("/api/display_agent")
 async def display_agent_api(request: Request):

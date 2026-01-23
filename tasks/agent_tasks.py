@@ -345,7 +345,6 @@ async def _process_one_source(
             )
     finally:
         await manager.shutdown()
-        await close_loop_redis()
 
 
 async def _gather_display_agent_sources(
@@ -384,3 +383,4 @@ async def _gather_display_agent_sources(
 
     logger.info(f"[display_agent_task_main] user={user_id}, tasks={len(tasks)} dispatched")
     await asyncio.gather(*tasks)
+    await close_loop_redis()

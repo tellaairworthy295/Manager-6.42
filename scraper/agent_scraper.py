@@ -23,7 +23,6 @@ async def display_agent(page: Page, user_id: str, prompt: list[str], locators, s
     except:
         wait_for_dynamical = locators.get("wait_for_dynamical")
         if wait_for_dynamical:
-            logger.info(f"Waiting for progressively loaded content: {wait_for_dynamical}")
             dyn_locator = parse_locators(wait_for_dynamical)
             try:
                 await page.wait_for_selector(dyn_locator, timeout=5000, state="visible")
