@@ -14,7 +14,7 @@ rss
 *.pdf
 *.log
 *.db
-
+bypass-paywalls-chrome-clean-master/
 # Python virtual environment
 venv/
 env/

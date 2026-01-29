@@ -20,13 +20,13 @@ from scraper.stocks_scraper import main_scraper
 from image_process import excel_flow
 
 from tasks.news_tasks import scrape_all_news
-from tasks.agent_tasks import display_agent_task_main #, scrape_agent_task
+from tasks.agent_tasks import display_agent_task_main
 from scraper.cookies_getter import update_common_cookies, update_agent_cookies
 #from utils.sender import send_email_with_attachments, load_email_config_from_json
 from utils.database import StockStatsRepository, get_db_manager, UsersRepository, StockRepository
-from utils.validators import split_prompt_to_list, validate_and_prepare_cookies #, save_user_promp, validate_scrape_agent_request
+from utils.validators import split_prompt_to_list, validate_and_prepare_cookies
 from utils.logging_config import get_others_logger
-from utils.redis_utils import create_aioredis, close_loop_redis, get_aioredis_client #, get_redis_client
+from utils.redis_utils import create_aioredis, close_loop_redis, get_aioredis_client
 from fastapi.middleware.cors import CORSMiddleware
 # ===== Setup =====
 logger = get_others_logger()
@@ -362,43 +362,6 @@ async def scrape_news_api(request: Request):
     result = scrape_all_news.send(requests, now_str)
     return JSONResponse({"status": "queued", "task_id": result.message_id})
     
-
-# @app.post("/api/scrape_agent")
-# async def scrape_agent_api(request: Request):
-#     data = await validate_scrape_agent_request(request)
-#     current_prompt = None
-#     user_id = data["user_id"]
-#     sources = data["sources"]
-#     stocks = data["stocks"]
-#     prompt = data["prompt"]
-    
-#     r = get_redis_client()
-#     # 1️⃣ Per-user lock
-#     if not r.set(f"agent:lock:user:{user_id}", "1", nx=True, ex=3600):
-#         raise ValidationError("您的任务正在处理中，请稍后再试。")
-
-#     current_prompt = save_user_prompt(user_id, prompt)
-#     with open("json/selectors.json", "r", encoding="utf-8") as f:
-#         s_locators_map = json.load(f)["agent"]
-#     all_cookies = await validate_and_prepare_cookies(user_id.split("_")[-1], sources, True)
-#     scrape_agent_task.send(
-#         stocks=stocks,
-#         user_id=user_id,
-#         prompt=current_prompt,
-#         all_cookies=all_cookies,
-#         s_locators_map=s_locators_map
-#     )
-    
-#     r.incr("agent:global:processing")
-#     tasks = int(r.get("agent:global:processing") or 0)
-#     return JSONResponse(
-#         {
-#             "已有任務": tasks,
-#             "detail": "您的任务提交成功，请耐心等待。",
-#             "prompt": current_prompt,
-#         },
-#         status_code=202,
-#     )
 
 @app.post("/api/display_agent")
 async def display_agent_api(request: Request):
