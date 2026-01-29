@@ -159,8 +159,8 @@ class AsyncCookiesHandler:
             except Exception:
                 pass  # Timeout means not found (normal)
 
-        # import time
-        # time.sleep(60)
+        import time
+        time.sleep(30)
         
         # 7. Wait login dialog to disappear (if locator defined)
         if self.login_dialog_locator:

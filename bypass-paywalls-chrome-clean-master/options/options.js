@@ -1,4 +1,4 @@
-var ext_api = (typeof browser === 'object') ? browser : chrome;
+var ext_api = chrome || browser;
 
 // Saves options to ext_api.storage
 function save_options(event) {

@@ -3,10 +3,10 @@ Database module with SQLAlchemy models and connection pooling for MySQL.
 Provides modular, extensible, and maintainable database operations.
 """
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date, timezone
 import re
 from typing import List, Optional, Dict, Any
-from sqlalchemy import Float, create_engine, Column, Integer, String, Text, DateTime, Boolean, UniqueConstraint
+from sqlalchemy import Date, Float, create_engine, Column, Integer, String, Text, DateTime, Boolean, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from sqlalchemy.pool import QueuePool
@@ -17,15 +17,26 @@ from sqlalchemy import func, case
 from contextlib import contextmanager
 
 from sqlalchemy.orm import declarative_base
+import urllib
 Base = declarative_base()
 
+# def normalize(s):
+#     if not s:
+#         return s
+#     # Remove soft hyphen and zero-width chars
+#     s = s.replace("\u00ad", "")
+#     s = re.sub(r"[\u200b-\u200f\u202a-\u202e]", "", s).strip()
+#     return s
 
 # ==================== Database Models ====================
 
 class NewsArticle(Base):
     """Model for news articles table."""
     __tablename__ = "news_articles"
-    
+    __table_args__ = {
+            'mysql_charset': 'utf8mb4',
+            'mysql_collate': 'utf8mb4_unicode_ci'
+        }
     id = Column(Integer, primary_key=True, autoincrement=True)
     url = Column(String(500), unique=True, nullable=False, index=True)
     source = Column(String(100))
@@ -33,29 +44,20 @@ class NewsArticle(Base):
     content = Column(Text)
     title_zh = Column(Text)
     content_zh = Column(Text)
+    xml_content = Column(Text)
     content_fully_loaded = Column(Boolean, default=False)
-    translation_status = Column(Integer, default=0)
-    scraped_at = Column(DateTime, default=datetime.now, index=True)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert model to dictionary."""
-        return {
-            "url": self.url,
-            "title": self.title,
-            "content": self.content,
-            "source": self.source,
-            "title_zh": self.title_zh,
-            "content_zh": self.content_zh,
-            "content_fully_loaded": self.content_fully_loaded,
-            "translation_status": self.translation_status,
-            "scraped_at": self.scraped_at.isoformat() if self.scraped_at else None,
-        }
+    publish_at = Column(DateTime, nullable=False) 
+    scraped_date = Column(Date, default=date.today, index=True) 
+    scraped_at = Column(DateTime, default=datetime.now) 
 
 
 class Stock(Base):
     """Model for stocks table."""
     __tablename__ = "stocks"
-    
+    __table_args__ = {
+        'mysql_charset': 'utf8mb4',
+        'mysql_collate': 'utf8mb4_unicode_ci'
+    }
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(String(20), nullable=False, index=True)
     stock = Column(String(100), nullable=False)
@@ -79,7 +81,7 @@ class StockStats(Base):
     __tablename__ = "stock_stats"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    date = Column(String(20), nullable=False, index=True)
+    date = Column(Date, nullable=False, index=True)
     up_limit = Column(Integer, nullable=False)
     down_limit = Column(Integer, nullable=False)
     up_limit_st = Column(Integer, nullable=False)
@@ -94,7 +96,10 @@ class StockStats(Base):
 class NewsAnalysis(Base):
     """Model for news analysis table."""
     __tablename__ = "news_analysis"
-    
+    __table_args__ = {
+        'mysql_charset': 'utf8mb4',
+        'mysql_collate': 'utf8mb4_unicode_ci'
+    }
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(String(20), nullable=False, index=True)
     time = Column(DateTime)
@@ -114,7 +119,7 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String(64), nullable=False)
-    email = Column(String(254), unique=True, nullable=False)
+    email = Column(String(254), nullable=False)
     source = Column(String(100), nullable=False)
     phone = Column(String(40))
     password = Column(String(128))
@@ -144,39 +149,31 @@ class DatabaseManager:
     def _initialize_connection(self):
         """
         Initialize MySQL connection with connection pooling.
-        
-        Environment variables (with defaults):
-        - DB_HOST: MySQL host (default: "localhost")
-        - DB_PORT: MySQL port (default: "3306")
-        - DB_USER: MySQL username (default: "muheng")
-        - DB_PASSWORD: MySQL password (default: "")
-        - DB_NAME: Database name (default: "scraped_data")
         """
         # Load config.json once at module load
         if not hasattr(self, "_config_cache"):
             with open("json/config.json", "r", encoding="utf-8") as f:
                 self._config_cache = json.load(f)
         db_config = self._config_cache.get("DatabaseConfig", {})
-        db_host = db_config.get("DB_HOST", "localhost")
+        db_host = db_config.get("DB_HOST", "10.29.88.63")
         db_port = db_config.get("DB_PORT", 3306)
-        db_user = db_config.get("DB_USER", "muheng")
-        db_password = db_config.get("DB_PASSWORD", "123456")
-        db_name = db_config.get("DB_NAME", "scraped_data")
+        db_user = db_config.get("DB_USER", "lmh")
+        db_password = db_config.get("DB_PASSWORD", "lmh@123456")
+        db_name = db_config.get("DB_NAME", "selfdev_test")
         
         # Create connection string
         connection_string = (
-            f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-            f"?charset=utf8mb4&collation=utf8mb4_unicode_ci"
+            f"mysql+pymysql://{db_user}:{urllib.parse.quote_plus(db_password)}@{db_host}:{db_port}/{db_name}?charset=utf8mb4"
         )
         
         # Create engine with connection pooling
         self.engine = create_engine(
             connection_string,
             poolclass=QueuePool,
-            pool_size=10,  # Number of connections to maintain
-            max_overflow=20,  # Maximum number of connections beyond pool_size
+            pool_size=5,  # Number of connections to maintain
+            max_overflow=3,  # Maximum number of connections beyond pool_size
             pool_pre_ping=True,  # Verify connections before using
-            pool_recycle=3600,  # Recycle connections after 1 hour
+            pool_recycle=1800,  # Recycle connections after 1 hour
             echo=False,  # Set to True for SQL query logging
         )
         
@@ -226,12 +223,6 @@ def get_db_manager() -> DatabaseManager:
 
 
 # ==================== Database Operations ====================
-
-class NewsArticleRepository:
-    """Repository for news article operations."""
-    
-    def __init__(self, db_manager: DatabaseManager):
-        self.db_manager = db_manager
     
 class NewsArticleRepository:
     """Repository for news article operations with safe upsert."""
@@ -242,16 +233,25 @@ class NewsArticleRepository:
     def insert_or_update_article(
         self,
         url: str,
+        publish_at,
         source: str,
         title: str,
         content: str,
+        xml_content,
         content_fully_loaded: bool,
         title_zh: Optional[str] = None,
         content_zh: Optional[str] = None,
-        translation_status: int = 0,
     ) -> NewsArticle:
         """Insert or update a news article safely with upsert logic."""
+        # Normalize the content and content_zh
+        # normalized_content = normalize(content)
+        # normalized_content_zh = normalize(content_zh) if content_zh else None
+        # normalized_title_zh = normalize(title_zh) if title_zh else None
         with self.db_manager.get_session() as session:
+            if not publish_at:
+                # Get current UTC time (no timezone adjustment needed)
+                publish_at = datetime.now(timezone.utc)
+                
             stmt = insert(NewsArticle).values(
                 url=url,
                 source=source,
@@ -259,8 +259,10 @@ class NewsArticleRepository:
                 content=content,
                 title_zh=title_zh,
                 content_zh=content_zh,
+                xml_content=xml_content,
                 content_fully_loaded=content_fully_loaded,
-                translation_status=translation_status,
+                publish_at=publish_at,
+                scraped_date=date.today(),
                 scraped_at=datetime.now(),
             )
 
@@ -271,8 +273,10 @@ class NewsArticleRepository:
                 content=stmt.inserted.content,
                 title_zh=stmt.inserted.title_zh,
                 content_zh=stmt.inserted.content_zh,
+                xml_content=xml_content,
                 content_fully_loaded=stmt.inserted.content_fully_loaded,
-                translation_status=stmt.inserted.translation_status,
+                publish_at=stmt.inserted.publish_at,
+                scraped_date=stmt.inserted.scraped_date,
                 scraped_at=stmt.inserted.scraped_at,
             )
 
@@ -284,42 +288,78 @@ class NewsArticleRepository:
                 raise
             
             return result
-
     
     def fetch_recent_articles(self, hours: int = 6) -> List[Dict[str, Any]]:
         """Fetch articles scraped within the last N hours."""
+        from datetime import datetime, timedelta, date
+        
         cutoff_time = datetime.now() - timedelta(hours=hours)
+        cutoff_date = cutoff_time.date()
+        today = date.today()
         
         with self.db_manager.get_session() as session:
-            articles = (
-                session.query(NewsArticle)
-                .filter(
-                    NewsArticle.scraped_at >= cutoff_time
+            # 获取今天和昨天的数据（覆盖凌晨跨日情况）
+            if cutoff_date == today:
+                # 如果 cutoff_time 是今天，只需要今天的数据
+                articles_query = session.query(NewsArticle).filter(
+                    NewsArticle.scraped_date == today
                 )
-                .all()
-            )
+            else:
+                # 需要今天和昨天的数据
+                yesterday = today - timedelta(days=1)
+                articles_query = session.query(NewsArticle).filter(
+                    NewsArticle.scraped_date.in_([yesterday, today])
+                )
+            
+            # 获取候选文章
+            candidate_articles = articles_query.all()
+            
+            # 在内存中精确过滤时间戳
+            recent_articles = [
+                a for a in candidate_articles 
+                if a.scraped_at >= cutoff_time
+            ]
             
             result = [
                 {"url": a.url, "title": a.title, "content": a.content}
-                for a in articles
+                for a in recent_articles
             ]
             return result
-    
+
     def get_recent_urls(self, hours: int = 1) -> List[str]:
         """Get URLs that were scraped within the last N hours."""
+        from datetime import datetime, timedelta, date
+        
         cutoff_time = datetime.now() - timedelta(hours=hours)
+        cutoff_date = cutoff_time.date()
+        today = date.today()
         
         with self.db_manager.get_session() as session:
-            urls = (
-                session.query(NewsArticle.url)
-                .filter(
-                    NewsArticle.content_fully_loaded == True,
-                    NewsArticle.scraped_at >= cutoff_time
+            # 获取今天和昨天的数据（覆盖凌晨跨日情况）
+            if cutoff_date == today:
+                # 只需要今天的数据
+                articles_query = session.query(NewsArticle).filter(
+                    NewsArticle.scraped_date == today,
+                    NewsArticle.content_fully_loaded == True
                 )
-                .all()
-            )
-            return [url[0] for url in urls]
-
+            else:
+                # 需要今天和昨天的数据
+                yesterday = today - timedelta(days=1)
+                articles_query = session.query(NewsArticle).filter(
+                    NewsArticle.scraped_date.in_([yesterday, today]),
+                    NewsArticle.content_fully_loaded == True
+                )
+            
+            # 获取所有文章
+            candidate_articles = articles_query.all()
+            
+            # 在内存中过滤时间戳
+            recent_articles = [
+                a for a in candidate_articles 
+                if a.scraped_at >= cutoff_time
+            ]
+            
+            return [a.url for a in recent_articles]
 
 class StockRepository:
     """Repository for stock operations with safe upsert."""
@@ -464,7 +504,7 @@ class StockStatsRepository:
         down_limit_st, even, break_rate, up_fluctuation, down_fluctuation, max_even, max_break
         """
         with self.db_manager.get_session() as session:
-            date = str(market_stats.get("date"))
+            date = market_stats.get("date")
             existing = (
                 session.query(StockStats)
                 .filter(StockStats.date == date)
@@ -524,7 +564,6 @@ class StockStatsRepository:
                 for s in all_stats
             ]
 
-
 class NewsAnalysisRepository:
     """Repository for news analysis operations."""
 
@@ -534,24 +573,17 @@ class NewsAnalysisRepository:
     def save_analysis(self, analysis_result: str) -> NewsAnalysis:
         """
         Save analysis result.
-
-        Converts the current datetime to compatible MySQL date and time strings.
-        Ensures time is stored as a full datetime ('YYYY-MM-DD HH:MM:SS') if necessary,
-        to avoid incorrect time or date format issues (e.g., see DataError 1292).
         """
         now = datetime.now()
-        # Save as MySQL DATETIME to avoid DataError for TIME-only fields
-        datetime_str = now.strftime("%Y-%m-%d %H:%M:%S")
-        date_str = now.strftime('%Y-%m-%d')
-
+        
         with self.db_manager.get_session() as session:
             analysis = NewsAnalysis(
-                date=date_str,
-                time=datetime_str,  # Store full datetime string
+                date=now.strftime('%Y-%m-%d'),  # 日期字符串
+                time=now,  # 直接使用 DateTime 对象
                 analysis=analysis_result,
             )
             session.add(analysis)
-            session.flush()
+            session.commit()  # 或 session.flush()
             return analysis
 
 class UsersRepository:
@@ -570,25 +602,38 @@ class UsersRepository:
     ) -> User:
         """Insert or update a user record with user_id and source as unique key."""
         with self.db_manager.get_session() as session:
-            stmt = insert(User).values(
-                user_id=user_id,
-                email=email,
-                source=source,
-                phone=phone,
-                password=password,
-            )
-            stmt = stmt.on_duplicate_key_update(
-                email=stmt.inserted.email,
-                phone=stmt.inserted.phone,
-                password=stmt.inserted.password,
-            )
+            # First check if user exists
+            existing_user = session.query(User).filter(
+                User.user_id == user_id,
+                User.source == source
+            ).first()
+            
+            if existing_user:
+                # Update existing record
+                if email is not None:
+                    existing_user.email = email
+                if phone is not None:
+                    existing_user.phone = phone
+                if password is not None:
+                    existing_user.password = password
+            else:
+                # Create new user
+                existing_user = User(
+                    user_id=user_id,
+                    email=email or "nan",
+                    source=source,
+                    phone=phone,
+                    password=password,
+                )
+                session.add(existing_user)
+            
             try:
-                result = session.execute(stmt)
                 session.commit()
-            except IntegrityError as e:
+                session.refresh(existing_user)
+                return existing_user
+            except Exception as e:
                 session.rollback()
                 raise
-            return result
 
     def get_user(self, user_id: str, source: str) -> Optional[Dict[str, Any]]:
         """Get a user record by user_id and source."""

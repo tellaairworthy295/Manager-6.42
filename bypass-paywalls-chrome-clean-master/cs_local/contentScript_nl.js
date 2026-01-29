@@ -255,7 +255,7 @@ else if (matchDomain(['lc.nl', 'dvhn.nl']) || document.querySelector('head > lin
           refreshCurrentTab();
         else if (json.includes(',body:')) {
           let nuxt_vars = json.split(/^\(function\(/)[1].split('){')[0].split(',');
-          let nuxt_values = json.split('}}(')[1].split('));')[0].replace(/,(true|false|\d+|{}),/g, ',"$1",').replace(/,(null),/g, ',"$1",').replace(/,(void\s\d),/g, ',"$1",').split(/\\?",\\?"/);
+          let nuxt_values = json.split('}}(')[1].split('));')[0].replace(/(^|,)(true|false|\.?\d+|{}),/g, ',"$1$2",').replace(/,(null),/g, ',"$1",').replace(/,(void\s\d),/g, ',"$1",').split(/\\?",\\?"/);
           function findNuxtText(str, attributes = false) {
             if (nuxt_vars.length && nuxt_values.length && !(attributes && str.length === 1 && str === str.toUpperCase())) {
               let index = nuxt_vars.indexOf(str);
@@ -301,6 +301,8 @@ else if (matchDomain(['lc.nl', 'dvhn.nl']) || document.querySelector('head > lin
             function addImage(elem, child) {
               let figure = document.createElement('figure');
               let img = document.createElement('img');
+              if (child.relation.href.length <= 2)
+                child.relation.href = findNuxtText(child.relation.href);
               img.src = child.relation.href;
               figure.appendChild(img);
               if (child.relation.caption) {
@@ -330,6 +332,8 @@ else if (matchDomain(['lc.nl', 'dvhn.nl']) || document.querySelector('head > lin
                     child.relation.link = findNuxtText(child.relation.link).replace(/\\u002F/g, '/');
                   if (child.relation.title.length <= 2)
                     child.relation.title = findNuxtText(child.relation.title);
+                  if (matchDomain('frieschdagblad.nl'))
+                    child.relation.title = child.relation.link;
                   addLink(elem, child.relation.title, child.relation.link);
                 } else if (child.children) {
                   if (child.children.length) {
@@ -339,7 +343,9 @@ else if (matchDomain(['lc.nl', 'dvhn.nl']) || document.querySelector('head > lin
                           if (item.text.length > 2)
                             addLink(elem, item.text, child.href || child.relation.follow.url, add_br);
                         } else
-                          addParText(elem, item.text, false, child.attributes && child.attributes.length);
+                          addParText(elem, item.text, add_br, child.attributes && child.attributes.length);
+                      } else if (findNuxtText(item.type) === 'br') {
+                        elem.appendChild(document.createElement('br'));
                       } else
                         addChildren(elem, item.children, false, item.attributes && item.attributes.length);
                     }
@@ -351,9 +357,17 @@ else if (matchDomain(['lc.nl', 'dvhn.nl']) || document.querySelector('head > lin
             for (let par of pars) {
               let elem = document.createElement('p');
               if (par.code) {
-                let parser = new DOMParser();
-                let doc = parser.parseFromString('<div>' + DOMPurify.sanitize(par.code, dompurify_options) + '</div>', 'text/html');
-                elem = doc.querySelector('div');
+                if (par.code.includes('flourish-embed') && par.code.includes(' data-src=\"')) {
+                  elem = document.createElement('div');
+                  let sub_elem = document.createElement('iframe');
+                  sub_elem.src = 'https://public.flourish.studio/' + par.code.split(' data-src=\"')[1].split('"')[0];
+                  sub_elem.style = 'width: 100%; height: 600px;';
+                  elem.appendChild(sub_elem);
+                } else {
+                  let parser = new DOMParser();
+                  let doc = parser.parseFromString('<div>' + DOMPurify.sanitize(par.code, dompurify_options) + '</div>', 'text/html');
+                  elem = doc.querySelector('div');
+                }
               } else if (par.insertbox_head || par.insertbox_text) {
                 if (par.insertbox_head && par.insertbox_head.length > 2)
                   addParText(elem, par.insertbox_head, true);
@@ -468,9 +482,12 @@ else if (matchDomain(nl_dpg_adr_domains.concat(['hln.be']))) {
       let shades = article.querySelectorAll('div[style*="background-color"][style*=";width"]');
       for (let elem of shades)
         elem.style.width = '85%';
-      let lazy_images = article.querySelectorAll('picture img[loading="lazy"][style]');
-      for (let elem of lazy_images)
+      let lazy_images = article.querySelectorAll('img[loading="lazy"][style]');
+      for (let elem of lazy_images) {
         elem.style = 'width: 95%;';
+        if ((!elem.src || elem.src.startsWith('data:image/')) && elem.getAttribute('currentsourceurl'))
+          elem.src = elem.getAttribute('currentsourceurl');
+      }
       let widgets = article.querySelectorAll('div > div > div[old-src]:not([src])');
       for (let elem of widgets) {
         let iframe = document.createElement('iframe');
@@ -493,46 +510,24 @@ else if (matchDomain(nl_dpg_adr_domains.concat(['hln.be']))) {
         elem.parentNode.removeAttribute('style');
         removeDOMElement(elem);
       }
-      let video_scripts = article.querySelectorAll('div > div > script[type="application/ld+json"], article > script[type="application/ld+json"]');
-      for (let elem of video_scripts) {
-        if (elem.text.includes(',"embedUrl":"')) {
-          let iframe = document.createElement('iframe');
-          iframe.src = elem.text.split(',"embedUrl":"')[1].split('"')[0];
-          iframe.style = 'width: 100%; height: 400px;';
-          let container = elem.parentNode;
-          if (elem.parentNode.tagName === 'DIV')
-            container = container.parentNode;
-          container.parentNode.replaceChild(iframe, container);
-        }
-      }
+      let video_buttons = article.querySelectorAll('button[type="button"]');
+      removeDOMElement(...video_buttons);
     }
-    let article_divs = document.querySelectorAll(article_src_sel + ' > div');
-    if (article_divs.length < 3) {
-      let header = document.querySelector(article_sel + ' > header');
-      if (header)
-        header.before(googleSearchToolLink(url));
-    }
-  }
-  let url = window.location.href;
-  let article_sel = 'div#remaining-paid-content';
-  let article_src_sel = 'div#fjs-paywall-intro + div';
-  let article = document.querySelector(article_sel);
-  if (article) {
-    article_src_sel += ', ' + article_sel;
-    getArchive(url, article_sel + '[data-reduced="true"]', {rm_attrib: 'data-reduced'}, article_sel, '', article_src_sel);
-  } else {
-    article_sel = 'article#article-content';
-    article_src_sel += ', ' + article_sel + ' > section';
-    let paywall_sel = article_sel + ' div[data-testid="premium"]';
-    let paywall_action = {rm_attrib: 'data-testid'};
-    if (!document.querySelector(paywall_sel)) { // regwal
-      paywall_sel = article_sel + ' > section[class]:empty';
-      paywall_action = {rm_attrib: 'class'};
-    }
-    getArchive(url, paywall_sel, paywall_action, article_sel + ' > section', '', article_src_sel, article_sel + ' > header');
+    let article_divs = document.querySelectorAll(article_sel + ' > div:not(:empty)');
+    if (article_divs.length < 3)
+      article.before(googleSearchToolLink(url));
     let ads = 'span[style*="background-color:"]:has(> span[style*="min-height:"])';
     hideDOMStyle(ads, 2);
   }
+  let url = window.location.href;
+  let article_sel = cs_param.article_sel || 'article > section';
+  let paywall_sel = cs_param.paywall_sel || article_sel + ' div[data-testid="premium"]';
+  let paywall_action = {rm_attrib: 'data-testid'};
+  if (!document.querySelector(paywall_sel)) { // regwal
+    paywall_sel = article_sel + '[class]:empty';
+    paywall_action = {rm_attrib: 'class'};
+  }
+  getArchive(url, paywall_sel, paywall_action, article_sel);
   let ads = 'div.dfp-space';
   hideDOMStyle(ads);
 }
@@ -627,9 +622,12 @@ else if (matchDomain('telegraaf.nl')) {
           })
         }
       }
+      let noscroll = document.querySelector('body[class]');
+      if (noscroll)
+        noscroll.removeAttribute('class');
     }
   }, 1000);
-  let ads = 'div[id^="ad_"], div[class^="scrollable-ads"], iframe#ecommerce-ad-iframe, div[data-pym-src]';
+  let ads = 'div[id^="ad_"], div[class^="scrollable-ads"], iframe#ecommerce-ad-iframe, div[data-pym-src], div.mh-ad-label';
   hideDOMStyle(ads);
 }
 

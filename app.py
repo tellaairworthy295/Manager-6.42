@@ -17,17 +17,16 @@ import redis.asyncio as aioredis
 from exception.exception_handler import NetworkException, ValidationError, generic_exception_handler, validation_exception_handler, network_exception_handler
 from scraper.news_scraper import fetch_news_from_db, save_agent_data
 from scraper.stocks_scraper import main_scraper
-from utils.sender import send_email_with_attachments
 from image_process import excel_flow
 
 from tasks.news_tasks import scrape_all_news
-from tasks.agent_tasks import display_agent_task_main, scrape_agent_task
+from tasks.agent_tasks import display_agent_task_main #, scrape_agent_task
 from scraper.cookies_getter import update_common_cookies, update_agent_cookies
-from utils.sender import send_email_with_attachments, load_email_config_from_json
+#from utils.sender import send_email_with_attachments, load_email_config_from_json
 from utils.database import StockStatsRepository, get_db_manager, UsersRepository, StockRepository
-from utils.validators import save_user_prompt, split_prompt_to_list, validate_and_prepare_cookies, validate_scrape_agent_request
+from utils.validators import split_prompt_to_list, validate_and_prepare_cookies #, save_user_promp, validate_scrape_agent_request
 from utils.logging_config import get_others_logger
-from utils.redis_utils import create_aioredis, close_loop_redis, get_aioredis_client, get_redis_client
+from utils.redis_utils import create_aioredis, close_loop_redis, get_aioredis_client #, get_redis_client
 from fastapi.middleware.cors import CORSMiddleware
 # ===== Setup =====
 logger = get_others_logger()
@@ -56,7 +55,7 @@ app.mount("/mcp", mcp_app)
 # Allow your Next.js frontend (localhost:3000) to call FastAPI (localhost:5000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # or ["*"] for all origins
+    allow_origins=["http://localhost:3000", "http://10.29.92.50:3000"],  # or ["*"] for all origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -222,6 +221,22 @@ async def delete_html_dir(user: str, conversation_id: str):
 
     return JSONResponse(content={"status": "deleted"})
 
+# @app.get("/api/rss")
+# async def get_rss():
+#     rss_dir = Path("rss") / "test.xml"
+    
+#     # Return with CORS headers
+#     return FileResponse(
+#         rss_dir, 
+#         media_type="application/rss+xml",
+#         headers={
+#             "Access-Control-Allow-Origin": "*",
+#             "Cache-Control": "no-cache, no-store, must-revalidate",
+#             "Pragma": "no-cache",
+#             "Expires": "0"
+#         }
+#     )
+
 # ================== Cookies Update ==================
 @app.post("/api/refresh_cookies")
 async def refresh_cookies(request: Request):
@@ -291,7 +306,6 @@ async def add_users(request: Request):
         ]
     }
     """
-    # Here DatabaseManager assumes environment variable config or set up, adjust as needed
     db_manager = get_db_manager()
     user_repo = UsersRepository(db_manager)
 
@@ -308,6 +322,8 @@ async def add_users(request: Request):
         passwd = site.get("passwd") or site.get("password")  # support both keys
         if not source:
             continue
+
+        # Assuming update_agent_cookies handles external tasks but doesn't affect insert logic
         user_credentials = [{
             "source": source,
             "phone": phone,
@@ -315,6 +331,7 @@ async def add_users(request: Request):
         }]
         await update_agent_cookies(user_credentials, user_id, False)
 
+        # Use the insert_or_update_user method to ensure upsert behavior
         user_repo.insert_or_update_user(
             user_id=user_id,
             source=source,
@@ -331,6 +348,7 @@ async def add_users(request: Request):
             "status": "ok"
         })
     return {"status": "ok", "users_added": resp}
+
 
     
 #========================Dramatiq tasks==========================
@@ -429,11 +447,11 @@ async def news_analyzer(request: Request):
     txt_path = f"news_analyses/{formatted}.txt"
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write(str(analysis_result))
-    config = load_email_config_from_json("json/config.json")
-    config.SUBJECT = "【新闻】彭博社最近6小时新闻AI总结"
-    config.BODY = "AI总结结果见附件。"
-    config.ATTACHMENTS = [txt_path]
-    send_email_with_attachments(**config.as_dict())
+    # config = load_email_config_from_json("json/config.json")
+    # config.SUBJECT = "【新闻】彭博社最近6小时新闻AI总结"
+    # config.BODY = "AI总结结果见附件。"
+    # config.ATTACHMENTS = [txt_path]
+    # await asyncio.to_thread(send_email_with_attachments, **config.as_dict())
 
     return JSONResponse({"status": "200", "message": "Sent results successfully."})
 
@@ -449,22 +467,22 @@ async def scrape_stocks_api(request: Request):
     )
     await asyncio.to_thread(excel_flow, market_number, date, days)
 
-    config = load_email_config_from_json("json/config.json")
-    config.ATTACHMENTS = [
-        f"excel/{date}.xlsx",
-        f"excel/{date}.txt",
-        f"images/Image.png",
-        "excel/市场统计趋势.png",
-        "excel/破板率趋势.png",
-    ]
-    config.BODY = "个股信息（已合并韭研和选股通）和韭研公社涨停简图相关信息，见附件。"
-    config.SUBJECT = "【韭研】个股分析与涨停简图"
-    await asyncio.to_thread(send_email_with_attachments, **config.as_dict())
-    try:
-        os.remove(f"excel/{date}.xlsx")
-        os.remove(f"excel/{date}.txt")
-    except Exception:
-        pass
+    # config = load_email_config_from_json("json/config.json")
+    # config.ATTACHMENTS = [
+    #     f"excel/{date}.xlsx",
+    #     f"excel/{date}.txt",
+    #     f"images/Image.png",
+    #     "excel/市场统计趋势.png",
+    #     "excel/破板率趋势.png",
+    # ]
+    # config.BODY = "个股信息（已合并韭研和选股通）和韭研公社涨停简图相关信息，见附件。"
+    # config.SUBJECT = "【韭研】个股分析与涨停简图"
+    # await asyncio.to_thread(send_email_with_attachments, **config.as_dict())
+    # try:
+    #     os.remove(f"excel/{date}.xlsx")
+    #     os.remove(f"excel/{date}.txt")
+    # except Exception:
+    #     pass
     return JSONResponse(
         {"status": "ok", "date": date}
     )
@@ -473,7 +491,7 @@ async def scrape_stocks_api(request: Request):
 async def fetch_news():
     """
     Fetch Bloomberg articles data from the local SQLite database.
-    Returns a list[str], each string combines 5 articles (url/title/content, one per line).
+    Returns a list[str], each string combines 15 articles (url/title/content, one per line).
     """
     data = await asyncio.to_thread(fetch_news_from_db)  # list[dict] with keys: url, title, content
     combined = []

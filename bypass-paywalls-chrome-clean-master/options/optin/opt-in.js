@@ -1,10 +1,10 @@
-var ext_api = (typeof browser === 'object') ? browser : chrome;
-var url_loc = (typeof browser === 'object') ? 'firefox' : 'chrome';
+var ext_api = chrome || browser;
 var manifestData = ext_api.runtime.getManifest();
+var ext_chromium = !!manifestData.key;
 var ext_manifest_version = manifestData.manifest_version;
 var navigator_ua = navigator.userAgent;
 var navigator_ua_mobile = navigator_ua.toLowerCase().includes('mobile');
-var chrome_android_browser = navigator_ua_mobile && (url_loc === 'chrome');
+var chrome_android_browser = navigator_ua_mobile && ext_chromium;
 var custom_switch = ((manifestData.optional_permissions && manifestData.optional_permissions.length) || (manifestData.optional_host_permissions && manifestData.optional_host_permissions.length));
 
 window.addEventListener("load", function () {
@@ -120,7 +120,7 @@ window.addEventListener("load", function () {
         update_enabled.innerText = 'NO';
     });
 
-    if (typeof browser === 'object') { // fetch consent (Firefox only)
+    if (!ext_chromium) { // fetch consent (Firefox only)
 
     var fetch_enabled = document.getElementById('fetch-enabled');
     ext_api.storage.local.get("optInFetch", function (result) {

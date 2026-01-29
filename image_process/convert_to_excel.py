@@ -146,7 +146,7 @@ def _get_trendings(rec_texts: list[str]):
         "break_rate": results["breaking_rate"]
     }
 
-def draw_and_save(rec_texts: list[str], market_number: dict, date: str, days: int = 90):
+def draw_and_save(rec_texts: list[str], market_number: dict, date, days: int = 90):
     """
     1. 从数据库中读取最近90天的数据，画出曲线图：
         - 破板率单独画在一张图上；
@@ -272,7 +272,7 @@ def draw_and_save(rec_texts: list[str], market_number: dict, date: str, days: in
 
     # logger.info("Charts saved to excel/break_rate.png and excel/market_stats.png")
 
-def excel_flow(market_number: dict, date: str, days: int = 5):
+def excel_flow(market_number: dict, date, days: int = 5):
     scraped_dir = "images"
     img_path = f"{scraped_dir}/Image.png"
     if not os.path.isfile(img_path):

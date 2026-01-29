@@ -1,7 +1,7 @@
 'use strict';
-var ext_api = (typeof browser === 'object') ? browser : chrome;
-var url_loc = (typeof browser === 'object') ? 'firefox' : 'chrome';
+var ext_api = chrome || browser;
 var manifestData = ext_api.runtime.getManifest();
+var ext_chromium = !!manifestData.key;
 var ext_name = manifestData.name;
 var ext_version = manifestData.version;
 var ext_manifest_version = manifestData.manifest_version;
@@ -19,6 +19,9 @@ if (ext_manifest_version === 3) {
     }
   }, 20000);
 }
+
+if (!ext_chromium)
+  ext_api = browser;
 
 if (typeof ext_api.action !== 'object') {
   ext_api.action = ext_api.browserAction;
@@ -81,7 +84,7 @@ for (let domain of grouped_sites['###_au_news_corp'])
 for (let domain of grouped_sites['###_fr_be_groupe_rossel'])
   restrictions[domain] = new RegExp('^((?!journal\\.' + domain.replace(/\./g, '\\.') + '\\/).)*$');
 
-if (typeof browser !== 'object') {
+if (ext_chromium) {
   for (let domain of [])
     restrictions[domain] = new RegExp('((\\/|\\.)' + domain.replace(/\./g, '\\.') + '\\/$|' + restrictions[domain].toString().replace(/(^\/|\/$)/g, '') + ')');
 }
@@ -236,8 +239,12 @@ function check_sites_updated(sites_updated_json, optin_update = false) {
         });
         if (!optin_update) {
           let updated_ext_version_new = Object.values(json).map(x => x.upd_version || '').sort().pop();
-          if (updated_ext_version_new)
-            setExtVersionNew(updated_ext_version_new);
+          if (updated_ext_version_new) {
+            ext_api.management.getSelf(function (result) {
+              if (result.installType === 'development')
+                setExtVersionNew(updated_ext_version_new);
+            })
+          }
         }
       })
     }
@@ -562,13 +569,14 @@ add_session_rule = function (domain, rule, blockedRegexes_rule = '', blockedRege
   if (grouped_sites['###_au_news_corp'].includes(domain)) {
     rule_id++;
     regex_id++;
+    let au_news_corp_amp = defaultSites['Australia News Corp'].amp_redirect;
     let redirect_rule = {
       "id": rule_id,
       "priority": 1,
       "action": {
         "type": "redirect",
         "redirect": {
-          "regexSubstitution": "https://www." + domain + "/\\1?amp"
+          "regexSubstitution": "https://www." + domain + "/\\1" + (au_news_corp_amp ? '?amp' : '')
         }
       },
       "condition": {
@@ -1025,7 +1033,7 @@ ext_api.storage.local.get({
 ext_api.storage.onChanged.addListener(function (changes, namespace) {
   if (namespace === 'sync')
     return;
-  if (typeof browser === 'object') {
+  if (!ext_chromium) {
     for (let key in changes) {
       let equal;
       if (typeof changes[key].newValue === 'object')
@@ -1129,6 +1137,9 @@ ext_api.storage.onChanged.addListener(function (changes, namespace) {
     if (key === 'ext_version_new') {
       ext_version_new = storageChange.newValue;
     }
+    if (key === 'ext_upd_version_new') {
+      ext_upd_version_new = storageChange.newValue;
+    }
     if (key === 'optIn') {
       optin_setcookie = storageChange.newValue;
     }
@@ -1148,7 +1159,7 @@ ext_api.runtime.onInstalled.addListener(function (details) {
   } else if (details.reason == "update") {
     ext_api.management.getSelf(function (result) {
       if (enabledSites.includes('#options_on_update') && result.installType !== 'development')
-        ext_api.runtime.openOptionsPage(); // User updated extension (non-developer mode)
+        ext_api.runtime.openOptionsPage();
     });
   }
 });
@@ -1189,7 +1200,9 @@ ext_api.webRequest.onBeforeRequest.addListener(function (details) {
   if (!isSiteEnabled(details) || details.url.includes('/digitalprinteditions') || !(details.url.includes('dest=') && details.url.split('dest=')[1].split('&')[0])) {
     return;
   }
-  var updatedUrl = decodeURIComponent(details.url.split('dest=')[1].split('&')[0]) + '?amp';
+  let au_news_corp_amp = defaultSites['Australia News Corp'].amp_redirect;
+  let destUrl = new URL(decodeURIComponent(details.url.split('dest=')[1].split('&')[0]));
+  let updatedUrl = destUrl.origin + '/' + destUrl.pathname.replace(/^\//, '').replace(/\//g, '%2F') + (au_news_corp_amp ? '?amp' : '');
   return {
     redirectUrl: updatedUrl
   };
@@ -1251,7 +1264,7 @@ function disableJavascriptInline() {
       ['blocking', 'responseHeaders']);
 }
 
-if (typeof browser !== 'object') {
+if (ext_chromium) {
   var focus_changed = false;
   ext_api.windows.onFocusChanged.addListener((windowId) => {
     if (windowId > 0)
@@ -1316,7 +1329,7 @@ if (typeof browser !== 'object') {
     let hostname = urlHost(url).replace(/^www\./, '');
     if (hostname.match(/^thelocal\.\w{2}/))
       cs_local = 'en';
-    else if (hostname.match(/\.(ar|br|cl|mx|pe|uy)$/) || matchUrlDomain(['abcmais.com', 'clarin.com', 'cronista.com', 'elespectador.com', 'elmercurio.com', 'eltiempo.com', 'eltribuno.com', 'eluniverso.com', 'exame.com', 'globo.com', 'lasegunda.com', 'latercera.com', 'milenio.com', 'revistaoeste.com'], url))
+    else if (hostname.match(/\.(ar|br|cl|mx|pe|uy)$/) || matchUrlDomain(['abcmais.com', 'clarin.com', 'cronista.com', 'elespectador.com', 'elmercurio.com', 'eltiempo.com', 'eltribuno.com', 'eluniverso.com', 'exame.com', 'globo.com', 'lasegunda.com', 'latercera.com', 'milenio.com', 'revistaoeste.com', 'semana.com'], url))
       cs_local = 'es.pt';
     else if ((hostname.match(/\.(de|at|ch)$/) && !matchUrlDomain(grouped_sites['###_ch_esh_medias'].concat(['letemps.ch']), url)) || matchUrlDomain(['faz.net', 'handelsblatt.com', 'wochenblatt.com'], url))
       cs_local = 'de';
@@ -1381,7 +1394,7 @@ if (typeof browser !== 'object') {
         // send bg2csData to contentScript.js
         if (true) {
           setTimeout(function () {
-            if (ext_manifest_version === 3 || typeof browser === 'object')
+            if (ext_manifest_version === 3 || !ext_chromium)
               ext_api.tabs.sendMessage(tabId, {msg: "bg2cs", data: bg2csData}).catch(x => false);
             else
               ext_api.tabs.sendMessage(tabId, {msg: "bg2cs", data: bg2csData});
@@ -1389,7 +1402,7 @@ if (typeof browser !== 'object') {
         }
         } // run cs once
         // remove cookies after page load
-        if (rc_domain_enabled && !['enotes.com', 'huffingtonpost.it', 'lastampa.it'].includes(rc_domain)) {
+        if (rc_domain_enabled && !['enotes.com', 'huffingtonpost.it', 'investors.com', 'lastampa.it'].includes(rc_domain)) {
           remove_cookies_fn(rc_domain, true);
         }
       }, n * 200);
@@ -1420,7 +1433,7 @@ if (typeof browser !== 'object') {
       }
     }
     // load toggleIcon.js (icon for dark or incognito mode in Chrome))
-    if (typeof browser !== 'object') {
+    if (ext_chromium) {
       if (ext_manifest_version === 2) {
         ext_api.tabs.executeScript(tabId, {
           file: 'options/toggleIcon.js',
@@ -1753,7 +1766,7 @@ function updateBadge(activeTab) {
     }
     if (matchUrlDomain(gpw_no_badge_domains, currentUrl))
       badgeText = '';
-    if (ext_version_new > ext_version)
+    if (ext_upd_version_new > ext_version)
       badgeText = '^' + badgeText;
     let isDefaultSite = matchUrlDomain(defaultSites_domains, currentUrl);
     let isCustomSite = matchUrlDomain(customSites_domains, currentUrl);
@@ -1779,22 +1792,16 @@ function updateBadge(activeTab) {
       ext_api.action.setBadgeText({text: badgeText});
 }
 
-function setExtVersionNew(check_ext_version_new, check_ext_upd_version_new = '') {
-  ext_api.management.getSelf(function (result) {
-    var installType = result.installType;
-    var ext_version_len = (installType === 'development') ? 7 : 5;
-    ext_version_new = check_ext_version_new;
-    if (ext_version_len === 5 && check_ext_upd_version_new && check_ext_upd_version_new < check_ext_version_new)
-      ext_version_new = check_ext_upd_version_new;
-    if (ext_version_new && ext_version_new.substring(0, ext_version_len) <= ext_version.substring(0, ext_version_len))
-      ext_version_new = '1';
-    ext_api.storage.local.set({
-      ext_version_new: ext_version_new
-    });
+function setExtVersionNew(check_ext_version_new, check_ext_upd_version_new = check_ext_version_new) {
+  ext_version_new = check_ext_version_new;
+  ext_upd_version_new = check_ext_upd_version_new;
+  ext_api.storage.local.set({
+    ext_version_new: ext_version_new,
+    ext_upd_version_new: ext_upd_version_new
   });
 }
 
-var ext_version_new;
+var ext_version_new, ext_upd_version_new;
 function check_update() {
   let manifest_new = ext_path + 'manifest.json';
   fetch(manifest_new)
@@ -1802,22 +1809,41 @@ function check_update() {
     if (response.ok) {
       response.json().then(json => {
         let json_ext_version_new = json['version'];
-        if (manifestData.browser_specific_settings && manifestData.browser_specific_settings.gecko.update_url) {
-          let json_upd_version_new = manifestData.browser_specific_settings.gecko.update_url;
-          fetch(json_upd_version_new)
-          .then(response => {
-            if (response.ok) {
-              response.json().then(upd_json => {
-                if (upd_json.addons) {
-                  let ext_id = manifestData.browser_specific_settings.gecko.id;
-                  let json_ext_upd_version_new = upd_json.addons[ext_id].updates[0].version;
-                  setExtVersionNew(json_ext_version_new, json_ext_upd_version_new);
-                }
-              })
+        ext_api.management.getSelf(function (result) {
+          if (result.installType !== 'development') {
+            if (manifestData.browser_specific_settings && manifestData.browser_specific_settings.gecko.update_url) {
+              let json_upd_version_new = manifestData.browser_specific_settings.gecko.update_url;
+              fetch(json_upd_version_new)
+              .then(response => {
+                if (response.ok) {
+                  response.json().then(upd_json => {
+                    if (upd_json.addons) {
+                      let ext_id = manifestData.browser_specific_settings.gecko.id;
+                      let json_ext_upd_version_new = upd_json.addons[ext_id].updates[0].version;
+                      setExtVersionNew(json_ext_version_new, json_ext_upd_version_new);
+                    }
+                  })
+                } else
+                  setExtVersionNew(json_ext_version_new, '1');
+              }).catch(err => setExtVersionNew(json_ext_version_new, '1'));
+            } else if (manifestData.update_url) {
+              let json_upd_version_new = manifestData.update_url;
+              fetch(json_upd_version_new)
+              .then(response => {
+                if (response.ok) {
+                  response.text().then(upd_html => {
+                    if (upd_html.includes(".crx' version='")) {
+                      let json_ext_upd_version_new = upd_html.split(".crx' version='")[1].split("'")[0];
+                      setExtVersionNew(json_ext_version_new, json_ext_upd_version_new);
+                    }
+                  })
+                } else
+                  setExtVersionNew(json_ext_version_new, '1');
+              }).catch(err => setExtVersionNew(json_ext_version_new, '1'));
             }
-          }).catch(err => setExtVersionNew(json_ext_version_new));
-        } else
-          setExtVersionNew(json_ext_version_new);
+          } else
+            setExtVersionNew(json_ext_version_new);
+        })
       })
     } else
       setExtVersionNew('');
@@ -2094,7 +2120,7 @@ ext_api.runtime.onMessage.addListener(function (message, sender) {
   }
 
   function sendArticleSrc(tab_id, message) {
-    if (ext_manifest_version === 3 || typeof browser === 'object')
+    if (ext_manifest_version === 3 || !ext_chromium)
       ext_api.tabs.sendMessage(tab_id, {
         msg: "showExtSrc",
         data: message.data
@@ -2209,7 +2235,7 @@ ext_api.runtime.onMessage.addListener(function (message, sender) {
 
 // show the opt-in tab on installation
 ext_api.storage.local.get(["optInShown", "customShown", "fetchShown"], function (result) {
-  if (!result.optInShown || !result.customShown || (typeof browser === 'object' && !result.fetchShown)) {
+  if (!result.optInShown || !result.customShown || (!ext_chromium && !result.fetchShown)) {
     setTimeout(function () {
     ext_api.tabs.create({
       url: "options/optin/opt-in.html"

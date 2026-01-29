@@ -1,55 +1,89 @@
 {
-  "Apollo Magazine": {
-    "domain": "apollo-magazine.com",
-    "allow_cookies": 1,
-    "block_regex": "\\.tinypass\\.com",
-    "upd_version": "4.2.7.5"
-  },
-  "Dnevnik.bg": {
-    "domain": "dnevnik.bg",
-    "allow_cookies": 1,
-    "useragent_custom": "Mozilla/5.0 (Java) outbrain",
-    "upd_version": "4.2.6.8"
-  },
-  "NOZ/MHN Mediengruppe": {
-    "domain": "###_de_noz_mhn",
+  "Algemeen Dagblad (+ regional/ADR)": {
+    "domain": "###_nl_dpg_adr",
     "group": [
-      "noz.de",
-      "shz.de"
+      "ad.nl",
+      "bd.nl",
+      "bndestem.nl",
+      "destentor.nl",
+      "ed.nl",
+      "gelderlander.nl",
+      "pzc.nl",
+      "tubantia.nl"
     ],
-    "allow_cookies" : 1,
-    "useragent": "googlebot",
-    "upd_version": "4.2.6.7"
-  },
-  "Süddeutsche Zeitung": {
-    "domain": "sueddeutsche.de",
     "allow_cookies": 1,
-    "block_regex": "\\.sueddeutsche\\.de\\/api\\/tinypass\\.min\\.js",
-    "ld_archive_is": "head>meta[content='locked']|div[itemprop='articleBody']",
-    "add_ext_link": "div.offerpage-container,div.offer-page|main",
-    "add_ext_link_type": "archive.is",
+    "block_regex": "temptation\\.{domain}",
+    "ld_archive_is": "article>header svg.premium-indicator|article>section",
     "cs_block": 1,
-    "upd_version": "4.2.7.3"
+    "upd_version": "4.2.8.9"
   },
-  "The Spectator Australia": {
-    "domain": "spectator.com.au",
+  "Der Freitag": {
+    "domain": "freitag.de",
+    "allow_cookies": 1,
+    "block_js_inline": "\\.freitag\\.de",
+    "upd_version": "4.2.8.8"
+  },
+  "Fortune": {
+    "domain": "fortune.com",
+    "allow_cookies": 1,
+    "block_regex": "\\.fortune\\.com\\/api\\/tinypass\\.min\\.js",
+    "upd_version": "4.2.8.7"
+  },
+  "Het Laatste Nieuws": {
+    "domain": "hln.be",
+    "allow_cookies": 1,
+    "block_regex": "temptation\\.hln\\.be",
+    "ld_archive_is": "article>header svg.premium-indicator|article>section",
+    "cs_block": 1,
+    "upd_version": "4.2.8.1"
+  },
+  "Investor's Business Daily": {
+    "domain": "investors.com",
     "allow_cookies": 1,
     "block_regex": "\\.tinypass\\.com",
-    "upd_version": "4.2.7.5"
+    "ld_json_url": "div.investors-paywall-overlay|div.investors-paywall-excerpt",
+    "upd_version": "4.2.8.5"
   },
-  "The Spectator Group (UK)": {
-    "domain": "###_uk_spectator",
+  "L'Équipe.fr": {
+    "domain": "lequipe.fr",
+    "allow_cookies": 1,
+    "cs_dompurify": 1,
+    "cs_code": "[{\"cond\":\"div.Article__paragraph\", \"rm_class\":\"Article__paragraph\"}]",
+    "upd_version": "4.2.8.7"
+  },
+  "ON3": {
+    "domain": "on3.com",
+    "allow_cookies": 1,
+    "ld_archive_is": "div[data-template-type='barrier']|article",
+    "cs_code": "[{\"hide_elem\":\"div#blocker\"}, {\"cond\":\"html.scroll-lock,body.scroll-lock\", \"rm_attrib\":\"class|style\"}]",
+    "upd_version": "4.2.8.6"
+  },
+  "Pitchfork": {
+    "domain": "pitchfork.com",
+    "allow_cookies": 1,
+    "remove_cookies_select_drop": ["pay_ent_msmp"],
+    "upd_version": "4.2.9.1"
+  },
+  "Tamedia.ch Group": {
+    "domain": "###_ch_tamedia",
     "group": [
-      "spectator.com"
+      "24heures.ch",
+      "bazonline.ch",
+      "bernerzeitung.ch",
+      "derbund.ch",
+      "tagesanzeiger.ch",
+      "tdg.ch"
     ],
-    "allow_cookies": 1,
+    "remove_cookies_select_drop": ["entitlementToken", "tmc"],
     "block_regex": "\\.tinypass\\.com",
-    "upd_version": "4.2.7.5"
+    "useragent": "googlebot",
+    "upd_version": "4.2.8.8"
   },
-  "War on the Rocks": {
-    "domain": "warontherocks.com",
+  "Die Welt": {
+    "domain": "welt.de",
     "allow_cookies": 1,
-    "ld_json_url": "a[href^='https://warontherocks.com/membership']|div.tw\\:container.tw\\:mb-20>div",
-    "upd_version": "4.2.7.1"
+    "block_regex": "\\.welt\\.de\\/variants-.+\\.js",
+    "cs_dompurify": 1,
+    "upd_version": "4.2.9.1"
   }
 }

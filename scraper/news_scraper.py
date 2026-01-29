@@ -1,7 +1,9 @@
 
 # news_scraper.py
+from datetime import datetime
 import json
 import random
+import re
 import time
 from bs4 import BeautifulSoup
 from selenium.common.exceptions import TimeoutException
@@ -131,19 +133,83 @@ def _wait_for_progressive_content(driver, selector, timeout=15, min_paragraphs=5
         
     return content_fully_loaded
 
+def extract_and_format_time(soup):
+    """
+    从Bloomberg页面提取时间并格式化为UTC时间字符串
+    返回格式: "2026-01-26 00:51:07"
+    """
+    # 尝试多种选择器
+    selectors = [
+        "time[datetime]",
+        "[data-component='timestamp'] time[datetime]",
+        ".ArticleTimestamp_articleTimestamp__zlcvt time[datetime]",
+        "meta[property='article:published_time']"
+    ]
+    
+    time_str = None
+    
+    for selector in selectors:
+        element = soup.select_one(selector)
+        if element:
+            if selector.startswith("meta"):
+                # 处理meta标签
+                if element.has_attr('content'):
+                    time_str = element['content']
+                    break
+            else:
+                # 处理time标签
+                if element.has_attr('datetime'):
+                    time_str = element['datetime']
+                    break
+    
+    if not time_str:
+        return None
+    
+    # 格式化时间
+    try:
+        # 移除时区信息，只保留基本时间
+        clean_time = re.sub(r'\.\d+', '', time_str)  # 移除毫秒
+        clean_time = re.sub(r'Z$', '', clean_time)  # 移除Z
+        
+        # 尝试解析为datetime
+        if 'T' in clean_time:
+            dt = datetime.strptime(clean_time, "%Y-%m-%dT%H:%M:%S")
+        else:
+            dt = datetime.strptime(clean_time, "%Y-%m-%d %H:%M:%S")
+        
+        # 格式化为需要的字符串
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+        
+    except Exception as e:
+        print(f"时间解析错误: {e}, 原始时间: {time_str}")
+        return None
+
 def _extract_article_content(soup, selector, unwanted_content=None):
     paragraphs = []
     
     paragraphs_elements = soup.select(selector)
+    
+    # 先提取文本並進行基本過濾
     paragraphs = [p.get_text(" ", strip=True) for p in paragraphs_elements if p.get_text(strip=True)]
 
-    # Filter unwanted content
+    # 過濾不想要的內容
     if unwanted_content:
         paragraphs = [p for p in paragraphs if not any(pattern in p for pattern in unwanted_content)]
-
-    # Join paragraphs
+    
+    # 新增：過濾以數字:數字格式開頭的段落
+    paragraphs = [
+        re.sub(r'^\d+:\d+\s*', '', p)  # 去掉開頭的數字:數字格式
+        for p in paragraphs
+        if not re.match(r'^\d+:\d+\s*$', p)  # 完全匹配數字:數字格式的整行去掉
+    ]
+    
+    # 再次過濾可能變空的段落
+    paragraphs = [p for p in paragraphs if p.strip()]
+    
+    # 合併段落
     content = "\n\n".join(paragraphs)
-    # Extract title
+    
+    # 提取標題
     title_tag = soup.find("h1")
     title = title_tag.get_text(strip=True) if title_tag else ""
 
@@ -159,7 +225,37 @@ def save_agent_data(analysis_result: str):
         logger.info(f"Saved analysis to database")
     except Exception as e:
         logger.info(f"Failed to save analysis to database, {e}")
-        
+
+def extract_xml_content(
+    soup: BeautifulSoup,
+    xml_selector: str | None,
+) -> str:
+    """
+    Extracts raw XML / HTML content using a selector.
+    Returns serialized HTML/XML string for database storage.
+    """
+
+    if not xml_selector:
+        return ""
+
+    try:
+        elements = soup.select(xml_selector)
+        if not elements:
+            return ""
+
+        # Preserve full DOM structure
+        xml_parts = []
+        for el in elements:
+            # Decode keeps inner tags intact (better than str(el))
+            xml_parts.append(el.decode())
+
+        return "\n".join(xml_parts)
+
+    except Exception as e:
+        logger.error(f"XML extraction failed: {e}")
+        return ""
+
+
 # ============ Main Scraping Function =============
 def scrape_news(url: str, source: str):
     """Scrape a single news article from a URL with comprehensive anti-CAPTCHA measures."""
@@ -172,6 +268,7 @@ def scrape_news(url: str, source: str):
         # Get config for this specific site
         site_config = news_configs.get(source)
         selector = site_config.get("selector")
+        xml_selector = site_config.get("xml_selector")
         min_paragraphs = site_config.get("min_paragraphs")
         unwanted_content = site_config.get("unwanted_content", [])
 
@@ -204,12 +301,16 @@ def scrape_news(url: str, source: str):
         )
         
         soup = BeautifulSoup(driver.page_source, "html.parser")
+
+        xml_content = extract_xml_content(soup, xml_selector)
+        xml_content = xml_content.replace("\x00", "")
+
         result = _extract_article_content(soup, selector, unwanted_content)
+        publish_at = extract_and_format_time(soup)
         result["content_fully_loaded"] = content_fully_loaded
 
         title = result.get("title")
         content = result.get("content")
-        translation_status = 0
         title_zh = None
         content_zh = None
 
@@ -219,11 +320,9 @@ def scrape_news(url: str, source: str):
                 translation_result = translate_article_to_chinese(title, content)
                 title_zh = translation_result.get('title_zh', '')
                 content_zh = translation_result.get('content_zh', '')
-                translation_status = 1
                 logger.info("Chinese translation completed")
             except Exception as e:
                 logger.error(f"Translation failed for {url}: {e}")
-                translation_status = 0
                 title_zh = ""
                 content_zh = ""
 
@@ -233,13 +332,14 @@ def scrape_news(url: str, source: str):
                 repo = NewsArticleRepository(db_manager)
                 repo.insert_or_update_article(
                     url=url,
+                    publish_at=publish_at,
                     source=source,
                     title=title,
                     content=content,
+                    xml_content=xml_content,
                     content_fully_loaded=content_fully_loaded,
                     title_zh=title_zh,
                     content_zh=content_zh,
-                    translation_status=translation_status
                 )
                 logger.info(f"Saved article to database: {url}")
             except Exception as db_e:

@@ -11,8 +11,6 @@ if (bg2csData && bg2csData.cs_param)
 
 if (!(csDone || csDoneOnce)) {
 
-if (window.location.hostname.endsWith('.it') || matchDomain(['eastwest.eu', 'ilsole24ore.com', 'italian.tech', 'quotidiano.net', 'tuttosport.com'])) {//italy
-
 if (matchDomain('corriere.it')) {
   if (window.location.pathname.endsWith('_amp.shtml')) {
     amp_unhide_subscr_section('iframe[src^="https://ads."]');
@@ -119,7 +117,7 @@ else if (matchDomain('ilfattoquotidiano.it')) {
       if (art_hidden)
         art_hidden.classList.remove('cropped');
     } else
-      header_nofix('div.ifq-post__content', 'div#ifq-paywall-hard');
+      header_nofix('div.ifq-post__content, div.article-content', 'div#ifq-paywall-hard, section.fqml-paywall');
   }
   let ads = 'div.adv, div.st-adunit, div[id^="ifq-adv-"], div.mgbox';
   hideDOMStyle(ads);
@@ -371,7 +369,6 @@ else if (matchDomain('tuttosport.com')) {
 
 else
   csDone = true;
-}
 
 } // end csDone(Once)
 

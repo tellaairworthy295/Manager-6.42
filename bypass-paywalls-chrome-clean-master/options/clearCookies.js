@@ -1,4 +1,4 @@
-var ext_api = (typeof browser === 'object') ? browser : chrome;
+var ext_api = chrome || browser;
 
 try {
   window.localStorage.clear();

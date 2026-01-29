@@ -1,9 +1,9 @@
 {
   "###_remove_sites": {
-    "cs_code": "aftenposten.no, theinformation.com, ###_custom_4.2.5.6",
+    "cs_code": "aftenposten.no, causette.fr, theinformation.com, ###_custom_4.2.8.2",
     "domain": "###"
   },
-  "404media.co": {
+  "404media.co (regwall)": {
     "allow_cookies": 1,
     "domain": "404media.co",
     "ld_archive_is": "div.post-access-cta|article"
@@ -83,9 +83,6 @@
     "ld_json": "div.subscription-package-article|div.restricted-article"
   },
   "Artsprofessional.co.uk": {
-    "add_ext_link": "div.Paywall__cta|section.Article__content",
-    "add_ext_link_type": "google_search_tool",
-    "allow_cookies": 1,
     "domain": "artsprofessional.co.uk"
   },
   "Athensreviewofbooks.com": {
@@ -224,11 +221,6 @@
     "allow_cookies": 1,
     "block_regex": "\\.catholicherald\\.co\\.uk\\/c\\/assets\\/pigeon\\.js",
     "domain": "catholicherald.co.uk"
-  },
-  "Causette.fr": {
-    "allow_cookies": 1,
-    "domain": "causette.fr",
-    "ld_json_url": "div.ihc-locker-wrap|div.entry-content"
   },
   "Chicago.suntimes.com": {
     "allow_cookies": 1,
@@ -622,6 +614,13 @@
     "cs_code": "[{\"cond\":\"article.restricted-non-subscriber\", \"rm_class\":\"restricted-non-subscriber\", \"elems\": [{\"cond\":\"article p\", \"rm_attrib\":\"style\"}]}, {\"cond\":\"div#vue-growler,div#js-modal\", \"rm_elem\":1}]",
     "domain": "group_usa_ibj_media",
     "group": "ibj.com,insideindianabusiness.com,theindianalawyer.com"
+  },
+  "Group_usa_informa_connect": {
+    "allow_cookies": 1,
+    "block_host_perm_add": "darwin.cx",
+    "block_regex": "\\.darwin\\.cx\\/dcxpw-init\\.js",
+    "domain": "group_usa_informa_connect",
+    "group": "cspdailynews.com,restaurantbusinessonline.com"
   },
   "Group_usa_oahu_publications": {
     "allow_cookies": 1,
@@ -1318,6 +1317,9 @@
     "cs_code": "[{\"cond\":\"div.pw-content\", \"rm_attrib\":\"class\", \"elems\": [{\"cond\":\"div.paywall-full,div.article-preview-fader\", \"rm_elem\":1}]}]",
     "domain": "rotowire.com"
   },
+  "Rtings.com (free articles only)": {
+    "domain": "rtings.com"
+  },
   "Rtoinsider.com": {
     "allow_cookies": 1,
     "domain": "rtoinsider.com",
@@ -1667,6 +1669,11 @@
     "allow_cookies": 1,
     "domain": "tvnewscheck.com",
     "ld_json_url": "div.singlepage div.mp_login_form|div.post-details"
+  },
+  "United.no": {
+    "allow_cookies": 1,
+    "domain": "united.no",
+    "useragent": "googlebot"
   },
   "Utilityweek.co.uk": {
     "allow_cookies": 1,

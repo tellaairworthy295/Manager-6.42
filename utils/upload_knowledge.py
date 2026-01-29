@@ -9,9 +9,9 @@ logger = get_news_task_logger()
 # ============================
 # Configuration
 # ============================
-BASE_URL = "http://10.25.116.40:7090"   # Dify API backend (adjust if needed)
-API_KEY = "dataset-XS82GQa1J04QacZ5iFl5QHKf"     # Replace with your real API key
-DATASET_ID = "aafc9493-9f65-452a-ad3a-0f140928f21b"       # Replace with your Knowledge Base (dataset) ID
+BASE_URL = "http://10.25.116.101:80"   # Dify API backend (adjust if needed)
+API_KEY = "dataset-5Ww30f0lj9rFWdh4H2FfXMLQ"     # Replace with your real API key
+DATASET_ID = "e050ade2-bac6-4905-95c2-514629bc027f"       # Replace with your Knowledge Base (dataset) ID
 
 # ============================
 # Helper functions
@@ -262,8 +262,8 @@ def clean_dify_knowledge():
         if doc.get("indexing_status") == "error":
             delete_document(doc["id"])
         # Delete docs created more than 24 hours ago
-        elif doc.get("created_at") is not None and float(doc["created_at"]) < twelve_hours_ago:
-            delete_document(doc["id"])
+        # elif doc.get("created_at") is not None and float(doc["created_at"]) < twelve_hours_ago:
+        #     delete_document(doc["id"])
     logger.info("Removal done!")
 
 

@@ -117,6 +117,7 @@ _* free articles only._
 [Fortune](https://fortune.com) -
 [Harvard Business Review](https://www.hbr.org) -
 [Inc.com](https://www.inc.com) -
+[Investor's Business Daily](https://www.investors.com) -
 [Law.com](https://www.law.com) -
 [MarketWatch](https://www.marketwatch.com) -
 [MIT Sloan Management Review](https://sloanreview.mit.edu) -
@@ -152,7 +153,6 @@ Global Polymer Group:
 [European Rubber Journal](https://www.european-rubber-journal.com) -
 [Plastics News](https://www.plasticsnews.com) -
 [Rubber News](https://www.rubbernews.com) -
-[Sustainable Plastics](https://www.sustainableplastics.com) -
 [Tire Business](https://www.tirebusiness.com) -
 [Urethanes Technology International](https://www.utech-polyurethane.com)\
 *Digiday Media* sites like\
@@ -212,6 +212,7 @@ Grouped in options:\
 ###### Sports
 [CyclingNews](https://www.cyclingnews.com) -
 [ESPN USA](https://www.espn.com) -
+[ON3](https://www.on3.com) -
 [RugbyPass](https://www.rugbypass.com) -
 [Sports Illustrated](https://www.si.com) -
 [The Athletic](https://www.nytimes.com/athletic)
@@ -265,6 +266,7 @@ Grouped in options:\
 [The Daily Wire](https://www.dailywire.com) -
 [The Diplomat](https://thediplomat.com) -
 [The Dispatch](https://thedispatch.com) -
+[The Information](https://www.theinformation.com) -
 [The Intercept](https://theintercept.com) -
 [The Juggernaut](https://www.thejuggernaut.com) -
 [The Lamp Magazine](https://thelampmagazine.com) -
@@ -288,6 +290,7 @@ Grouped in options:\
 [Condé Nast Traveler](https://www.cntraveler.com) -
 [Epicurious](https://www.epicurious.com) -
 [GC](https://www.gq.com) -
+[Pitchfork](https://www.pitchfork.com) -
 [The New Yorker](https://www.newyorker.com) -
 [Vanity Fair](https://www.vanityfair.com) -
 [Vogue USA](https://www.vogue.com) -
@@ -365,7 +368,6 @@ Grouped in options:\
 [The Columbian](https://www.columbian.com) -
 [The Dallas Morning News](https://www.dallasnews.com) -
 [The Hill](https://thehill.com) -
-[The New York Sun](https://www.nysun.com) -
 [The Salt Lake Tribune](https://www.sltrib.com) -
 [The San Francisco Standard](https://www.sfstandard.com) -
 [The Seattle Times](https://www.seattletimes.com) -
@@ -738,7 +740,6 @@ Grouped in options:\
 [Kölnische Rundschau](https://www.rundschau-online.de) -
 [Krautreporter](https://krautreporter.de) -
 [Kurier.at](https://kurier.at) -
-[Manager Magazin](https://www.manager-magazin.de) -
 [Mittelbayerische Zeitung](https://www.mittelbayerische.de) -
 [Neue Westfälische](https://www.nw.de) -
 [Nordwest Zeitung](https://www.nwzonline.de) -
@@ -772,8 +773,6 @@ Grouped in options:\
 [Westdeutsche Allgemeine Zeitung](https://www.waz.de) -
 [Westfalenpost](https://www.wp.de) -
 [Westfälische Rundschau](https://www.wr.de)\
-*[Haas Mediengruppe](https://www.haas-mediengruppe.de/marken)* sites like (opt-in to custom sites for unlisted)\
-[Mannheimer Morgen](https://www.mannheimer-morgen.de)\
 *Ippen.media* sites like (opt-in to custom sites for unlisted)\
 [Frankfurter Rundschau](https://www.fr.de) -
 [Münchner Merkur](https://www.merkur.de) -
@@ -1081,6 +1080,7 @@ Grouped in options:\
 [Geelong Advertiser](https://www.geelongadvertiser.com.au) -
 [Gold Coast Bulletin](https://www.goldcoastbulletin.com.au) -
 [Herald Sun](https://www.heraldsun.com.au) -
+[Northern Territory News](https://www.ntnews.com.au) -
 [The Advertiser/AdelaideNow](https://www.adelaidenow.com.au) -
 [The Australian](https://www.theaustralian.com.au) -
 [The Chronicle](https://www.thechronicle.com.au) -
@@ -1230,7 +1230,8 @@ Grouped in options:\
 
 ##### Colombia
 [El Espectador](https://www.elespectador.com) -
-[El Tiempo](https://www.eltiempo.com)
+[El Tiempo](https://www.eltiempo.com) -
+[Semana](https://www.semana.com)
 
 ##### Ecuador
 [El Universo](https://www.eluniverso.com)

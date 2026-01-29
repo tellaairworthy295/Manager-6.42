@@ -3,6 +3,7 @@
 
 # Exclude all TXT files
 *.txt
+rss
 # But keep requirements.txt
 !requirements.txt
 !command.txt

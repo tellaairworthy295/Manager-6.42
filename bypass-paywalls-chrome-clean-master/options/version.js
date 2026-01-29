@@ -1,10 +1,9 @@
-var ext_api = (typeof browser === 'object') ? browser : chrome;
-
+var ext_api = chrome || browser;
 var manifestData = ext_api.runtime.getManifest();
-var url_loc = manifestData.key ? 'chrome' : 'firefox';
 var ext_url = 'https://gitflic.ru/project/magnolia1234/bpc_uploads';
 var ext_name = manifestData.name;
-var version_str = 'v' + manifestData.version;
+var ext_version = manifestData.version;
+var version_str = 'v' + ext_version;
 var version_span = document.querySelector('span#version');
 if (version_span)
   version_span.innerText = version_str;
@@ -31,25 +30,13 @@ function show_warning() {
 
 function show_update(ext_version_new, check = true) {
   if (ext_version_new) {
-    ext_api.management.getSelf(function (result) {
-      var installType = result.installType;
-      var version_len = (installType === 'development') ? 7 : 5;
-      if (ext_version_new.substring(0, version_len) > manifestData.version.substring(0, version_len)) {
-        ext_api.storage.local.set({
-          ext_version_new: ext_version_new
-        });
-        anchorEl = document.createElement('a');
-        anchorEl.target = '_blank';
-        if (installType === 'development')
-          anchorEl.href = ext_url;
-        else {
-          anchorEl.href = ext_url;
-          ext_version_new = ext_version_new.replace(/\d$/, '0');
-        }
-        anchorEl.innerText = 'New release v' + ext_version_new;
-        version_span_new.appendChild(anchorEl);
-      }
-    });
+    if (ext_version_new > ext_version) {
+      anchorEl = document.createElement('a');
+      anchorEl.target = '_blank';
+      anchorEl.href = ext_url;
+      anchorEl.innerText = 'New release v' + ext_version_new;
+      version_span_new.appendChild(anchorEl);
+    }
     show_warning();
   } else if (check) {
     anchorEl = document.createElement('a');
@@ -70,10 +57,13 @@ function check_version_update(ext_version_new, popup) {
     show_update(ext_version_new, false);
 }
 
-ext_api.storage.local.get({optInUpdate: true, ext_version_new: false}, function (result) {
+ext_api.storage.local.get({optInUpdate: true, ext_upd_version_new: false}, function (result) {
+  let ext_version_new = result.ext_upd_version_new;
   if (result.optInUpdate) {
     let popup = document.querySelector('script[id="popup"]');
-    check_version_update(result.ext_version_new, popup);
-  } else
+    check_version_update(ext_version_new, popup);
+  } else if (ext_version_new)
+    show_update(ext_version_new, false);
+  else
     show_warning();
 });

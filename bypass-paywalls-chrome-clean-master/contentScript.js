@@ -1,5 +1,10 @@
 //"use strict";
-var ext_api = (typeof browser === 'object') ? browser : chrome;
+var ext_api = chrome || browser;
+var ext_chromium = window.navigator.userAgent.toLowerCase().includes('chrome');
+if (ext_api.runtime) {
+  var manifestData = ext_api.runtime.getManifest();
+  ext_chromium = !!manifestData.key;
+}
 var mobile = window.navigator.userAgent.toLowerCase().includes('mobile');
 var domain;
 var func_post;
@@ -219,26 +224,9 @@ if (bg2csData.ld_archive_is && dompurify_loaded) {
       // optional
       let article_src_sel = data_split[2] || article_sel;
       let article_link_sel = data_split[3] || article_sel;
-      func_post = function () {
+      func_post = func_post || function () {
         if (mobile) {
-          let lazy_images = document.querySelectorAll('figure img[loading="lazy"][style], picture img[loading="lazy"][style]');
-          for (let elem of lazy_images)
-            elem.style = 'width: 95%;';
-        }
-        // custom
-        if (matchDomain('404media.co')) {
-          let paywall = pageContains('h2', 'This post is for paid members only');
-          if (paywall.length) {
-            removeDOMElement(paywall[0].parentNode);
-            header_nofix(article_link_sel, '', 'BPC > no archive-fix');
-          }
-          let podcast = document.querySelector('div[frameborder][old-src]');
-          if (podcast) {
-            let iframe = document.createElement('iframe');
-            iframe.src = podcast.getAttribute('old-src');
-            iframe.style = 'width: 90%; height: 250px;';
-            podcast.parentNode.replaceChild(iframe, podcast);
-          }
+          document.querySelectorAll('figure img[loading="lazy"][style], picture img[loading="lazy"][style]').forEach(e => e.style = 'width: 95%;');
         }
       }
       getArchive(url, paywall_sel, '', article_sel, '', article_src_sel, article_link_sel);
@@ -584,19 +572,22 @@ function getExtFetch(url, json_key = '', headers = {}, callback, data_ext_fetch_
 var selector_level;
 function replaceDomElementExt(url, proxy, base64, selector, text_fail = '', selector_source = selector, selector_archive = selector) {
   let article = document.querySelector(selector);
-  if (!article)
+  let archive_match = url.match(/https:\/\/archive\.\w{2}\//);
+  if (!article) {
+    if (archive_match && document.body)
+      document.body.firstChild.before(archiveLink(url));
     return;
-  else if (typeof browser === 'object' && !bg2csData_fetch) { // fetch consent (Firefox only)
+  } else if (proxy && !ext_chromium && !bg2csData_fetch) { // fetch consent (Firefox only)
     let body = document.body || article;
     header_nofix(body.firstChild, '', 'BPC > opt-in for consent to fetch site content (by external url-request).\r\nSee options > opt-in (new Mozilla Firefox \'data transmission\' consent requirement).');
-    if (url.match(/https:\/\/archive\.\w{2}\//))
-      body.firstChild.before(archiveLink(url));
+    if (archive_match)
+      article.before(archiveLink(url));
     return;
   }
   if (proxy) {
     selector_level = true;
     if (!text_fail) {
-      if (url.startsWith('https://archive.'))
+      if (archive_match)
         text_fail = 'BPC > Try for full article text (no need to report issue for external site):\r\n';
       else if (!matchUrlDomain(window.location.hostname, url))
         text_fail = 'BPC > failed to load from external site:\r\n';

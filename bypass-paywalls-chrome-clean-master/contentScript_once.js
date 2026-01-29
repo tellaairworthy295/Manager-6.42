@@ -79,9 +79,10 @@ window.setTimeout(function () {
       if (document.querySelector('head > script[src*="/dfv.containers.piwik.pro/"]'))
         group = '###_de_dfv_medien';
       else if (hostname.endsWith('.de')) {
-        if (document.querySelector('div.navigation__personalization > a[href^="https://www.haas-mediengruppe.de/"]'))
+        if (matchDomain(['bergstraesser-anzeiger.de', 'fnweb.de', 'mannheimer-morgen.de', 'schwetzinger-zeitung.de'])) {
           group = '###_de_haas_medien';
-        else if (document.querySelector('head > link[href*=".rndtech.de/"]'))
+          nofix = 1;
+        } else if (document.querySelector('head > link[href*=".rndtech.de/"]'))
           group = '###_de_madsack';
         else if (document.querySelector('header a.mgw-logo[href^="https://mgw.de"]'))
           group = '###_de_mgw'; // custom
@@ -189,7 +190,7 @@ window.setTimeout(function () {
       else if (document.querySelector('footer#footer li > a[href^="https://cherryroad-media.com"]')) {
         group = '###_usa_cherryroad';
         nofix = 1;
-      } else if (document.querySelector('head > link[href*=".gannettdigital.com/"], head > link[href*=".gannett-cdn.com/"]'))
+      } else if (document.querySelector('head > link[href*="/gannett_net.js"], footer a[href^="https://www.gannett.com"]'))
         group = '###_usa_gannett';
       else if (document.querySelector('head > script[src*="/treg.hearstnp.com/"]'))
         group = '###_usa_hearst_comm';

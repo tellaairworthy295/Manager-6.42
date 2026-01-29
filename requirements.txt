@@ -10,7 +10,6 @@ fastapi
 redis
 uvicorn
 asyncio
-matplotlib
 numpy
 pandas
 python-docx
@@ -23,3 +22,7 @@ dramatiq
 filelock
 python-multipart
 fastmcp
+concurrent-log-handler
+aiohttp
+pillow
+openpyxl

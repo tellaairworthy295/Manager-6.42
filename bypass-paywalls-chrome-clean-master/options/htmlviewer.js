@@ -251,6 +251,16 @@ if (window.location.href === 'https://codebeautify.org/htmlviewer') {
           document.querySelectorAll('article p').forEach(e => e.removeAttribute('style'));
         } else if (matchUrlDomain('law.com', canonical_url)) {
           hide = 'div.paywall-container';
+        } else if (matchUrlDomain('medscape.com', canonical_url)) {
+          if (canonical_url.includes('.com/slideshow/')) {
+            let slide_container = document.querySelector('div.slide-container > div.slick-list[style]');
+            if (slide_container) {
+              slide_container.removeAttribute('style');
+              slide_container.querySelectorAll('div[data-slick-index][class]').forEach(e => e.removeAttribute('class'));
+              slide_container.querySelectorAll('img.lazy-load[data-src]').forEach(e => e.src = e.getAttribute('data-src'));
+            }
+          }
+          hide = 'div.text-ad-unit, div[id^="ads-"], div.adswrapper';
         } else if (matchUrlDomain('nouvelobs.com', canonical_url)) {
           hide = 'div[class^="paywall"], div.dfp-slot';
         } else if (matchUrlDomain('politiken.dk', canonical_url)) {

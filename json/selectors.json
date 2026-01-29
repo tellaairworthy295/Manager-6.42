@@ -2,19 +2,30 @@
   "news": {
       "bloomberg": {
         "selector": "article p, div.body-content p, div[data-component='story-text'] p",
+        "xml_selector": "div.body-content",
+        "time_selector": "time[datetime]",
         "min_paragraphs": 5,
         "unwanted_content": [
           "Bloomberg may send me offers and promotions.",
-          "By submitting my information, I agree to the Privacy Policy and Terms of Service"
+          "By submitting my information, I agree to the Privacy Policy and Terms of Service",
+          "Listen",
+          "Listen to Odd Lots on Apple Podcasts Listen to Odd Lots on Spotify Watch Odd Lots on YouTube Subscribe to the newsletter",
+          "Get Alerts for:",
+          "Sign up here for the twice-weekly Next Africa newsletter , and subscribe to the Next Africa podcast on Apple , Spotify or anywhere you listen .",
+          "Sign up here for the twice-weekly Next Africa newsletter, and subscribe to the Next Africa podcast on Apple, Spotify or anywhere you listen."
         ]
       },
       "reuters": {
         "selector": "div[data-testid='article-body'] p, div[data-testid*='paragraph']",
+        "xml_selector": null,
+        "time_selector": null,
         "min_paragraphs": 5,
         "unwanted_content": []
       },
       "bbc": {
         "selector": "div[data-component=\"text-block\"] p",
+        "xml_selector": null,
+        "time_selector": null,
         "min_paragraphs": 3,
         "unwanted_content": []
       }

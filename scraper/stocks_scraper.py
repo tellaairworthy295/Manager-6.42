@@ -93,8 +93,8 @@ async def main_scraper(date: str) -> bool:
             f"Saved {count} stock records to database for {date}"
         )
 
-        result = repo.get_today_stocks()
-        await asyncio.to_thread(_write_analysis_file, result, date)
+        # result = repo.get_today_stocks()
+        # await asyncio.to_thread(_write_analysis_file, result, date)
 
     return True, market_number
 
@@ -255,10 +255,10 @@ async def _prepare_image_dir(path: str):
                 logger.warning(f"Could not delete {fp}: {e}")
 
 
-def _write_analysis_file(result: list[dict], date):
-    with open(f"excel/{date}.txt", "w", encoding="utf-8") as f:
-        for item in result:
-            f.write(
-                f"{item['stock']}\t{item['code']}\n"
-                f"{item['analysis']}\n\n"
-            )
+# def _write_analysis_file(result: list[dict], date):
+#     with open(f"excel/{date}.txt", "w", encoding="utf-8") as f:
+#         for item in result:
+#             f.write(
+#                 f"{item['stock']}\t{item['code']}\n"
+#                 f"{item['analysis']}\n\n"
+#             )

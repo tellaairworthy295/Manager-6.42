@@ -1,5 +1,4 @@
-var ext_api = (typeof browser === 'object') ? browser : chrome;
-var url_loc = (typeof browser === 'object') ? 'firefox' : 'chrome';
+var ext_api = chrome || browser;
 var manifestData = ext_api.runtime.getManifest();
 var ext_manifest_version = manifestData.manifest_version;
 var custom_switch = ((manifestData.optional_permissions && manifestData.optional_permissions.length) || (manifestData.optional_host_permissions && manifestData.optional_host_permissions.length));
