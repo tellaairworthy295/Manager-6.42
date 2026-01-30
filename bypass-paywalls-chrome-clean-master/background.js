@@ -976,6 +976,7 @@ ext_api.storage.local.get({
       // reset ungrouped sites
       let new_domain_sites = {
         'Medium (opt-in to custom sites for custom domains)': '###_medium',
+        'The Baltimore Banner': 'thebanner.com',
         'The Times Literary Supplement': 'the-tls.com'
       };
       for (let key in new_domain_sites) {
@@ -1331,7 +1332,7 @@ if (ext_chromium) {
       cs_local = 'en';
     else if (hostname.match(/\.(ar|br|cl|mx|pe|uy)$/) || matchUrlDomain(['abcmais.com', 'clarin.com', 'cronista.com', 'elespectador.com', 'elmercurio.com', 'eltiempo.com', 'eltribuno.com', 'eluniverso.com', 'exame.com', 'globo.com', 'lasegunda.com', 'latercera.com', 'milenio.com', 'revistaoeste.com', 'semana.com'], url))
       cs_local = 'es.pt';
-    else if ((hostname.match(/\.(de|at|ch)$/) && !matchUrlDomain(grouped_sites['###_ch_esh_medias'].concat(['letemps.ch']), url)) || matchUrlDomain(['faz.net', 'handelsblatt.com', 'wochenblatt.com'], url))
+    else if ((hostname.match(/\.(de|at|ch)$/) && !matchUrlDomain(grouped_sites['###_ch_esh_medias'].concat(['letemps.ch']), url)) || matchUrlDomain(['diepresse.com', 'faz.net', 'handelsblatt.com', 'wochenblatt.com'], url))
       cs_local = 'de';
     else if (hostname.match(/\.(dk|fi|se)$/))
       cs_local = 'fi.se';

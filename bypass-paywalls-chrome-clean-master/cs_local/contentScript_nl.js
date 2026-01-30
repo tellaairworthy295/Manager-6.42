@@ -43,6 +43,41 @@ else if (matchDomain(be_mediahuis_domains)) {
               header.after(br, video, br);
           }
         }
+        let gallery, img_width, captions, next, next_images, next_img_width;
+        let gallery_new = document.createElement('div');
+        let figure_nr = 0;
+        let gallery_figures = document.querySelectorAll('div > ul > li > figure');
+        for (let figure of gallery_figures) {
+          if (!figure_nr) {
+            gallery = figure.parentNode.parentNode.parentNode;
+            captions = Array.from(gallery.querySelectorAll('span')).filter(e => e.innerText.includes('©'));
+            next = gallery.nextSibling;
+            if (next)
+              next_images = next.querySelectorAll('img[currentsourceurl]');
+          }
+          let img = figure.querySelector('img[currentsourceurl]');
+          if (img && next_images) {
+            let img_src = img.getAttribute('currentsourceurl');
+            if (img_src) {
+              if (img_src.includes('/alternates/'))
+                img_width = img_src.split('/alternates/')[1].split('/')[0];
+            } else if (img_width && next_images[figure_nr]) {
+              img_src = next_images[figure_nr].getAttribute('currentsourceurl');
+              if (img_src && img_src.includes('/alternates/')) {
+                next_img_width = img_src.split('/alternates/')[1].split('/')[0];
+                img_src = img_src.replace(next_img_width, img_width);
+              }
+            }
+            let figure_new = makeFigure(img_src, captions && captions[figure_nr] ? captions[figure_nr].parentNode.innerText : '', {style: 'height: 500px;'});
+            figure_new.style = 'margin: 20px 0px;';
+            gallery_new.appendChild(figure_new);
+          }
+          figure_nr++;
+        }
+        if (gallery && next) {
+          next.after(gallery_new);
+          removeDOMElement(gallery, next);
+        }
         let errors = document.querySelectorAll('div[height][old-src]:not([src]):has(div#__next_error__)');
         for (let elem of errors) {
           let iframe = document.createElement('iframe');
@@ -72,7 +107,7 @@ else if (matchDomain(be_mediahuis_domains)) {
       }
     }
     let url = window.location.href;
-    let paywall_sel = 'head > meta[name$="article_ispaidcontent"][content="true"]';
+    let paywall_sel = 'head > meta[name$="article_ispaidcontent"][content="true"], div[data-testid="paywall-position-inline-paywall"]:not(:empty)';
     let article_sel = 'main > article';
     let article_main = document.querySelector(article_sel);
     if (!article_main)
@@ -208,13 +243,14 @@ else if (matchDomain(be_roularta_domains)) {
 }
 
 else if (matchDomain('groene.nl')) {
-  let more = pageContains('div.wrapper > h2', 'Verder lezen?');
-  if (more.length) {
-    let link_text = 'https://www.groene.nl/populair';
-    let a_link = document.createElement('a');
-    a_link.href = link_text;
-    a_link.innerText = 'BPC > ' + link_text.split('www.')[1];
-    more[0].parentNode.append(document.createElement('br'), a_link);
+  let login = document.querySelector('header li > a[href*="/accounts/inloggen"]');
+  if (login) {
+    let pop = document.createElement('li');
+    let pop_link = document.createElement('a');
+    pop_link.href = '/populair';
+    pop_link.innerText = 'Populair';
+    pop.appendChild(pop_link);
+    login.parentNode.after(pop);
     csDoneOnce = true;
   }
 }
@@ -512,22 +548,33 @@ else if (matchDomain(nl_dpg_adr_domains.concat(['hln.be']))) {
       }
       let video_buttons = article.querySelectorAll('button[type="button"]');
       removeDOMElement(...video_buttons);
+      if (comments)
+        article.appendChild(comments);
+      if (readmore)
+        article.appendChild(readmore);
     }
     let article_divs = document.querySelectorAll(article_sel + ' > div:not(:empty)');
     if (article_divs.length < 3)
       article.before(googleSearchToolLink(url));
-    let ads = 'span[style*="background-color:"]:has(> span[style*="min-height:"])';
+    let ads = 'span[style*="background-color:"]:has(> span[style*="min-height:"]), span > br';
     hideDOMStyle(ads, 2);
   }
+  let comments = document.querySelector('div[data-content-type="SHARE"]');
+  let readmore = document.querySelector('div[data-content-type="CROSS_PROMOTION"]');
   let url = window.location.href;
-  let article_sel = cs_param.article_sel || 'article > section';
-  let paywall_sel = cs_param.paywall_sel || article_sel + ' div[data-testid="premium"]';
-  let paywall_action = {rm_attrib: 'data-testid'};
-  if (!document.querySelector(paywall_sel)) { // regwal
-    paywall_sel = article_sel + '[class]:empty';
-    paywall_action = {rm_attrib: 'class'};
-  }
-  getArchive(url, paywall_sel, paywall_action, article_sel);
+  let article_sel = cs_param.article_sel || 'article';
+  let paywall_sel = cs_param.paywall_sel || article_sel + ' svg.media-top__premium-indicator';
+  let paywall_action = {rm_class: 'media-top__premium-indicator'};
+  if (!document.querySelector(paywall_sel)) { // regwall
+    let pars = document.querySelectorAll(article_sel + ' div[data-content-type="PARAGRAPH"]');
+    if (pars.length < 3) {
+      header_nofix('section.grid', '', 'BPC > regwall (use free account)');
+      paywall_sel = article_sel + '.article';
+      paywall_action = {rm_class: 'article'};
+      getArchive(url, paywall_sel, paywall_action, article_sel);
+    }
+  } else
+    getArchive(url, paywall_sel, paywall_action, article_sel);
   let ads = 'div.dfp-space';
   hideDOMStyle(ads);
 }
@@ -553,13 +600,12 @@ else if (matchDomain(nl_mediahuis_region_domains)) {
             header.after(br, video, br);
         }
       }
+      article.querySelectorAll('hgroup, section:not(:empty)').forEach(e => e.style = 'width: 95%;');
       if (mobile) {
         let div_next = document.querySelector('div[id="__next"]');
         if (div_next)
           article.style.width = div_next.offsetWidth - 20 + 'px';
-        let lazy_images = article.querySelectorAll('figure img[loading="lazy"][style]');
-        for (let elem of lazy_images)
-          elem.style = 'width: 95%;';
+        article.querySelectorAll('figure img[loading="lazy"][style]').forEach(e => e.style = 'width: 95%;');
         let figures = article.querySelectorAll('figure div');
         for (let elem of figures) {
           elem.removeAttribute('style');

@@ -165,6 +165,9 @@ window.setTimeout(function () {
         group = '###_uk_william_reed';
       else if (matchDomain(['footballleagueworld.co.uk']))
         group = '###_ca_valnet';
+    } else if (hostname.endsWith('co.za')) {
+      if (matchDomain(['dailydispatch.co.za', 'sowetan.co.za', 'theherald.co.za']))
+        group = '###_za_arena';
     } else if (hostname.match(/\.(ca|com|net|news|org)$/)) {
       if (matchDomain(['latribune.ca', 'lavoixdelest.ca', 'ledroit.com', 'ledroitfranco.com', 'lenouvelliste.ca', 'lequotidien.com']))
         group = '###_ca_gcm';

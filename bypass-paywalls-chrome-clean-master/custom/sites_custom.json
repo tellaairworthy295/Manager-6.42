@@ -1,6 +1,6 @@
 {
   "###_remove_sites": {
-    "cs_code": "aftenposten.no, causette.fr, theinformation.com, ###_custom_4.2.8.2",
+    "cs_code": "aftenposten.no, causette.fr, group_za_arena, theinformation.com, ###_custom_4.2.8.4",
     "domain": "###"
   },
   "404media.co (regwall)": {
@@ -634,12 +634,6 @@
     "domain": "group_usa_wehco_media",
     "group": "arkansasonline.com,nwaonline.com,timesfreepress.com"
   },
-  "Group_za_arena": {
-    "allow_cookies": 1,
-    "cs_code": "[{\"hide_elem\":\"section.b-paywall__overlay,div.b-ads-block\"}, {\"cond\":\"html[style]\", \"rm_attrib\":\"style\"}]",
-    "domain": "group_za_arena",
-    "group": "businessday.co.za,dailydispatch.co.za,sowetan.co.za,theherald.co.za,timeslive.co.za"
-  },
   "Gulfnews.com": {
     "allow_cookies": 1,
     "domain": "gulfnews.com",
@@ -760,6 +754,12 @@
   "Internationalepolitik.de": {
     "allow_cookies": 1,
     "domain": "internationalepolitik.de"
+  },
+  "Investing.com (regwall only)": {
+    "allow_cookies": 1,
+    "block_host_perm_add": "invmed.co",
+    "block_regex": "\\.invmed\\.co\\/bootstrap\\/bootstrap\\.min\\.js",
+    "domain": "investing.com"
   },
   "Investmentnews.com": {
     "allow_cookies": 1,
@@ -1569,8 +1569,7 @@
   },
   "Thefederal.com": {
     "allow_cookies": 1,
-    "amp_redirect": "div#premium_access_message_text",
-    "cs_code": "[{\"cond\":\"div.access-message\", \"rm_elem\":1, \"elems\":[{\"cond\":\"div.hide.paywall-content\", \"rm_attrib\":\"class\"}]}]",
+    "cs_code": "[{\"cond\":\"div.hide.paywall-content\", \"set_attrib\":\"class|article_cont_size\"}, {\"hide_elem\":\"div#premium_access_message_text,div.para_text_cl,div#lock_message,div.login_space\"}]",
     "domain": "thefederal.com"
   },
   "Thehub.ca": {

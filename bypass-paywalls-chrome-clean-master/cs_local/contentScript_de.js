@@ -232,6 +232,14 @@ else if (matchDomain('cicero.de')) {
     ampToHtml();
 }
 
+else if (matchDomain('diepresse.com')) {
+  let paywall = document.querySelector('div.premium-content.hide');
+  if (paywall)
+    paywall.removeAttribute('class');
+  let fade = 'div.paywall-container--locked';
+  hideDOMStyle(fade);
+}
+
 else if (matchDomain('faz.net')) {
   let paywall = document.querySelector('div.wall');
   if (paywall && dompurify_loaded) {

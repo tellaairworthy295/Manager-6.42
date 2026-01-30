@@ -130,6 +130,7 @@
     "*://*.business-standard.com/*",
     "*://*.businessam.be/*",
     "*://*.businessdailyafrica.com/*",
+    "*://*.businessday.co.za/*",
     "*://*.businessdesk.co.nz/*",
     "*://*.businessinsider.com.pl/*",
     "*://*.businessinsider.com/*",
@@ -227,6 +228,7 @@
     "*://*.diariodenavarra.es/*",
     "*://*.diariosur.es/*",
     "*://*.diariovasco.com/*",
+    "*://*.diepresse.com/*",
     "*://*.digiday.com/*",
     "*://*.digitimes.com/*",
     "*://*.diplomatique.org.br/*",
@@ -802,7 +804,7 @@
     "*://*.theatlantic.com/*",
     "*://*.theaustralian.com.au/*",
     "*://*.thebaffler.com/*",
-    "*://*.thebaltimorebanner.com/*",
+    "*://*.thebanner.com/*",
     "*://*.theblaze.com/*",
     "*://*.thebookseller.com/*",
     "*://*.thebulletin.org/*",
@@ -855,6 +857,7 @@
     "*://*.thueringer-allgemeine.de/*",
     "*://*.tijd.be/*",
     "*://*.timeshighereducation.com/*",
+    "*://*.timeslive.co.za/*",
     "*://*.timesunion.com/*",
     "*://*.tirebusiness.com/*",
     "*://*.tlz.de/*",
@@ -976,6 +979,7 @@
     "*://*.nhst.tech/*",
     "*://*.nyt.com/*",
     "*://*.prisa.com/*",
+    "*://*.thebaltimorebanner.com/*",
     "*://*.townnews.com/*",
     "*://*.wgchrrammzv.com/*",
     "*://archive.fo/*",
@@ -990,5 +994,5 @@
     "*://codebeautify.org/*",
     "*://gitflic.ru/*"
   ],
-  "version": "4.2.9.1"
+  "version": "4.2.9.6"
 }

@@ -17,11 +17,11 @@
         "ATTACHMENTS": []
   },
   "DatabaseConfig": {
-    "DB_HOST": "10.29.88.63",
-    "DB_PORT": 3306,
-    "DB_USER": "lmh",
-    "DB_PASSWORD": "lmh@123456",
-    "DB_NAME": "selfdev_test"
+    "DB_HOST": "localhost",
+    "DB_PORT": 35300,
+    "DB_USER": "root",
+    "DB_PASSWORD": "112358@gh",
+    "DB_NAME": "dify_data"
   },
   "AgentSitesConfig":[
     {

@@ -158,9 +158,6 @@ class AsyncCookiesHandler:
                 raise ValidationError(f"{self.section_name}用户名或密码错误，请检查后重试")
             except Exception:
                 pass  # Timeout means not found (normal)
-
-        import time
-        time.sleep(30)
         
         # 7. Wait login dialog to disappear (if locator defined)
         if self.login_dialog_locator:

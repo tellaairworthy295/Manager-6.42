@@ -209,7 +209,7 @@ Grouped in options:\
 [SlideShare](https://www.slideshare.net) -
 [Study.com (only lessons; no videos)](https://study.com)
 
-###### Sports
+##### Sports
 [CyclingNews](https://www.cyclingnews.com) -
 [ESPN USA](https://www.espn.com) -
 [ON3](https://www.on3.com) -
@@ -363,7 +363,7 @@ Grouped in options:\
 [Star Tribune](https://www.startribune.com) -
 [Tampa Bay Times](https://www.tampabay.com) -
 [The Atlanta Journal-Constitution](https://www.ajc.com)\
-[The Baltimore Banner](https://www.thebaltimorebanner.com) -
+[The Baltimore Banner](https://www.thebanner.com) -
 [The Boston Globe](https://www.bostonglobe.com) -
 [The Columbian](https://www.columbian.com) -
 [The Dallas Morning News](https://www.dallasnews.com) -
@@ -728,6 +728,7 @@ Grouped in options:\
 [Der Freitag](https://www.freitag.de) -
 [Der Spiegel](https://www.spiegel.de) -
 [Der Tagesspiegel](https://www.tagesspiegel.de) -
+[Die Presse](https://www.diepresse.com) -
 [Die Rheinpfalz](https://www.rheinpfalz.de) -
 [Die Welt](https://www.welt.de) -
 [Die Zeit](https://www.zeit.de) -
@@ -1053,7 +1054,7 @@ Grouped in options:\
 
 #### Africa
 
-###### Kenya
+##### Kenya
 
 [The Standard](https://www.standardmedia.co.ke) -
 [The Star](https://www.the-star.co.ke)
@@ -1062,6 +1063,12 @@ Grouped in options:\
 *[Nation Media Group](https://www.nationmedia.com/brands)* sites like (opt-in to custom sites for unlisted)\
 [Business Daily](https://www.businessdailyafrica.com) -
 [Daily Nation](https://nation.africa)
+
+##### South Africa
+Grouped in options:\
+*[Arena Holdings](https://arena.africa/brands)* sites like (opt-in to custom sites for unlisted)\
+[BusinessDay](https://www.businessday.co.za) -
+[TimesLive](https://www.timeslive.co.za)
 
 ##### Australia/New Zealand
 

@@ -84,7 +84,7 @@ def fetch_urls_from_page(query: str, site: str):
         links = [link for link in links if link not in recent_links]
 
         logger.info(f"Found {len(links)} {query} article links")
-        return links
+        return links[:2]
     except Exception as e:
         logger.error(f"Error fetching URLs: {e}")
         raise

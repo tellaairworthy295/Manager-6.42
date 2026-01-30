@@ -64,7 +64,7 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, group_
     failed_urls = []
 
     for url in urls:
-        time.sleep(random.uniform(2.5, 5.0))
+        time.sleep(random.uniform(2.0, 10.0))
         content = ""
         for attempt in range(3):
             try:
@@ -152,16 +152,16 @@ def finalize_and_update_dify(group_key: str, now_str: str):
             for rr in results
             if rr.get("total_content")
         ]
-        clean_dify_knowledge()
-        try:
-            upload_dify_knowledge(all_content, now_str, max_retries=3, retry_delay=5)
-            logger.info("✅ Dify KB updated after scraping all sources")
-        except Exception as e:
-            logger.error(f"❌ Failed to update Dify KB: {e}")
+        # clean_dify_knowledge()
+        # try:
+        #     upload_dify_knowledge(all_content, now_str, max_retries=3, retry_delay=5)
+        #     logger.info("✅ Dify KB updated after scraping all sources")
+        # except Exception as e:
+        #     logger.error(f"❌ Failed to update Dify KB: {e}")
 
-        logger.info(
-            f"Dify KB updated: {total_sites} sites, {successes} success, {failures} failed"
-        )
+        # logger.info(
+        #     f"Dify KB updated: {total_sites} sites, {successes} success, {failures} failed"
+        # )
     except Exception as e:
         logger.exception(f"Aggregator failed: {e}")
     finally:

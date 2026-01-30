@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timedelta, date, timezone
 import re
 from typing import List, Optional, Dict, Any
-from sqlalchemy import Date, Float, create_engine, Column, Integer, String, Text, DateTime, Boolean, UniqueConstraint
+from sqlalchemy import VARCHAR, Date, Float, create_engine, Column, Integer, String, Text, DateTime, Boolean, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from sqlalchemy.pool import QueuePool
@@ -19,14 +19,6 @@ from contextlib import contextmanager
 from sqlalchemy.orm import declarative_base
 import urllib
 Base = declarative_base()
-
-# def normalize(s):
-#     if not s:
-#         return s
-#     # Remove soft hyphen and zero-width chars
-#     s = s.replace("\u00ad", "")
-#     s = re.sub(r"[\u200b-\u200f\u202a-\u202e]", "", s).strip()
-#     return s
 
 # ==================== Database Models ====================
 
@@ -59,7 +51,7 @@ class Stock(Base):
         'mysql_collate': 'utf8mb4_unicode_ci'
     }
     id = Column(Integer, primary_key=True, autoincrement=True)
-    date = Column(String(20), nullable=False, index=True)
+    date = Column(Date, nullable=False, index=True)  # Changed from String to Date
     stock = Column(String(100), nullable=False)
     code = Column(String(50))
     analysis = Column(Text)
@@ -71,7 +63,7 @@ class Stock(Base):
     def to_dict(self) -> Dict[str, Any]:
         """Convert model to dictionary."""
         return {
-            "date": self.date,
+            "date": self.date.isoformat() if isinstance(self.date, date) else self.date,  # Convert Date to string
             "stock": self.stock,
             "code": self.code,
             "analysis": self.analysis,
@@ -101,17 +93,38 @@ class NewsAnalysis(Base):
         'mysql_collate': 'utf8mb4_unicode_ci'
     }
     id = Column(Integer, primary_key=True, autoincrement=True)
-    date = Column(String(20), nullable=False, index=True)
+    date = Column(Date, nullable=False, index=True)  # Changed from String to Date
     time = Column(DateTime)
     analysis = Column(Text)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert model to dictionary."""
         return {
-            "date": self.date,
+            "date": self.date.isoformat() if isinstance(self.date, date) else self.date,
             "time": self.time.isoformat() if self.time else None,
             "analysis": self.analysis,
         }
+
+class ActionData(Base): 
+    """Model for action data table."""
+    __tablename__ = "action_data"
+    __table_args__ = (
+        UniqueConstraint('date', 'name', name='uq_date_name'),  # Composite uniqueness on (date, name)
+        {
+            'mysql_charset': 'utf8mb4',
+            'mysql_collate': 'utf8mb4_unicode_ci'
+        }
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    section = Column(VARCHAR(128), nullable=False)
+    board = Column(VARCHAR(64), nullable=False)
+    code = Column(VARCHAR(64), nullable=False)
+    name = Column(VARCHAR(64), nullable=False)
+    time = Column(VARCHAR(64), nullable=False)
+    market = Column(Float, nullable=False)
+    turnover = Column(Float, nullable=False)
+    keyword = Column(Text)
 
 class User(Base):
     """Model for users table."""
@@ -155,11 +168,11 @@ class DatabaseManager:
             with open("json/config.json", "r", encoding="utf-8") as f:
                 self._config_cache = json.load(f)
         db_config = self._config_cache.get("DatabaseConfig", {})
-        db_host = db_config.get("DB_HOST", "10.29.88.63")
-        db_port = db_config.get("DB_PORT", 3306)
-        db_user = db_config.get("DB_USER", "lmh")
-        db_password = db_config.get("DB_PASSWORD", "lmh@123456")
-        db_name = db_config.get("DB_NAME", "selfdev_test")
+        db_host = db_config.get("DB_HOST", "localhost")
+        db_port = db_config.get("DB_PORT", 35300)
+        db_user = db_config.get("DB_USER", "root")
+        db_password = db_config.get("DB_PASSWORD", "112358@gh")
+        db_name = db_config.get("DB_NAME", "dify_data")
         
         # Create connection string
         connection_string = (
@@ -243,10 +256,6 @@ class NewsArticleRepository:
         content_zh: Optional[str] = None,
     ) -> NewsArticle:
         """Insert or update a news article safely with upsert logic."""
-        # Normalize the content and content_zh
-        # normalized_content = normalize(content)
-        # normalized_content_zh = normalize(content_zh) if content_zh else None
-        # normalized_title_zh = normalize(title_zh) if title_zh else None
         with self.db_manager.get_session() as session:
             if not publish_at:
                 # Get current UTC time (no timezone adjustment needed)
@@ -415,7 +424,7 @@ class StockRepository:
             )
             return [
                 {
-                    "date": record.date,
+                    "date": record.date.isoformat() if isinstance(record.date, date) else record.date,
                     "stock": record.stock,
                     "code": record.code,
                     "analysis": record.analysis,
@@ -432,7 +441,7 @@ class StockRepository:
         with self.db_manager.get_session() as session:
             stocks = (
                 session.query(Stock)
-                .filter(Stock.date == str(today))
+                .filter(Stock.date == today)
                 .all()
             )
             result = [
@@ -458,8 +467,12 @@ class StockRepository:
         with self.db_manager.get_session() as session:
             count = 0
             for rec in records:
+                stock_date = rec["date"]
+                # Accept both string or date, but always convert to datetime.date for DB
+                if isinstance(stock_date, str):
+                    stock_date = datetime.strptime(stock_date, "%Y-%m-%d").date()
                 stmt = insert(Stock).values(
-                    date=rec["date"],
+                    date=stock_date,
                     stock=rec["stock"],
                     code=rec.get("code"),
                     analysis=rec.get("analysis"),
@@ -504,10 +517,12 @@ class StockStatsRepository:
         down_limit_st, even, break_rate, up_fluctuation, down_fluctuation, max_even, max_break
         """
         with self.db_manager.get_session() as session:
-            date = market_stats.get("date")
+            stats_date = market_stats.get("date")
+            if isinstance(stats_date, str):
+                stats_date = datetime.strptime(stats_date, "%Y-%m-%d").date()
             existing = (
                 session.query(StockStats)
-                .filter(StockStats.date == date)
+                .filter(StockStats.date == stats_date)
                 .first()
             )
             if existing:
@@ -523,7 +538,7 @@ class StockStatsRepository:
                 existing.max_break = market_stats.get("max_break")
             else:
                 new_stats = StockStats(
-                    date=market_stats.get("date"),
+                    date=stats_date,
                     up_limit=market_stats.get("up_limit"),
                     down_limit=market_stats.get("down_limit"),
                     up_limit_st=market_stats.get("up_limit_st"),
@@ -549,7 +564,7 @@ class StockStatsRepository:
             # 转成字典列表，避免 detached instance
             return [
                 {
-                    "date": s.date,
+                    "date": s.date.isoformat() if isinstance(s.date, date) else s.date,
                     "up_limit": s.up_limit,
                     "down_limit": s.down_limit,
                     "up_limit_st": s.up_limit_st,
@@ -564,6 +579,47 @@ class StockStatsRepository:
                 for s in all_stats
             ]
 
+class ActionDataRepository:
+    """
+    Repository for upserting action_data table.
+    """
+
+    def __init__(self, db_manager: DatabaseManager):
+        self.db_manager = db_manager
+
+    def upsert_action_data(self, data: dict) -> ActionData:
+        """
+        Upsert (insert or update) for action_data table using ('date', 'name') as unique key
+        per uq_date_name constraint.
+        'data' dict must contain all columns needed for ActionData.
+        """
+        required_fields = [
+            "date", "section", "board", "code", "name",
+            "time", "market", "turnover", "keyword"
+        ]
+        missing_fields = [f for f in required_fields if f not in data]
+        if missing_fields:
+            raise ValueError(f"Missing fields for upsert: {missing_fields}")
+
+        with self.db_manager.get_session() as session:
+            # uq_date_name: unique on (date, name)
+            existing = session.query(ActionData)\
+                .filter_by(date=data["date"], name=data["name"])\
+                .first()
+            if existing:
+                # Update all fields except id
+                for f in required_fields:
+                    setattr(existing, f, data[f])
+                session.commit()
+                session.refresh(existing)
+                return existing
+            else:
+                new_action = ActionData(**data)
+                session.add(new_action)
+                session.commit()
+                session.refresh(new_action)
+                return new_action
+
 class NewsAnalysisRepository:
     """Repository for news analysis operations."""
 
@@ -575,10 +631,10 @@ class NewsAnalysisRepository:
         Save analysis result.
         """
         now = datetime.now()
-        
+        today_date = now.date()
         with self.db_manager.get_session() as session:
             analysis = NewsAnalysis(
-                date=now.strftime('%Y-%m-%d'),  # 日期字符串
+                date=today_date,  # Now a Date column
                 time=now,  # 直接使用 DateTime 对象
                 analysis=analysis_result,
             )

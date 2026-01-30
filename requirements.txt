@@ -12,9 +12,7 @@ uvicorn
 asyncio
 numpy
 pandas
-python-docx
 sqlalchemy
-mysql-connector-python
 playwright
 setuptools
 opencv-python
@@ -26,3 +24,4 @@ concurrent-log-handler
 aiohttp
 pillow
 openpyxl
+pymysql=1.1.2

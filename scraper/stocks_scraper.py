@@ -121,7 +121,7 @@ async def _scrape_stocks_async(
         await page.wait_for_selector(
             row_selector,
             state="attached",
-            timeout=15_000,
+            timeout=30_000,
         )
 
         html = await page.content()
@@ -133,7 +133,7 @@ async def _scrape_stocks_async(
                 await page.wait_for_selector(
                     selector,
                     state="visible",
-                    timeout=15_000,
+                    timeout=30_000,
                 )
                 elements = soup.select(selector)
                 # Extract the plain number (text) from the first matching element,
@@ -202,7 +202,7 @@ async def _scrape_images_async(page, url: str) -> str | None:
     try:
         await page.wait_for_selector(
             "div#QR-code img",
-            timeout=20_000,
+            timeout=30_000,
         )
         logger.info("Image area loaded.")
     except PlaywrightTimeoutError:

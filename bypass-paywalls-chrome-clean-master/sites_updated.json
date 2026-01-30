@@ -1,4 +1,10 @@
 {
+  "Albuquerque Journal": {
+    "domain": "abqjournal.com",
+    "allow_cookies": 1,
+    "cs_code": "[{\"cond\":\"div.lab-paywall-locked\", \"rm_class\":\"lab-paywall-locked\"}]",
+    "upd_version": "4.2.9.5"
+  },
   "Algemeen Dagblad (+ regional/ADR)": {
     "domain": "###_nl_dpg_adr",
     "group": [
@@ -13,15 +19,39 @@
     ],
     "allow_cookies": 1,
     "block_regex": "temptation\\.{domain}",
-    "ld_archive_is": "article>header svg.premium-indicator|article>section",
+    "ld_archive_is": "article svg.media-top__premium-indicator|article",
     "cs_block": 1,
-    "upd_version": "4.2.8.9"
+    "upd_version": "4.2.9.2"
+  },
+  "Arena Holdings (ZA)": {
+    "domain": "###_za_arena",
+    "group": [
+      "businessday.co.za",
+      "timeslive.co.za"
+    ],
+    "allow_cookies": 1,
+    "cs_code": "[{\"hide_elem\":\"section.b-paywall__overlay\"}, {\"cond\":\"html[style]\", \"rm_attrib\":\"style\"}]",
+    "upd_version": "4.2.9.6"
   },
   "Der Freitag": {
     "domain": "freitag.de",
     "allow_cookies": 1,
     "block_js_inline": "\\.freitag\\.de",
     "upd_version": "4.2.8.8"
+  },
+  "Die Presse (AT)": {
+    "domain": "diepresse.com",
+    "allow_cookies": 1,
+    "block_regex": "\\.tinypass\\.com",
+    "cs_code": "[{\"hide_elem\":\"div.paywall-container--locked\"}, {\"cond\":\"div.premium-content.hide\", \"rm_attrib\":\"class\"}]",
+    "upd_version": "4.2.9.4"
+  },
+  "Die Welt": {
+    "domain": "welt.de",
+    "allow_cookies": 1,
+    "block_regex": "\\.welt\\.de\\/variants-.+\\.js",
+    "cs_dompurify": 1,
+    "upd_version": "4.2.9.1"
   },
   "Fortune": {
     "domain": "fortune.com",
@@ -60,7 +90,6 @@
   },
   "Pitchfork": {
     "domain": "pitchfork.com",
-    "allow_cookies": 1,
     "remove_cookies_select_drop": ["pay_ent_msmp"],
     "upd_version": "4.2.9.1"
   },
@@ -79,11 +108,20 @@
     "useragent": "googlebot",
     "upd_version": "4.2.8.8"
   },
-  "Die Welt": {
-    "domain": "welt.de",
+  "The Baltimore Banner": {
+    "domain": "thebanner.com",
     "allow_cookies": 1,
-    "block_regex": "\\.welt\\.de\\/variants-.+\\.js",
-    "cs_dompurify": 1,
-    "upd_version": "4.2.9.1"
+    "block_regex": "(\\.tinypass\\.com|\\.thebaltimorebanner\\.com\\/script\\.js)",
+    "upd_version": "4.2.9.3"
+  },
+  "The Daily Wire": {
+    "domain": "dailywire.com",
+    "upd_version": "4.2.9.4"
+  },
+  "The Dispatch": {
+    "domain": "thedispatch.com",
+    "allow_cookies": 1,
+    "block_regex": "(\\.thedispatch\\.com\\/xbuilder\\/experience\\/execute|\\.cxense\\.com)",
+    "upd_version": "4.2.9.5"
   }
 }

@@ -23,6 +23,8 @@ var usa_nymag_domains = ['curbed.com', 'grubstreet.com', 'nymag.com', 'thecut.co
 var usa_outside_mag_domains = ["backpacker.com", "betamtb.com", "betternutrition.com", "cleaneatingmag.com", "climbing.com", "outsideonline.com", "oxygenmag.com", "skimag.com", "trailrunnermag.com", "triathlete.com", "vegetariantimes.com", "womensrunning.com", "yogajournal.com"];
 var usa_penske_media_domains = ['billboard.com', 'rollingstone.com', 'sourcingjournal.com', 'sportico.com', 'variety.com', 'wwd.com'];
 var usa_tribune_domains = ['baltimoresun.com', 'capitalgazette.com', 'chicagotribune.com', 'courant.com', 'dailypress.com', 'mcall.com', 'nydailynews.com', 'orlandosentinel.com', 'pilotonline.com', 'sun-sentinel.com'];
+var za_arena_domains = ['businessday.co.za', 'timeslive.co.za'];
+var za_arena_custom_domains = ['dailydispatch.co.za', 'sowetan.co.za', 'theherald.co.za'];
 
 cs_default = function (bg2csData = '') {
 
@@ -131,8 +133,12 @@ if (matchDomain('afr.com')) {
                             if (item.data.url)
                               result = '<a href="' + item.data.url + '" target="_blank">' + item.data.url + '</a>';
                           } else if (item.type === 'iframe') {
-                            if (item.data.url)
-                              result = '<iframe src="' + item.data.url + '" style="width: 100%; height: 400px; border: none;"></iframe>';
+                            if (item.data.url) {
+                              let height = 400;
+                              if (item.data.url.includes('/headshots/'))
+                                height = 100;
+                              result = '<iframe src="' + item.data.url + '" style="width: 100%; height: ' + height + 'px; border: none;"></iframe>';
+                            }
                           } else if (!['callout', 'quote', 'relatedStory', 'video'].includes(item.type)) {
                             console.log(item);
                           }
@@ -181,7 +187,7 @@ if (matchDomain('afr.com')) {
                             header.innerText = asset.headlines.headline;
                             header.id = post.id;
                           }
-                          let byline;
+                          let byline = document.createTextNode('');
                           if (asset.byline) {
                             byline = document.createElement('p');
                             byline.innerText = asset.byline;
@@ -1230,6 +1236,12 @@ else if (matchDomain(usa_adv_local_domains)) {
   hideDOMStyle(ads);
 }
 
+else if (matchDomain('abqjournal.com')) {
+  let paywall = document.querySelector('div.lab-paywall-locked');
+  if (paywall)
+    paywall.classList.remove('lab-paywall-locked');
+}
+
 else if (matchDomain('adweek.com')) {
   let paywall = document.querySelector('div.paywall');
   if (paywall) {
@@ -1850,14 +1862,8 @@ else if (matchDomain('dailyherald.com')) {
 }
 
 else if (matchDomain('dailywire.com')) {
-  let paywall = document.querySelector('div#payed-article-paywall');
-  if (paywall) {
-    removeDOMElement(paywall);
-    let div_hidden = document.querySelector('#post-body-text > div > div[class]');
-    if (div_hidden)
-      div_hidden.removeAttribute('class');
-  }
-  let ads = 'div.ad-wrapper';
+  window.localStorage.removeItem('article-gate-data');
+  let ads = 'div.ad-wrapper, div.css-1d84fd8';
   hideDOMStyle(ads);
 }
 
@@ -2585,6 +2591,10 @@ else if (matchDomain('interestingengineering.com')) {
   csDoneOnce = true;
 }
 
+else if (matchDomain('investing.com')) { //custom
+  header_nofix('h1', 'div#article-paywall');
+}
+
 else if (matchDomain('investors.com')) {
   func_post = function () {
     let videos = document.querySelectorAll('div.jwp-placement[data-jw-video_url]');
@@ -3253,9 +3263,30 @@ else if (matchDomain('project-syndicate.org')) {
         elem.src = elem.getAttribute('new-cursrc');
       elem.style = 'width: 95%;';
     }
+    let art_bodies = document.querySelectorAll('[itemprop="articleBody"]');
+    let first = true;
+    for (let elem of art_bodies) {
+      if (mobile) {
+        let mobile_style = 'width: 90%; margin: 20px;';
+        elem.parentNode.style = mobile_style;
+        if (first) {
+          let intro = document.querySelector('[itemprop="abstract"]');
+          if (intro)
+            intro.parentNode.parentNode.style = mobile_style;
+          document.querySelectorAll('h1').forEach(e => e.style = mobile_style + ' font-size: 40px;');
+          first = false;
+        }
+      }
+      let pars = elem.querySelectorAll('div');
+      if (pars.length) {
+        if (pars.length < 3)
+          header_nofix(article_sel, '', 'BPC > no archive-fix');
+      }
+    }
   }
   let url = window.location.href;
-  getArchive(url, 'div.paywall--base', '', 'main > article');
+  let article_sel = 'main > article';
+  getArchive(url, 'div.paywall--base', '', article_sel);
 }
 
 else if (matchDomain('puck.news')) {
@@ -3302,6 +3333,11 @@ else if (matchDomain('quora.com')) {
 
 else if (matchDomain('reuters.com')) {
   let ads = 'div[data-testid="ResponsiveAdSlot"], div[data-testid="Dianomi"]';
+  hideDOMStyle(ads);
+}
+
+else if (matchDomain('reviewjournal.com')) {
+  let ads = 'div.ads-insert, div.rj-ads-wrapper';
   hideDOMStyle(ads);
 }
 
@@ -3749,7 +3785,7 @@ else if (matchDomain('the-star.co.ke')) {
       let article = document.querySelector('div.story-content');
       if (article) {
         article.removeAttribute('class');
-        let scripts = document.querySelectorAll('script[type]');
+        let scripts = document.querySelectorAll('script');
         let json_script
         let script_start = 'self.__next_f.push([1,"';
         for (let script of scripts) {
@@ -3769,7 +3805,7 @@ else if (matchDomain('the-star.co.ke')) {
         if (json_script) {
           let intro_pars = article.querySelectorAll('p');
           removeDOMElement(...intro_pars);
-          let json_text = json_script.text.split('self.__next_f.push([1,"')[1].split('"])')[0].replace(/^.+\\n\\n\\n/, '').replace(/\.\\n((\\r\\n)+)?/g, '.\r\n\r\n').replace(/(\\r)?\\n/g, ' ').replace(/\\"/g, '"').replace(/\\u0026/g, '&');
+          let json_text = json_script.text.split('self.__next_f.push([1,"')[1].split('"])')[0].replace(/^.+\\n{4,}/, '').replace(/\.\\n((\\r\\n)+)?/g, '.\r\n\r\n').replace(/(\\r)?\\n/g, ' ').replace(/\\"/g, '"').replace(/\\u0026/g, '&');
           let article_new = document.createElement('div');
           article_new.style = 'margin: 20px 0px;';
           article_new.innerText = parseHtmlEntities(json_text);
@@ -3816,8 +3852,8 @@ else if (matchDomain('theatlantic.com')) {
   hideDOMStyle(banners);
 }
 
-else if (matchDomain('thebaltimorebanner.com')) {
-  let ads = 'div.article-body__inline-ad';
+else if (matchDomain('thebanner.com')) {
+  let ads = 'div.article-body__inline-ad, div#leaderboard-ad';
   hideDOMStyle(ads);
 }
 
@@ -4890,6 +4926,14 @@ else if (matchDomain(ke_nation_media_domains) || matchDomain(ke_nation_media_cus
   hideDOMStyle(banners);
 }
 
+else if (matchDomain(za_arena_domains) || matchDomain(za_arena_custom_domains)) {
+  let noscroll = document.querySelector('html[style]');
+  if (noscroll)
+    noscroll.removeAttribute('style');
+  let banners = 'section.b-paywall__overlay, div.b-ads-block';
+  hideDOMStyle(banners);
+}
+
 else if (matchDomain(['oed.com']) || (window.location.hostname.replace(/^www\./, '').startsWith('oxford') && document.querySelector('div[id^="footer"] a[href="http://www.oup.com/"]'))) {
   let paywall_sel = 'div.contentRestrictedMessage';
   let article_sel = 'div#readPanel > div';
@@ -4913,7 +4957,7 @@ else if (matchDomain(usa_hearst_comm_domains) || document.querySelector('head > 
   hideDOMStyle(ads);
 }
 
-else if (matchDomain(usa_lee_ent_domains.concat(ca_torstar_domains, ['abqjournal.com'])) || document.querySelector('head > meta[name="tncms-access-version"]')) {
+else if (matchDomain(usa_lee_ent_domains.concat(ca_torstar_domains)) || document.querySelector('head > meta[name="tncms-access-version"]')) {
   if (window.location.pathname.endsWith('.amp.html')) {
     amp_unhide_access_hide('="hasAccess"', '="NOT hasAccess"', '.amp-ads-container');
     let elem_hidden = document.querySelectorAll('html[class], body[class]');
