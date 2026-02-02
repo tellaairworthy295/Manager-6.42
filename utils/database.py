@@ -121,7 +121,7 @@ class ActionData(Base):
     board = Column(VARCHAR(64), nullable=False)
     code = Column(VARCHAR(64), nullable=False)
     name = Column(VARCHAR(64), nullable=False)
-    time = Column(VARCHAR(64), nullable=False)
+    d_time = Column(VARCHAR(64), nullable=False)
     market = Column(Float, nullable=False)
     turnover = Column(Float, nullable=False)
     keyword = Column(Text)
@@ -595,7 +595,7 @@ class ActionDataRepository:
         """
         required_fields = [
             "date", "section", "board", "code", "name",
-            "time", "market", "turnover", "keyword"
+            "d_time", "market", "turnover", "keyword"
         ]
         missing_fields = [f for f in required_fields if f not in data]
         if missing_fields:

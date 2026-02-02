@@ -105,7 +105,7 @@ def _save_actionData(rec_texts: list[str], excel_path: str, date: str):
                 "board": row["Board"],
                 "code": row["Code"],
                 "name": row["Name"],
-                "time": row["Time"],
+                "d_time": row["Time"],
                 "market": float(row["Market"]) if row["Market"] != "" else 0.0,
                 "turnover": float(row["Turnover"]) if row["Turnover"] != "" else 0.0,
                 "keyword": row["Keyword"],

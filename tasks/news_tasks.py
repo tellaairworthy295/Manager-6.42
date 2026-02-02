@@ -66,12 +66,11 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, group_
     for url in urls:
         time.sleep(random.uniform(2.0, 10.0))
         content = ""
-        for attempt in range(3):
+        for attempt in range(1,3):
             try:
                 content = scrape_news(url, source)
             except Exception as e:
                 content = ""
-                logger.warning(f"Failed to scrape {url} (attempt {attempt+1}/3): {e}")
             if content:
                 success_count += 1
                 break
@@ -79,13 +78,12 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, group_
                 if attempt == 2:
                     failed_count += 1
                     failed_urls.append(url)
-                    logger.warning(f"Giving up on {url} after 3 attempts")
+                    logger.warning(f"Giving up on {url} after retry")
                 else:
-                    logger.warning(f"Content empty for {url} (attempt {attempt+1}/3), will retry")
-                    time.sleep(random.uniform(3.0, 5.5))
+                    logger.warning(f"Content empty for {url}, will retry")
+                    time.sleep(random.uniform(2.0, 10.0))
         if content:
             total_content.append(content)
-        time.sleep(random.uniform(2.0, 4.0))
 
     final_result = {
         "source": source,
