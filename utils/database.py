@@ -348,15 +348,13 @@ class NewsArticleRepository:
             if cutoff_date == today:
                 # 只需要今天的数据
                 articles_query = session.query(NewsArticle).filter(
-                    NewsArticle.scraped_date == today,
-                    NewsArticle.content_fully_loaded == True
+                    NewsArticle.scraped_date == today
                 )
             else:
                 # 需要今天和昨天的数据
                 yesterday = today - timedelta(days=1)
                 articles_query = session.query(NewsArticle).filter(
-                    NewsArticle.scraped_date.in_([yesterday, today]),
-                    NewsArticle.content_fully_loaded == True
+                    NewsArticle.scraped_date.in_([yesterday, today])
                 )
             
             # 获取所有文章

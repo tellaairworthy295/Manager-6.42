@@ -96,13 +96,19 @@ def fetch_urls_from_page(query: str, site: str):
                 pass
 # ============================== Helper Functions ==============================================
 
-def _wait_for_progressive_content(driver, selector, timeout=15, min_paragraphs=5):
-    """Wait for content to load with human-like scrolling behavior."""
+def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_content, timeout=15, min_paragraphs=4):
+    """Wait for content to load with human-like scrolling behavior, preserving most-complete non-empty result against anti-bot blocking."""
     start = time.time()
     last_count = 0
     stable_count = 0
     content_fully_loaded = False
-    
+
+    # Track most complete non-empty content so far to survive anti-bot blanking
+    best_xml_content = ""
+    best_result = {"title": "", "content": ""}
+    best_publish_at = None
+    best_count = 0
+
     while time.time() - start < timeout:        
         soup = BeautifulSoup(driver.page_source, "html.parser")
         paragraphs = soup.select(selector)
@@ -114,8 +120,21 @@ def _wait_for_progressive_content(driver, selector, timeout=15, min_paragraphs=5
         else:
             stable_count += 1
 
+        xml_content = extract_xml_content(soup, xml_selector)
+        result = _extract_article_content(soup, selector, unwanted_content)
+        publish_at = extract_and_format_time(soup)
+
+        # Consider only if nonempty, and "better" (more paragraphs = more complete)
+        this_content_ok = bool(result.get("content", "").strip()) and count > 0
+        if this_content_ok and count >= best_count:
+            best_count = count
+            best_xml_content = xml_content
+            best_result = result
+            best_publish_at = publish_at
+
         if count > min_paragraphs and stable_count > 1:
             content_fully_loaded = True
+            # Use the current best, which should be this one
             break
 
         # Human-like scrolling: sometimes scroll down gradually, sometimes jump
@@ -126,12 +145,12 @@ def _wait_for_progressive_content(driver, selector, timeout=15, min_paragraphs=5
             # Vary scroll behavior: sometimes smooth, sometimes jump
             scroll_amount = random.randint(500, 1000)
             driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
-            _human_pause(1.5, 2.5)
-        else:
-            # At bottom, wait a bit more in case content loads
-            _human_pause(2.5, 4.0)
-        
-    return content_fully_loaded
+            
+        _human_pause(1.5, 2.5)
+
+    # On exit, always use the best version found, even if content_fully_loaded is False or anti-bot blanked page
+    return content_fully_loaded, best_xml_content, best_result, best_publish_at
+
 
 def extract_and_format_time(soup):
     """
@@ -282,31 +301,26 @@ def scrape_news(url: str, source: str):
         logger.info("Page loaded, waiting for content...")
 
         # Wait for progressive content with human-like scrolling
-        content_fully_loaded = _wait_for_progressive_content(
+        content_fully_loaded, xml_content, result, publish_at = _wait_for_progressive_content(
             driver,
+            selector=selector,
+            xml_selector=xml_selector,
+            unwanted_content=unwanted_content,
             timeout=15,
             min_paragraphs=min_paragraphs,
-            selector=selector
         )
         
-        if not content_fully_loaded:
-            logger.info("Content not fully loaded, refreshing page and retrying ...")
-            driver.refresh()
-            _human_pause(2.0,4.0)
-            content_fully_loaded = _wait_for_progressive_content(
-            driver,
-            timeout=15,
-            min_paragraphs=min_paragraphs,
-            selector=selector
-        )
-        
-        soup = BeautifulSoup(driver.page_source, "html.parser")
+        # if not content_fully_loaded:
+        #     logger.info("Content not fully loaded, refreshing page and retrying ...")
+        #     driver.refresh()
+        #     _human_pause(2.0,4.0)
+        #     content_fully_loaded = _wait_for_progressive_content(
+        #     driver,
+        #     timeout=15,
+        #     min_paragraphs=min_paragraphs,
+        #     selector=selector
+        # )
 
-        xml_content = extract_xml_content(soup, xml_selector)
-        xml_content = xml_content.replace("\x00", "")
-
-        result = _extract_article_content(soup, selector, unwanted_content)
-        publish_at = extract_and_format_time(soup)
         result["content_fully_loaded"] = content_fully_loaded
 
         title = result.get("title")

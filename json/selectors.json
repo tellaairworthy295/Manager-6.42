@@ -4,7 +4,7 @@
         "selector": "article p, div.body-content p, div[data-component='story-text'] p",
         "xml_selector": "div.body-content",
         "time_selector": "time[datetime]",
-        "min_paragraphs": 5,
+        "min_paragraphs": 4,
         "unwanted_content": [
           "Bloomberg may send me offers and promotions.",
           "By submitting my information, I agree to the Privacy Policy and Terms of Service",
