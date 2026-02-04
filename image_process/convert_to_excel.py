@@ -3,7 +3,7 @@ import re
 import unicodedata
 import pandas as pd
 from utils.database import StockStatsRepository, get_db_manager, ActionDataRepository
-from .preprocess import preprecess_image
+from .preprocess import preprocess_image
 from .ocr_api import ocr_image_safe
 # Configure loguru for to_excel module
 from utils.logging_config import get_stock_logger
@@ -42,7 +42,7 @@ def _save_actionData(rec_texts: list[str], excel_path: str, date: str):
     os.makedirs(excel_path, exist_ok=True)
 
     # Expected columns
-    cols = ["Section", "Board", "Code", "Name", "Time", "Market", "Turnover", "Keyword"]
+    cols = ["Section", "Board", "Code", "Name", "Time", "Market", "Turnover", "Keyword", "Highlight"]
 
     # Clean text list (remove empty/blank items)
     rec_texts = [t.strip() for t in rec_texts if t and t.strip()]
@@ -59,20 +59,28 @@ def _save_actionData(rec_texts: list[str], excel_path: str, date: str):
             section_name = m.group(1)
             row_num = int(m.group(2))
             i += 1  # moved past section header
-            for _ in range(row_num):
+            for num_row in range(row_num):
                 # Attempt to get next 7
                 if i + 7 <= len(rec_texts):
+                    skip = 7
                     chunk = rec_texts[i:i + 7]
-                    m_0 = re.match(r"^(\d{6})", chunk[0].strip())
-                    if m_0:
-                        chunk = ['1'] + chunk[:-1]
-                        skip = 6
+                    m_first_code = re.match(r"^(\d{6})", chunk[0].strip())
+                    m_first_board = re.match(r"^(\d+天\d+板)$", chunk[0].strip())
+                    m_last_board = re.match(r"^(1|\d+天\d+板)$", chunk[-1].strip())
+                    m_last_section = re.match(r"^(.+)\*(\d+)$", chunk[-1].strip())
+                    if m_last_board or m_last_section:
+                        chunk = chunk[:-1] + [""]
+                        skip -= 1
+                    if m_first_code:
+                        chunk = ['1'] + chunk[1:]
+                        skip -= 1
+
+                    if chunk[0] == "7":
+                        chunk[0] = "1"
+                    if num_row < 2 and m_first_board:
+                        chunk = chunk + [True]
                     else:
-                        if chunk[0] == "7":
-                            chunk[0] = "1"
-                        if chunk[-1] == "1":
-                            chunk = [chunk[-1]] + chunk[:-1]
-                        skip = 7
+                        chunk = chunk + [False]
                     data.append([section_name] + chunk)
                     i += skip
                 else:
@@ -96,6 +104,7 @@ def _save_actionData(rec_texts: list[str], excel_path: str, date: str):
     db_manager = get_db_manager()
     repo = ActionDataRepository(db_manager)
 
+    data_dict_list = []
     for _, row in df.iterrows():
         # Convert row values to DB dict, ensure types are correct
         try:
@@ -106,14 +115,15 @@ def _save_actionData(rec_texts: list[str], excel_path: str, date: str):
                 "code": row["Code"],
                 "name": row["Name"],
                 "d_time": row["Time"],
-                "market": float(row["Market"]) if row["Market"] != "" else 0.0,
-                "turnover": float(row["Turnover"]) if row["Turnover"] != "" else 0.0,
+                "market": row["Market"],
+                "turnover": row["Turnover"],
                 "keyword": row["Keyword"],
+                "highlight": row["Highlight"]
             }
-            repo.upsert_action_data(data_dict)
+            data_dict_list.append(data_dict)
         except Exception as e:
             logger.error(f"Failed to upsert action data row: {row.tolist()}; error: {e}")
-
+    repo.upsert_action_data_batch(data_dict_list)
     logger.info("Action data upserted to database.")
 
     
@@ -169,7 +179,7 @@ def _get_trendings(rec_texts: list[str]):
         "break_rate": results["breaking_rate"]
     }
 
-def _save_stockstats(rec_texts: list[str], market_number: dict, date, days: int = 90):
+def _save_stockstats(rec_texts: list[str], market_number: dict, date):
     """
     1. 从数据库中读取最近90天的数据，画出曲线图：
         - 破板率单独画在一张图上；
@@ -201,19 +211,21 @@ def _save_stockstats(rec_texts: list[str], market_number: dict, date, days: int 
     repo.add_market_stats(new_stats)
 
 
-def excel_flow(market_number: dict, date, days: int = 5):
+def excel_flow(market_number: dict, date):
     scraped_dir = "images"
     img_path = f"{scraped_dir}/Image.png"
     if not os.path.isfile(img_path):
         logger.error(f"Image file does not exist: {img_path}")
         return None
     try:
-        path = preprecess_image(img_path)
+        path = preprocess_image(img_path)
         rec_texts = ocr_image_safe(path)
         _normalize_text(rec_texts)
         _save_actionData(rec_texts, "excel", date)
-        _save_stockstats(rec_texts, market_number, date, days)
+        _save_stockstats(rec_texts, market_number, date)
     except Exception as e:
         logger.error(f"Error while OCR: {e}")
         raise RuntimeError(f"Error while OCR: {e}")
 
+# if __name__ == "__main__":
+#     excel_flow({}, "2026-02-02")

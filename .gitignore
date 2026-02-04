@@ -7,7 +7,6 @@ rss
 # But keep requirements.txt
 !requirements.txt
 !command.txt
-
 *.jpg
 *.jpeg
 *.gif

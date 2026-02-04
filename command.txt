@@ -36,7 +36,7 @@ curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: appli
 curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: application/json" -d "{\"requests\": [{\"query\": \"site:reuters.com/world\", \"site\": \"www.reuters.com/world\", \"source\": \"reuters\"}]}"
 
 
-curl.exe -X POST "http://localhost:5000/api/scrape_stocks" -H "Content-Type: application/json" -d "{\"days\":90}"
+curl.exe -X GET "http://localhost:5000/api/scrape_stocks"
 
 curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: application/json" -d "{\"requests\": [{\"query\": \"site:bloomberg.com/news/articles\", \"site\": \"www.bloomberg.com/news/articles\", \"source\": \"bloomberg\"}]}"
 

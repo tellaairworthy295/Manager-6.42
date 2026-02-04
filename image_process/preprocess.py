@@ -12,11 +12,10 @@ def horizontal_projection(bin_img):
     """
     return np.sum(bin_img == 0, axis=1)
 
-
 def find_safe_cut_lines(
     bin_img,
-    min_gap_height=15,
-    max_ink_ratio=0.02
+    min_gap_height=20,
+    max_ink_ratio=0.001
 ):
     """
     Returns y positions suitable for slicing
@@ -50,7 +49,7 @@ def choose_cut_near(cut_lines, target_y, max_shift=200):
 
 def smart_slice_tall_image(
     img,
-    target_height=3000,
+    target_height=2000,
     overlap=0
 ):
     gray = np.array(img)
@@ -80,7 +79,7 @@ def _is_tall_image(img, ratio=2.0):
     return h / w >= ratio
 
 
-def preprecess_image(img_path):
+def preprocess_image(img_path):
     img = Image.open(img_path)
     img_array = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
     gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)

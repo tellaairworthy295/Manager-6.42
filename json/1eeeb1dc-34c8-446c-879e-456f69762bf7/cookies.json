@@ -2,28 +2,18 @@
   "alphapai": {
     "cookies": [
       {
-        "name": "sajssdk_2015_cross_new_user",
-        "value": "1",
-        "domain": ".rabyte.cn",
-        "path": "/",
-        "expires": 1769183999,
-        "httpOnly": false,
-        "secure": false,
-        "sameSite": "Lax"
-      },
-      {
         "name": "sensorsdata2015jssdkcross",
         "value": "%7B%22distinct_id%22%3A%221163481096134852608%22%2C%22first_id%22%3A%2219be9c6f6b6632-0a7ca9f6dea3a48-26061a51-921600-19be9c6f6b714e3%22%2C%22props%22%3A%7B%22%24latest_traffic_source_type%22%3A%22%E7%9B%B4%E6%8E%A5%E6%B5%81%E9%87%8F%22%2C%22%24latest_search_keyword%22%3A%22%E6%9C%AA%E5%8F%96%E5%88%B0%E5%80%BC_%E7%9B%B4%E6%8E%A5%E6%89%93%E5%BC%80%22%2C%22%24latest_referrer%22%3A%22%22%7D%2C%22identities%22%3A%22eyIkaWRlbnRpdHlfY29va2llX2lkIjoiMTliZTljNmY2YjY2MzItMGE3Y2E5ZjZkZWEzYTQ4LTI2MDYxYTUxLTkyMTYwMC0xOWJlOWM2ZjZiNzE0ZTMiLCIkaWRlbnRpdHlfbG9naW5faWQiOiIxMTYzNDgxMDk2MTM0ODUyNjA4In0%3D%22%2C%22history_login_id%22%3A%7B%22name%22%3A%22%24identity_login_id%22%2C%22value%22%3A%221163481096134852608%22%7D%2C%22%24device_id%22%3A%2219be9c6f6b6632-0a7ca9f6dea3a48-26061a51-921600-19be9c6f6b714e3%22%7D",
         "domain": ".rabyte.cn",
         "path": "/",
-        "expires": 1803719386.947862,
+        "expires": 1804641098.927825,
         "httpOnly": false,
         "secure": false,
         "sameSite": "Lax"
       },
       {
         "name": "SERVERCORSID",
-        "value": "9a4fea2aa7602ad876b7fe538a245c3a|1769159390|1769159390",
+        "value": "9a4fea2aa7602ad876b7fe538a245c3a|1770081105|1770081098",
         "domain": "rabytetech.datasink.sensorsdata.cn",
         "path": "/",
         "expires": -1,
@@ -38,7 +28,7 @@
         "localStorage": [
           {
             "name": "USER_AUTH_TOKEN",
-            "value": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxMTYzNDgxMDk2MTM0ODUyNjA4Iiwic3ViIjoie1wiaW50ZXJuYWxcIjpmYWxzZSxcImxvZ2luVGltZVwiOlwiMjAyNi0wMS0yM1QxNTozNDo1NC44OTJcIixcInBsYXRmb3JtXCI6XCJ3ZWJcIixcInVpZFwiOlwiMTE2MzQ4MTA5NjEzNDg1MjYwOFwifSIsImlzcyI6InJhYnl0ZSIsImlhdCI6MTc2OTE1MzY5NCwiZXhwIjoxNzcxNzQ1Njk0fQ.rARcAXopGoyMotdGDeULfEoZWFHkoZQYVEPHInrYi5c"
+            "value": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxMTYzNDgxMDk2MTM0ODUyNjA4Iiwic3ViIjoie1wiaW50ZXJuYWxcIjpmYWxzZSxcImxvZ2luVGltZVwiOlwiMjAyNi0wMi0wM1QwOToxMTo0NC41MTVcIixcInBsYXRmb3JtXCI6XCJ3ZWJcIixcInVpZFwiOlwiMTE2MzQ4MTA5NjEzNDg1MjYwOFwifSIsImlzcyI6InJhYnl0ZSIsImlhdCI6MTc3MDA4MTEwNCwiZXhwIjoxNzcyNjczMTA0fQ.nCRvFuf-u1KDiENSVnNIAG0z6Uzb6wjuRkXTYfPQkB0"
           },
           {
             "name": "extension-download-guide",
@@ -54,7 +44,7 @@
           },
           {
             "name": "pc-admin-side-adv-modal-storage",
-            "value": "{\"dateOflastTime\":\"2026-01-23\",\"flag\":\"18516208815\"}"
+            "value": "{\"dateOflastTime\":\"2026-02-03\",\"flag\":\"18516208815\"}"
           },
           {
             "name": "paipai-agent-fastsheet-us-guide",

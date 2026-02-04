@@ -5,6 +5,7 @@ Provides modular, extensible, and maintainable database operations.
 import json
 from datetime import datetime, timedelta, date, timezone
 import re
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 from sqlalchemy import VARCHAR, Date, Float, create_engine, Column, Integer, String, Text, DateTime, Boolean, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
@@ -117,14 +118,15 @@ class ActionData(Base):
     )
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(Date, nullable=False, index=True)
-    section = Column(VARCHAR(128), nullable=False)
-    board = Column(VARCHAR(64), nullable=False)
-    code = Column(VARCHAR(64), nullable=False)
-    name = Column(VARCHAR(64), nullable=False)
-    d_time = Column(VARCHAR(64), nullable=False)
-    market = Column(Float, nullable=False)
-    turnover = Column(Float, nullable=False)
+    section = Column(VARCHAR(64), nullable=False)
+    board = Column(VARCHAR(32), nullable=False)
+    code = Column(VARCHAR(32), nullable=False)
+    name = Column(VARCHAR(32), nullable=False)
+    d_time = Column(VARCHAR(32), nullable=False)
+    market = Column(VARCHAR(32), nullable=False)
+    turnover = Column(VARCHAR(32), nullable=False)
     keyword = Column(Text)
+    highlight = Column(Boolean, nullable=False)
 
 class User(Base):
     """Model for users table."""
@@ -165,7 +167,8 @@ class DatabaseManager:
         """
         # Load config.json once at module load
         if not hasattr(self, "_config_cache"):
-            with open("json/config.json", "r", encoding="utf-8") as f:
+            PROJECT_ROOT = Path(__file__).parent.parent
+            with open(PROJECT_ROOT / "json/config.json", "r", encoding="utf-8") as f:
                 self._config_cache = json.load(f)
         db_config = self._config_cache.get("DatabaseConfig", {})
         db_host = db_config.get("DB_HOST", "localhost")
@@ -585,38 +588,58 @@ class ActionDataRepository:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    def upsert_action_data(self, data: dict) -> ActionData:
+    def upsert_action_data_batch(self, data_list: List[dict]) -> List[ActionData]:
         """
-        Upsert (insert or update) for action_data table using ('date', 'name') as unique key
-        per uq_date_name constraint.
-        'data' dict must contain all columns needed for ActionData.
+        Upsert (insert or update) batch for action_data table.
+        First deletes all records for the specific date, then inserts all new records.
+
+        Args:
+            data_list: List of dictionaries, each containing all columns needed for ActionData
+
+        Returns:
+            List of inserted ActionData objects
         """
+        if not data_list:
+            return []
+
+        # Validate all records
         required_fields = [
             "date", "section", "board", "code", "name",
-            "d_time", "market", "turnover", "keyword"
+            "d_time", "market", "turnover", "keyword", "highlight"
         ]
-        missing_fields = [f for f in required_fields if f not in data]
-        if missing_fields:
-            raise ValueError(f"Missing fields for upsert: {missing_fields}")
+
+        for i, data in enumerate(data_list):
+            missing_fields = [f for f in required_fields if f not in data]
+            if missing_fields:
+                raise ValueError(f"Record {i} missing fields: {missing_fields}")
+
+        # Get the date from the first record (all records should have same date)
+        batch_date = data_list[0]["date"]
 
         with self.db_manager.get_session() as session:
-            # uq_date_name: unique on (date, name)
-            existing = session.query(ActionData)\
-                .filter_by(date=data["date"], name=data["name"])\
-                .first()
-            if existing:
-                # Update all fields except id
-                for f in required_fields:
-                    setattr(existing, f, data[f])
-                session.commit()
-                session.refresh(existing)
-                return existing
-            else:
+            # Delete all records for this specific date
+            session.query(ActionData) \
+                .filter_by(date=batch_date) \
+                .delete(synchronize_session=False)
+
+            # Insert all new records
+            new_actions = []
+            for data in data_list:
+                # Optional: Verify all records have the same date
+                if data["date"] != batch_date:
+                    raise ValueError(f"Record has different date {data['date']}, expected {batch_date}")
+
                 new_action = ActionData(**data)
+                new_actions.append(new_action)
                 session.add(new_action)
-                session.commit()
-                session.refresh(new_action)
-                return new_action
+
+            session.commit()
+
+            # Refresh all inserted objects
+            for action in new_actions:
+                session.refresh(action)
+
+            return new_actions
 
 class NewsAnalysisRepository:
     """Repository for news analysis operations."""

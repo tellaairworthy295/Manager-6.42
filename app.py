@@ -55,7 +55,7 @@ app.mount("/mcp", mcp_app)
 # Allow your Next.js frontend (localhost:3000) to call FastAPI (localhost:5000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://10.29.92.50:3000"],  # or ["*"] for all origins
+    allow_origins=["http://10.25.116.175:3000", "http://10.29.92.50:3000"],  # or ["*"] for all origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,7 +89,7 @@ async def sse_stream(
         idle_rounds = 0
         backoff_threshold = 3
         task = asyncio.current_task()
-        
+
         try:
             while not task.cancelled():
                 entries = await redis.xread(
@@ -224,7 +224,7 @@ async def delete_html_dir(user: str, conversation_id: str):
 # @app.get("/api/rss")
 # async def get_rss():
 #     rss_dir = Path("rss") / "test.xml"
-    
+
 #     # Return with CORS headers
 #     return FileResponse(
 #         rss_dir, 
@@ -266,7 +266,7 @@ async def refresh_agent_cookies(request: Request):
     data = await request.json()
     user_id = data.get("user_id")
     sources = data.get("sources")
-    
+
     if isinstance(sources, str):
         try:
             sources = json.loads(sources)
@@ -291,6 +291,7 @@ async def lookup_user(request: Request):
     if not email:
         return JSONResponse({"error": "email is required"}, status_code=400)
     user_id = user_repo.get_user_id_by_email(email)
+    logger.info(user_id)
     return {"status": "200", "user_id": user_id}
 
 @app.post("/api/add_user")
@@ -350,7 +351,7 @@ async def add_users(request: Request):
     return {"status": "ok", "users_added": resp}
 
 
-    
+
 #========================Dramatiq tasks==========================
 @app.post("/api/scrape_news")
 async def scrape_news_api(request: Request):
@@ -361,7 +362,7 @@ async def scrape_news_api(request: Request):
     now_str = datetime.now().strftime("%Y%m%d%H%M%S")
     result = scrape_all_news.send(requests, now_str)
     return JSONResponse({"status": "queued", "task_id": result.message_id})
-    
+
 
 @app.post("/api/display_agent")
 async def display_agent_api(request: Request):
@@ -389,8 +390,8 @@ async def display_agent_api(request: Request):
     with open("json/selectors.json", "r", encoding="utf-8") as f:
         s_locators_map = json.load(f)["agent"]
     all_cookies = await validate_and_prepare_cookies(user_id.split("_")[-1], sources, True)
-    display_agent_task_main.send(user_id=user_id, prompt=prompt_list, 
-                                    all_cookies=all_cookies, s_locators_map=s_locators_map, 
+    display_agent_task_main.send(user_id=user_id, prompt=prompt_list,
+                                    all_cookies=all_cookies, s_locators_map=s_locators_map,
                                     conversation_id=conversation_id, dia_count=dia_count)
 
 @app.post("/api/news_analysis")
@@ -418,17 +419,15 @@ async def news_analyzer(request: Request):
 
     return JSONResponse({"status": "200", "message": "Sent results successfully."})
 
-@app.post("/api/scrape_stocks")
-async def scrape_stocks_api(request: Request):
-    data = await request.json()
-    date = data.get("date") or datetime.today().strftime("%Y-%m-%d")
-    days = data.get("days", 90)
+@app.get("/api/scrape_stocks")
+async def scrape_stocks_api():
+    date = datetime.today().strftime("%Y-%m-%d")
     flag, market_number = await main_scraper(date)
     if not flag:
         return JSONResponse(
         {"status": "ok", "msg": "Not a new date"}
     )
-    await asyncio.to_thread(excel_flow, market_number, date, days)
+    await asyncio.to_thread(excel_flow, market_number, date)
 
     # config = load_email_config_from_json("json/config.json")
     # config.ATTACHMENTS = [

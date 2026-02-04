@@ -1,4 +1,3 @@
-
 import json
 import os
 import asyncio
@@ -15,15 +14,21 @@ from pwright.async_pf import new_stealth_page
 from utils.database import get_db_manager, StockRepository
 from utils.interactive import async_safe_click
 from utils.logging_config import get_stock_logger
+from pathlib import Path
 
 logger = get_stock_logger()
 
-async def main_scraper(date: str) -> bool:
+
+async def main_scraper(date: str, today: bool = True) -> bool:
     # Load selectors & cookies once
-    with open("json/selectors.json", "r", encoding="utf-8") as f:
+    # 获取项目根目录路径（假设项目根目录是 D:\dify_server）
+    PROJECT_ROOT = Path(__file__).parent.parent  # 从 scraper/ 向上两级到 dify_server/
+
+    # 使用绝对路径
+    with open(PROJECT_ROOT / "json/selectors.json", "r", encoding="utf-8") as f:
         selectors_map = json.load(f)["stocks"]
 
-    with open("json/common/cookies.json", "r", encoding="utf-8") as f:
+    with open(PROJECT_ROOT / "json/common/cookies.json", "r", encoding="utf-8") as f:
         cookies_map = json.load(f)
 
     all_records: list[dict] = []
@@ -43,19 +48,24 @@ async def main_scraper(date: str) -> bool:
 
             try:
                 async with PlaywrightContext(
-                    manager,
-                    storage_state=storage_state,
-                    ignore_https_errors=True,
+                        manager,
+                        storage_state=storage_state,
+                        ignore_https_errors=True,
                 ) as context:
                     page = await new_stealth_page(context)
 
                     try:
+                        if not today and "jiuyan" in url:
+                            url = url + f"/{date}"
+                        elif not today:
+                            break
                         await page.goto(url, wait_until="domcontentloaded", timeout=50000)
                     except Exception as e:
                         raise NetworkException(f"Network Error. Failed to load {url}: {str(e)}")
                     logger.info("Page loaded.")
 
                     data = await _scrape_stocks_async(
+                        site=selectors["name"],
                         page=page,
                         date=date,
                         click_selector=selectors.get("click_selector"),
@@ -98,16 +108,18 @@ async def main_scraper(date: str) -> bool:
 
     return True, market_number
 
+
 async def _scrape_stocks_async(
-    *,
-    page,
-    date: str,
-    click_selector: str | None,
-    row_selector: str,
-    name_selector: str,
-    code_selector: str,
-    analysis_selector: str,
-    market_number_selector: dict | None
+        *,
+        page,
+        site: str,
+        date: str,
+        click_selector: str | None,
+        row_selector: str,
+        name_selector: str,
+        code_selector: str,
+        analysis_selector: str,
+        market_number_selector: dict | None
 ) -> list[dict] | None:
     try:
         if click_selector:
@@ -161,12 +173,13 @@ async def _scrape_stocks_async(
                 continue
 
             name = name_tag.get_text(strip=True)
+            name = re.sub(r'\s+', '', name)
             code_raw = code_tag.get_text(strip=True)
             numbers = re.findall(r"\d{6}", code_raw)
             code = numbers[0] if numbers else code_raw
 
             analysis = analysis_tag.get_text(" ", strip=True)
-
+            analysis = "韭研:" + "\n" + analysis if site == "jiuyan" else "选股通:" + "\n" + analysis
             records.append(
                 {
                     "date": date,
@@ -184,6 +197,7 @@ async def _scrape_stocks_async(
     except Exception as e:
         logger.exception(f"Error scraping stocks: {e}")
         return None
+
 
 async def _scrape_images_async(page, url: str) -> str | None:
     logger.info(f"Scraping 涨停简图 from: {url}")
@@ -241,6 +255,7 @@ async def _scrape_images_async(page, url: str) -> str | None:
         logger.warning(f"Failed to download image: {e}")
         return None
 
+
 async def _prepare_image_dir(path: str):
     if not os.path.isdir(path):
         os.makedirs(path, exist_ok=True)
@@ -262,3 +277,6 @@ async def _prepare_image_dir(path: str):
 #                 f"{item['stock']}\t{item['code']}\n"
 #                 f"{item['analysis']}\n\n"
 #             )
+
+# if __name__ == "__main__":
+#     asyncio.run(main_scraper("2026-02-02", False))

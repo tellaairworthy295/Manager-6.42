@@ -1,8 +1,10 @@
-import requests
-requests.get(
-    "https://ipv4.webshare.io/",
-    proxies={
-        "http": "http://kkfwbqem:u03nhy3u6js5@23.95.150.145:6114/",
-        "https": "http://kkfwbqem:u03nhy3u6js5@23.95.150.145:6114/"
-    }
-).text
+
+
+from utils.database import UsersRepository, get_db_manager
+
+
+db_manager = get_db_manager()
+user_repo = UsersRepository(db_manager)
+
+user_id = user_repo.get_user_id_by_email("1026334385@qq.com")
+print(user_id)
