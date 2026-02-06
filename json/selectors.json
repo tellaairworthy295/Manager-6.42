@@ -1,80 +1,239 @@
 {
   "news": {
-      "bloomberg": {
-        "selector": "article p, div.body-content p, div[data-component='story-text'] p",
-        "xml_selector": "div.body-content",
-        "time_selector": "time[datetime]",
-        "min_paragraphs": 4,
-        "unwanted_content": [
-          "Bloomberg may send me offers and promotions.",
-          "By submitting my information, I agree to the Privacy Policy and Terms of Service",
-          "Listen",
-          "Listen to Odd Lots on Apple Podcasts Listen to Odd Lots on Spotify Watch Odd Lots on YouTube Subscribe to the newsletter",
-          "Get Alerts for:",
-          "Sign up here for the twice-weekly Next Africa newsletter , and subscribe to the Next Africa podcast on Apple , Spotify or anywhere you listen .",
-          "Sign up here for the twice-weekly Next Africa newsletter, and subscribe to the Next Africa podcast on Apple, Spotify or anywhere you listen."
-        ]
-      },
-      "reuters": {
-        "selector": "div[data-testid='article-body'] p, div[data-testid*='paragraph']",
-        "xml_selector": null,
-        "time_selector": null,
-        "min_paragraphs": 5,
-        "unwanted_content": []
-      },
-      "bbc": {
-        "selector": "div[data-component=\"text-block\"] p",
-        "xml_selector": null,
-        "time_selector": null,
-        "min_paragraphs": 3,
-        "unwanted_content": []
-      }
+    "bloomberg": {
+      "selector": "article p, div.body-content p, div[data-component='story-text'] p",
+      "xml_selector": "div.body-content",
+      "time_selector": "time[datetime]",
+      "min_paragraphs": 4,
+      "unwanted_content": [
+        "Bloomberg may send me offers and promotions.",
+        "By submitting my information, I agree to the Privacy Policy and Terms of Service",
+        "Listen",
+        "Listen to Odd Lots on Apple Podcasts Listen to Odd Lots on Spotify Watch Odd Lots on YouTube Subscribe to the newsletter",
+        "Get Alerts for:",
+        "Sign up here for the twice-weekly Next Africa newsletter , and subscribe to the Next Africa podcast on Apple , Spotify or anywhere you listen .",
+        "Sign up here for the twice-weekly Next Africa newsletter, and subscribe to the Next Africa podcast on Apple, Spotify or anywhere you listen."
+      ]
     },
+    "reuters": {
+      "selector": "div[data-testid='article-body'] p, div[data-testid*='paragraph']",
+      "xml_selector": null,
+      "time_selector": null,
+      "min_paragraphs": 5,
+      "unwanted_content": []
+    },
+    "bbc": {
+      "selector": "div[data-component=\"text-block\"] p",
+      "xml_selector": null,
+      "time_selector": null,
+      "min_paragraphs": 3,
+      "unwanted_content": []
+    }
+  },
   "stocks": {
-      "https://www.jiuyangongshe.com/action": {
-        "name": "jiuyan",
-        "click_selector": "//div[text()='全部异动解析']",
-        "row_selector": "ul.td-box li.row",
-        "name_selector": ".fs15-bold",
-        "code_selector": ".fs12-bold-ash",
-        "analysis_selector": "pre",
-        "image": true,
-        "cookies": true,
-        "market_number": null
+    "https://www.jiuyangongshe.com/action": {
+      "category": "action",
+      "name": "jiuyan",
+      "cookies": true,
+      "image": true,
+      "section": {
+        "selector": "li.module",
+        "extractors": {
+          "section_reason": {
+            "mode": "per_section",
+            "fields": {
+              "section_name": {
+                "selector": ".fs18-bold.lf",
+                "postprocess": ["strip_spaces"]
+              },
+              "reason": {
+                "selector": ".text-justify span.fs16",
+                "postprocess": ["strip_spaces"]
+              }
+            }
+          }
+        },
+        "rows": {
+          "selector": "ul.td-box li.row"
+        }
       },
-      "https://xuangutong.com.cn/dingpan": {
-        "name": "xuangutong",
-        "click_selector": null,
-        "row_selector": "tbody.hit-pool__table-body tr",
-        "name_selector": ".stock-title-name",
-        "code_selector": ".stock-title a",
-        "analysis_selector": ".stock-reason span.line-clamp",
-        "image": false,
-        "cookies": true,
-        "market_number": {
-          "up_limit": "#limit-title .-market-color--red", 
-          "up_fluctuation": "#fluctuation-title .-market-color--red",
-          "down_limit": "#limit-title .-market-color--green",
-          "down_fluctuation": "#fluctuation-title .-market-color--green"
+      "columns": {
+        "stock": {
+          "selector": ".fs15-bold",
+          "postprocess": ["strip_spaces"]
+        },
+        "code": {
+          "selector": ".fs12-bold-ash",
+          "postprocess": ["extract_6_digits"]
+        },
+        "analysis": {
+          "selector": "pre",
+          "postprocess": ["prefix_by_site"]
         }
       }
     },
+    "https://xuangutong.com.cn/top-gainer": {
+      "category": "action",
+      "name": "xuangutong",
+      "cookies": true,
+      "image": false,
+      "section": {
+        "selector": "div.topgainer-tag",
+        "extractors": {
+          "section_reason": {
+            "mode": "per_section",
+            "fields": {
+              "section_name": {
+                "selector": "header h3 a",
+                "postprocess": ["strip_spaces"]
+              },
+              "reason": {
+                "selector": "p span:nth-child(2)",
+                "postprocess": ["strip_spaces"]
+              }
+            }
+          }
+        },
+        "rows": {
+          "selector": "tr.x-table-body_row"
+        }
+      },
+      "columns": {
+        "stock": {
+          "selector": "td:nth-child(1) a span:first-child",
+          "postprocess": ["strip_spaces"]
+        },
+        "code": {
+          "selector": "td:nth-child(1) a span:nth-of-type(2)",
+          "postprocess": ["extract_6_digits"]
+        },
+        "analysis": {
+          "selector": "td:nth-child(8) div span",
+          "postprocess": ["prefix_by_site"]
+        }
+      }
+    },
+    "https://xuangutong.com.cn/dingpan": {
+      "category": "limit",
+      "name": "xuangutong",
+      "cookies": true,
+      "image": false,
+      "section": {
+        "rows": {
+          "selector": "tbody.hit-pool__table-body tr"
+        }
+      },
+      "columns": {
+        "stock": {
+          "selector": ".stock-title-name",
+          "postprocess": [
+            "strip_spaces"
+          ]
+        },
+        "code": {
+          "selector": ".stock-title a",
+          "postprocess": [
+            "extract_6_digits"
+          ]
+        },
+        "analysis": {
+          "selector": ".stock-reason span.line-clamp",
+          "postprocess": [
+            "prefix_by_site"
+          ]
+        },
+        "last_price": {
+          "selector": "td:nth-child(4) span.-market-color--rise, td:nth-child(4)"
+        },
+        "change_rate": {
+          "selector": "td:nth-child(5) span.-market-color--rise, td:nth-child(5)"
+        },
+        "lock_ratio": {
+          "selector": "td:nth-child(6)"
+        },
+        "turnover": {
+          "selector": "td:nth-child(7)"
+        },
+        "market_capital": {
+          "selector": "td:nth-child(8)"
+        },
+        "total_capital": {
+          "selector": "td:nth-child(9)"
+        },
+        "d_time_first": {
+          "selector": "td:nth-child(10)"
+        },
+        "d_time_last": {
+          "selector": "td:nth-child(11)"
+        }
+      },
+      "page_extractors": {
+        "market_number": {
+          "up_limit": {
+            "selector": "#limit-title .-market-color--red",
+            "postprocess": [
+              "extract_int"
+            ]
+          },
+          "up_fluctuation": {
+            "selector": "#fluctuation-title .-market-color--red",
+            "postprocess": [
+              "extract_int"
+            ]
+          },
+          "down_limit": {
+            "selector": "#limit-title .-market-color--green",
+            "postprocess": [
+              "extract_int"
+            ]
+          },
+          "down_fluctuation": {
+            "selector": "#fluctuation-title .-market-color--green",
+            "postprocess": [
+              "extract_int"
+            ]
+          }
+        }
+      }
+    }
+  },
   "agent": {
     "alphapai": {
       "url": "https://alphapai-web.rabyte.cn/reading/paipai/index",
       "click_locator": null,
-      "text_box_locator": { "by": "css", "value": "textarea.el-textarea__inner" },
-      "finish_locator": { "by": "css", "value": "div.btn-download-file" },
+      "text_box_locator": {
+        "by": "css",
+        "value": "textarea.el-textarea__inner"
+      },
+      "finish_locator": {
+        "by": "css",
+        "value": "div.btn-download-file"
+      },
       "content_locator": null,
       "wait_for_dynamical": null
     },
     "gangtise": {
       "url": "https://open.gangtise.com/?ai/knowledge=%2Fknowledge%2F%3Ft%3D1765246113209%23%2Fknowledge#/ai/knowledge",
-      "click_locator": { "by": "xpath", "value": "//div[contains(@class, 'menu-item') and .//div[@class='title-open'][text()='AI助手']]" },
-      "text_box_locator": { "by": "css", "value": "textarea.el-textarea__inner" },
-      "finish_locator": { "by": "css", "value": "div.iconfont.send.cursor-pointer.disable.icon-fasong" },
-      "content_locator": {"by": "css", "value": "div.markdown-it.markdown-box.answer"},
-      "wait_for_dynamical": {"by": "css", "value": "div.hotspot-top"}
+      "click_locator": {
+        "by": "xpath",
+        "value": "//div[contains(@class, 'menu-item') and .//div[@class='title-open'][text()='AI助手']]"
+      },
+      "text_box_locator": {
+        "by": "css",
+        "value": "textarea.el-textarea__inner"
+      },
+      "finish_locator": {
+        "by": "css",
+        "value": "div.iconfont.send.cursor-pointer.disable.icon-fasong"
+      },
+      "content_locator": {
+        "by": "css",
+        "value": "div.markdown-it.markdown-box.answer"
+      },
+      "wait_for_dynamical": {
+        "by": "css",
+        "value": "div.hotspot-top"
+      }
     }
   }
 }

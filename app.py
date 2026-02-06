@@ -14,7 +14,8 @@ import uvicorn
 from fastmcp import FastMCP
 import redis.asyncio as aioredis
 # ===== Local imports =====
-from exception.exception_handler import NetworkException, ValidationError, generic_exception_handler, validation_exception_handler, network_exception_handler
+from exception.exception_handler import NetworkException, ValidationError, generic_exception_handler, \
+    validation_exception_handler, network_exception_handler, SelectorException, selection_exception_handler
 from scraper.news_scraper import fetch_news_from_db, save_agent_data
 from scraper.stocks_scraper import main_scraper
 from image_process import excel_flow
@@ -28,12 +29,14 @@ from utils.validators import split_prompt_to_list, validate_and_prepare_cookies
 from utils.logging_config import get_others_logger
 from utils.redis_utils import create_aioredis, close_loop_redis, get_aioredis_client
 from fastapi.middleware.cors import CORSMiddleware
+
 # ===== Setup =====
 logger = get_others_logger()
 
 # === MCP integration ===
 mcp = FastMCP(name="News MCP")
 mcp_app = mcp.http_app(path="/tools")
+
 
 # --- Lifespan handler: combine MCP lifespan + Redis lifecycle ---
 @asynccontextmanager
@@ -63,19 +66,25 @@ app.add_middleware(
 
 app.add_exception_handler(ValidationError, validation_exception_handler)
 app.add_exception_handler(NetworkException, network_exception_handler)
+app.add_exception_handler(SelectorException, selection_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
+
+
 # ====================================================
 
 # --- Helper to get global Redis client ---
 async def get_redis():
     return get_aioredis_client()
+
+
 # --- SSE router ---
 router = APIRouter(prefix="/sse", tags=["Real-time"])
 
+
 @router.get("/{channel}")
 async def sse_stream(
-    channel: str,
-    redis: aioredis.Redis = Depends(get_redis),
+        channel: str,
+        redis: aioredis.Redis = Depends(get_redis),
 ):
     stream_key = f"sse:{channel}"
 
@@ -142,13 +151,17 @@ async def sse_stream(
         },
     )
 
+
 # Mount the SSE router
 app.include_router(router)
+
 
 # ================== Health Check ====================
 @app.get("/ping")
 async def ping():
     return {"status": "pong"}
+
+
 #==============================APP===================================================
 @app.get("/api/trendings")
 def fetch_market_stats(days: int = 30):
@@ -197,6 +210,7 @@ async def list_html_files(user: str, conversation_id: str):
 
     return JSONResponse(content=[files_alpha, files_gangtise])
 
+
 # UPDATED: allow selecting specific file
 @app.get("/preview/{user}/{conversation_id}/{source}/{filename}")
 async def preview_file(user: str, conversation_id: str, source: str, filename: str):
@@ -205,6 +219,7 @@ async def preview_file(user: str, conversation_id: str, source: str, filename: s
         raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(html_path, media_type="text/html")
+
 
 @app.delete("/delete/{user}/{conversation_id}")
 async def delete_html_dir(user: str, conversation_id: str):
@@ -220,6 +235,7 @@ async def delete_html_dir(user: str, conversation_id: str):
         raise HTTPException(status_code=500, detail=f"Error deleting directory: {str(e)}")
 
     return JSONResponse(content={"status": "deleted"})
+
 
 # @app.get("/api/rss")
 # async def get_rss():
@@ -242,7 +258,7 @@ async def delete_html_dir(user: str, conversation_id: str):
 async def refresh_cookies(request: Request):
     data = await request.json()
     sources = data.get("sources")
-        # Make sure sources is a list
+    # Make sure sources is a list
     if isinstance(sources, str):
         try:
             sources = json.loads(sources)
@@ -293,6 +309,7 @@ async def lookup_user(request: Request):
     user_id = user_repo.get_user_id_by_email(email)
     logger.info(user_id)
     return {"status": "200", "user_id": user_id}
+
 
 @app.post("/api/add_user")
 async def add_users(request: Request):
@@ -351,7 +368,6 @@ async def add_users(request: Request):
     return {"status": "ok", "users_added": resp}
 
 
-
 #========================Dramatiq tasks==========================
 @app.post("/api/scrape_news")
 async def scrape_news_api(request: Request):
@@ -391,8 +407,9 @@ async def display_agent_api(request: Request):
         s_locators_map = json.load(f)["agent"]
     all_cookies = await validate_and_prepare_cookies(user_id.split("_")[-1], sources, True)
     display_agent_task_main.send(user_id=user_id, prompt=prompt_list,
-                                    all_cookies=all_cookies, s_locators_map=s_locators_map,
-                                    conversation_id=conversation_id, dia_count=dia_count)
+                                 all_cookies=all_cookies, s_locators_map=s_locators_map,
+                                 conversation_id=conversation_id, dia_count=dia_count)
+
 
 @app.post("/api/news_analysis")
 async def news_analyzer(request: Request):
@@ -419,15 +436,16 @@ async def news_analyzer(request: Request):
 
     return JSONResponse({"status": "200", "message": "Sent results successfully."})
 
+
 @app.get("/api/scrape_stocks")
 async def scrape_stocks_api():
     date = datetime.today().strftime("%Y-%m-%d")
-    flag, market_number = await main_scraper(date)
+    flag, market_number, all_records_limit = await main_scraper(date)
     if not flag:
         return JSONResponse(
-        {"status": "ok", "msg": "Not a new date"}
-    )
-    await asyncio.to_thread(excel_flow, market_number, date)
+            {"status": "ok", "msg": "Not a new date"}
+        )
+    await asyncio.to_thread(excel_flow, market_number, all_records_limit, date)
 
     # config = load_email_config_from_json("json/config.json")
     # config.ATTACHMENTS = [
@@ -448,6 +466,7 @@ async def scrape_stocks_api():
     return JSONResponse(
         {"status": "ok", "date": date}
     )
+
 
 @app.get("/api/get_news")
 async def fetch_news():
@@ -485,13 +504,16 @@ async def fetch_stocks(days: int = Field(gt=0, le=30, description="Number of rec
     name="fetch_stocks_and_analyses",
     description="Fetch relevant stocks and their per-day analyses for the past N days.",
 )
-async def fetch_stocks_and_analyses(stocks: list[str] = Field(min_length=1, description="List of stock identifiers (names and codes, at least one stock). (e.g., ['中国一重601106','国泰集团603977'])"),
-                                    days: int = Field(ge=0, le=30, description="Number of recent days(1-30) to fetch analyses, e.g., 5")):
+async def fetch_stocks_and_analyses(stocks: list[str] = Field(min_length=1,
+                                                              description="List of stock identifiers (names and codes, at least one stock). (e.g., ['中国一重601106','国泰集团603977'])"),
+                                    days: int = Field(ge=0, le=30,
+                                                      description="Number of recent days(1-30) to fetch analyses, e.g., 5")):
     logger.info(f"fetch_stocks_and_analyses:\n stocks: {stocks}\n days: {days}\n")
     db_manager = get_db_manager()
     stock_repo = StockRepository(db_manager)
     data = await asyncio.to_thread(stock_repo.get_analysis_by_stock, stocks, days)
     return {"data": data}
+
 
 # =====================================================
 # Entry point

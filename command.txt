@@ -1,8 +1,7 @@
 
 !!!streaming lags!!!
 !!!concurrency!!!
-!!!delete lags dify slept maybe!!!
-!!! stock analysis, news analysis all displayed in webapp !!!
+!!! Based on Xuangutong, combine jiuyan"
 
 CREATE USER 'scraper'@'localhost' IDENTIFIED BY 'strong_password_here';
 GRANT ALL PRIVILEGES ON scraped_data.* TO 'muheng'@'localhost';

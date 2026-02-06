@@ -2,16 +2,16 @@ import json
 import os
 import asyncio
 import re
+from datetime import datetime
+
 import aiohttp
-from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
-from exception.exception_handler import NetworkException
 from pwright.async_pm import AsyncPlaywrightManager
 from pwright.async_cm import PlaywrightContext
 from pwright.async_pf import new_stealth_page
-from utils.database import get_db_manager, StockRepository
+from utils.database import get_db_manager, StockRepository, SectionReasonRepository
 from utils.interactive import async_safe_click
 from utils.logging_config import get_stock_logger
 from pathlib import Path
@@ -19,20 +19,170 @@ from pathlib import Path
 logger = get_stock_logger()
 
 
-async def main_scraper(date: str, today: bool = True) -> bool:
-    # Load selectors & cookies once
-    # 获取项目根目录路径（假设项目根目录是 D:\dify_server）
-    PROJECT_ROOT = Path(__file__).parent.parent  # 从 scraper/ 向上两级到 dify_server/
+async def pw_select(scope, selector: str):
+    return await scope.query_selector(selector)
 
-    # 使用绝对路径
+
+async def pw_select_all(scope, selector: str):
+    return await scope.query_selector_all(selector)
+
+
+async def pw_text(el):
+    if not el:
+        return None
+    return (await el.inner_text()).strip()
+
+
+async def select_el(row, selector, *, is_page_scope: bool):
+    if is_page_scope:
+        return row.select_one(selector)
+    return await row.query_selector(selector)
+
+
+async def get_text(el, *, is_page_scope: bool):
+    if not el:
+        return None
+
+    if is_page_scope:
+        return el.get_text(" ", strip=True)
+
+    return (await el.inner_text()).strip()
+
+
+async def get_section_scopes(page, section_cfg):
+    # explicit sections
+    if "selector" in section_cfg:
+        await page.wait_for_selector(
+            section_cfg["selector"],
+            state="attached",
+            timeout=30_000
+        )
+        return await page.query_selector_all(section_cfg["selector"])
+
+    # implicit single section = page itself
+    return [page]
+
+
+async def run_named_extractors(*, scope, extractors, site):
+    result = {}
+
+    for name, extractor in extractors.items():
+        fields = extractor["fields"]
+        record = {}
+
+        for field, cfg in fields.items():
+            el = await scope.query_selector(cfg["selector"])
+            raw = (await el.inner_text()).strip() if el else None
+            record[field] = postprocess_value(
+                raw, cfg.get("postprocess"), site
+            )
+
+        result[name] = record
+
+    return result
+
+
+def postprocess_value(value: str | None, rules: list[str] | None, site: str | None = None):
+    if value is None or not rules:
+        return value
+
+    for rule in rules:
+        if rule == "strip_spaces":
+            value = re.sub(r"\s+", "", value)
+
+        elif rule == "extract_6_digits":
+            m = re.search(r"\d{6}", value)
+            value = m.group(0) if m else value
+
+        elif rule == "extract_int":
+            digits = re.sub(r"\D", "", value)
+            value = int(digits) if digits.isdigit() else None
+
+        elif rule == "keep_text":
+            value = value.strip()
+
+        elif rule == "prefix_by_site" and value:
+            value = apply_prefix(value, site) if site else value
+
+        else:
+            raise ValueError(f"Unknown postprocess rule: {rule}")
+
+    return value
+
+
+async def extract_page_data(
+        page,
+        extractors: dict,
+        site: str
+) -> dict:
+    result = {}
+
+    for block_name, fields in extractors.items():
+        block_data = {}
+
+        for field, cfg in fields.items():
+            try:
+                el = await page.query_selector(cfg["selector"])
+                raw = await pw_text(el)
+                value = postprocess_value(
+                    raw,
+                    cfg.get("postprocess"),
+                    site
+                )
+            except Exception:
+                value = None
+
+            block_data[field] = value
+
+        result[block_name] = block_data
+
+    return result
+
+
+def route_scraped_data(
+        *,
+        selectors: dict,
+        data: dict,
+        action_records: list,
+        limit_records: list,
+        market_number_ref: dict,
+        section_reason_ref: dict,
+):
+    category = selectors["category"]
+
+    if data.get("records"):
+        if category == "action":
+            action_records.extend(data["records"])
+        elif category == "limit":
+            limit_records.extend(data["records"])
+
+    if data.get("market_number"):
+        market_number_ref.update(data["market_number"])
+
+    if data["sections"].get("section_reason"):
+        section_reason_ref.update(data["section_reason"])
+
+
+def apply_prefix(value: str, site: str) -> str:
+    if site == "jiuyan":
+        return f"韭研:\n{value}\n"
+    return f"选股通:\n{value}\n"
+
+
+async def main_scraper(date: str):
+    PROJECT_ROOT = Path(__file__).parent.parent
+
     with open(PROJECT_ROOT / "json/selectors.json", "r", encoding="utf-8") as f:
         selectors_map = json.load(f)["stocks"]
 
     with open(PROJECT_ROOT / "json/common/cookies.json", "r", encoding="utf-8") as f:
         cookies_map = json.load(f)
 
-    all_records: list[dict] = []
-    market_number = None
+    all_action_records: list[dict] = []
+    all_limit_records: list[dict] = []
+    market_number: dict = {}
+    section_reason: dict = {}
+
     manager = AsyncPlaywrightManager()
     await manager.start()
 
@@ -53,150 +203,144 @@ async def main_scraper(date: str, today: bool = True) -> bool:
                         ignore_https_errors=True,
                 ) as context:
                     page = await new_stealth_page(context)
-
-                    try:
-                        if not today and "jiuyan" in url:
-                            url = url + f"/{date}"
-                        elif not today:
-                            break
-                        await page.goto(url, wait_until="domcontentloaded", timeout=50000)
-                    except Exception as e:
-                        raise NetworkException(f"Network Error. Failed to load {url}: {str(e)}")
-                    logger.info("Page loaded.")
-
-                    data = await _scrape_stocks_async(
-                        site=selectors["name"],
+                    await page.goto(url, wait_until="domcontentloaded", timeout=50_000)
+                    data = await scrape_page(
                         page=page,
                         date=date,
-                        click_selector=selectors.get("click_selector"),
-                        row_selector=selectors["row_selector"],
-                        name_selector=selectors["name_selector"],
-                        code_selector=selectors["code_selector"],
-                        analysis_selector=selectors["analysis_selector"],
-                        market_number_selector=selectors["market_number"]
+                        selectors=selectors
                     )
-                    if data and data["records"]:
-                        all_records.extend(data["records"])
-                        logger.info(f"Scraped {len(data["records"])} records from {url}")
-                    else:
-                        logger.warning(f"No records scraped from {url}")
-                        return False, market_number
 
-                    market_number = data["market_number"] if data["market_number"] else market_number
-                    # Optional image scraping
+                    if not data or not data.get("records"):
+                        logger.warning(f"No records scraped from {url}")
+                        return False, {}, []
+
+                    route_scraped_data(
+                        selectors=selectors,
+                        data=data,
+                        action_records=all_action_records,
+                        limit_records=all_limit_records,
+                        market_number_ref=market_number,
+                        section_reason_ref=section_reason,
+                    )
+
+                    logger.info(
+                        f"Scraped {len(data['records'])} records from {url}"
+                    )
+
                     if selectors.get("image"):
                         await _prepare_image_dir("images")
                         await _scrape_images_async(page, url)
 
             except Exception as e:
                 logger.exception(f"Error scraping {url}: {e}")
+
     finally:
         await manager.shutdown()
 
-    # Save DB results
-    if all_records:
+    # -------- persistence / downstream --------
+    if all_action_records:
         db_manager = get_db_manager()
-        repo = StockRepository(db_manager)
+        StockRepository(db_manager).insert_or_update_stocks(all_action_records)
 
-        count = repo.insert_or_update_stocks(all_records)
-        logger.info(
-            f"Saved {count} stock records to database for {date}"
+    if section_reason:
+        db_manager = get_db_manager()
+        repo = SectionReasonRepository(db_manager)
+        repo.delete_by_date(datetime.strptime(date, "%Y-%m-%d"))
+        repo.upsert_section_reason(
+            datetime.strptime(date, "%Y-%m-%d"),
+            section_reason
         )
 
-        # result = repo.get_today_stocks()
-        # await asyncio.to_thread(_write_analysis_file, result, date)
-
-    return True, market_number
+    return True, market_number, all_limit_records
 
 
-async def _scrape_stocks_async(
+async def scrape_page(
         *,
         page,
-        site: str,
         date: str,
-        click_selector: str | None,
-        row_selector: str,
-        name_selector: str,
-        code_selector: str,
-        analysis_selector: str,
-        market_number_selector: dict | None
-) -> list[dict] | None:
-    try:
-        if click_selector:
-            await async_safe_click(
-                page,
-                f"xpath={click_selector}",
-                timeout=5_000,
-                max_attempts=3,
-            )
-        # Wait for rows and the first .market-color--red within #fluctuation-title
-        await page.wait_for_selector(
-            row_selector,
-            state="attached",
-            timeout=30_000,
+        selectors: dict
+) -> dict:
+    site = selectors["name"]
+    section_cfg = selectors["section"]
+    columns = selectors["columns"]
+
+    records = []
+    section_datasets = {}
+    page_data = {}
+
+    # ---- page-level extractors ----
+    if "page_extractors" in selectors:
+        page_data = await extract_page_data(
+            page,
+            selectors["page_extractors"],
+            site
         )
 
-        html = await page.content()
-        soup = BeautifulSoup(html, "html.parser")
-
-        market_number = {}
-        if market_number_selector:
-            for label, selector in market_number_selector.items():
-                await page.wait_for_selector(
-                    selector,
-                    state="visible",
-                    timeout=30_000,
-                )
-                elements = soup.select(selector)
-                # Extract the plain number (text) from the first matching element,
-                # or None if not found.
-                if elements and elements[0]:
-                    text = elements[0].get_text(strip=True)
-                    # Try to extract int, fallback to text if not possible.
-                    try:
-                        number = int(re.sub(r"[^\d]", "", text))
-                    except Exception:
-                        number = text
-                    market_number[label] = number
-                else:
-                    market_number[label] = None
-
-        rows = soup.select(row_selector)
-        records: list[dict] = []
-
-        for row in rows:
-            name_tag = row.select_one(name_selector)
-            code_tag = row.select_one(code_selector)
-            analysis_tag = row.select_one(analysis_selector)
-
-            if not name_tag or not code_tag or not analysis_tag:
-                continue
-
-            name = name_tag.get_text(strip=True)
-            name = re.sub(r'\s+', '', name)
-            code_raw = code_tag.get_text(strip=True)
-            numbers = re.findall(r"\d{6}", code_raw)
-            code = numbers[0] if numbers else code_raw
-
-            analysis = analysis_tag.get_text(" ", strip=True)
-            analysis = "韭研:" + "\n" + analysis if site == "jiuyan" else "选股通:" + "\n" + analysis
-            records.append(
-                {
-                    "date": date,
-                    "stock": name,
-                    "code": code,
-                    "analysis": analysis,
-                }
+    # ---- sections ----
+    if "selector" in section_cfg:
+        try:
+            # Wait for selector and get the first element as confirmation
+            await page.wait_for_selector(
+                section_cfg["selector"],
+                timeout=30_000,
+                state="attached"  # 只需要元素存在于DOM中
             )
 
-        return {
-            "market_number": market_number,
-            "records": records
-        }
+            # Now get all matching elements
+            sections = await page.query_selector_all(section_cfg["selector"])
 
-    except Exception as e:
-        logger.exception(f"Error scraping stocks: {e}")
-        return None
+        except Exception as e:
+            raise RuntimeError(f"sections not loaded in time: {str(e)}")
+    else:
+        # When no selector specified, we use the whole page
+        # But we still need to wait for the page to load
+        try:
+            await page.wait_for_load_state("networkidle", timeout=30_000)
+        except Exception as e:
+            raise RuntimeError(f"Page not loaded in time: {str(e)}")
+
+        sections = [page]  # implicit single section
+
+    for section in sections:
+        extracted_blocks = {}
+
+        # ---- section extractors ----
+        if "extractors" in section_cfg:
+            extracted_blocks = await run_named_extractors(
+                scope=section,
+                extractors=section_cfg["extractors"],
+                site=site
+            )
+            for name, data in extracted_blocks.items():
+                section_datasets.setdefault(name, []).append(data)
+
+        # ---- rows ----
+        rows = await section.query_selector_all(
+            section_cfg["rows"]["selector"]
+        )
+
+        for row in rows:
+            record = {"date": date}
+
+            # propagate section metadata
+            record.update(extracted_blocks)
+
+            for field, cfg in columns.items():
+                el = await row.query_selector(cfg["selector"])
+                raw = await pw_text(el)
+
+                record[field] = postprocess_value(
+                    raw, cfg.get("postprocess"), site
+                )
+
+            if record.get("stock") and record.get("code"):
+                records.append(record)
+    logger.info(page_data)
+    return {
+        "records": records,
+        "sections": section_datasets,
+        **page_data
+    }
 
 
 async def _scrape_images_async(page, url: str) -> str | None:
@@ -213,29 +357,26 @@ async def _scrape_images_async(page, url: str) -> str | None:
         max_attempts=3,
     )
 
+    img_selector = "div#QR-code img"
+
     try:
-        await page.wait_for_selector(
-            "div#QR-code img",
+        img_el = await page.wait_for_selector(
+            img_selector,
+            state="visible",
             timeout=30_000,
         )
         logger.info("Image area loaded.")
     except PlaywrightTimeoutError:
         return None
 
-    html = await page.content()
-    soup = BeautifulSoup(html, "html.parser")
-    img_tag = soup.select_one("div#QR-code img")
-
-    if not img_tag:
-        logger.info("Target image not found.")
-        return None
-
-    img_url = img_tag.get("src")
+    # ---- extract src directly from DOM ----
+    img_url = await img_el.get_attribute("src")
     if not img_url:
+        logger.info("Image src attribute missing.")
         return None
 
-    if not img_url.startswith(("http://", "https://")):
-        img_url = urljoin(url, img_url)
+    # resolve relative URL if needed
+    img_url = urljoin(url, img_url)
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -268,15 +409,3 @@ async def _prepare_image_dir(path: str):
                 os.remove(fp)
             except Exception as e:
                 logger.warning(f"Could not delete {fp}: {e}")
-
-
-# def _write_analysis_file(result: list[dict], date):
-#     with open(f"excel/{date}.txt", "w", encoding="utf-8") as f:
-#         for item in result:
-#             f.write(
-#                 f"{item['stock']}\t{item['code']}\n"
-#                 f"{item['analysis']}\n\n"
-#             )
-
-# if __name__ == "__main__":
-#     asyncio.run(main_scraper("2026-02-02", False))

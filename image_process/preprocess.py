@@ -5,6 +5,8 @@ from PIL import Image
 from utils.logging_config import get_stock_logger
 
 logger = get_stock_logger()
+
+
 def horizontal_projection(bin_img):
     """
     bin_img: binary image (text=0, background=255)
@@ -12,10 +14,11 @@ def horizontal_projection(bin_img):
     """
     return np.sum(bin_img == 0, axis=1)
 
+
 def find_safe_cut_lines(
-    bin_img,
-    min_gap_height=20,
-    max_ink_ratio=0.001
+        bin_img,
+        min_gap_height=20,
+        max_ink_ratio=0.002
 ):
     """
     Returns y positions suitable for slicing
@@ -48,9 +51,9 @@ def choose_cut_near(cut_lines, target_y, max_shift=200):
 
 
 def smart_slice_tall_image(
-    img,
-    target_height=2000,
-    overlap=0
+        img,
+        target_height=2000,
+        overlap=0
 ):
     gray = np.array(img)
     h, w = gray.shape
@@ -96,5 +99,3 @@ def preprocess_image(img_path):
 
     logger.info(f"✅ Saved grayscale + enhanced-contrast + thresholded to: {new_img_path}")
     return new_img_path
-
-

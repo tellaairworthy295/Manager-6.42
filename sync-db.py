@@ -21,8 +21,8 @@ import urllib
 REMOTE_DB_URL = f"mysql+pymysql://root:{urllib.parse.quote_plus('112358@gh')}@8.153.91.114:35300/dify_data"
 LOCAL_DB_URL = f"mysql+pymysql://lmh:{urllib.parse.quote_plus('lmh@123456')}@10.29.88.63:3306/selfdev_test"
 
-POLL_INTERVAL_SECONDS = 2 * 60   # 10 minutes
-LOOKBACK_MINUTES = 30             # fetch last 20 minutes
+POLL_INTERVAL_SECONDS = 1 * 60   # 1 minutes
+LOOKBACK_MINUTES = 20             # fetch last 20 minutes
 
 Base = declarative_base()
 

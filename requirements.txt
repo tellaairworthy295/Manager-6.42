@@ -24,4 +24,5 @@ concurrent-log-handler
 aiohttp
 pillow
 openpyxl
+aiofiles
 pymysql==1.1.2

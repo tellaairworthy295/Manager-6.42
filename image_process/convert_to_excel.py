@@ -1,8 +1,11 @@
+import collections
 import os
 import re
+from datetime import datetime
+
 import unicodedata
 import pandas as pd
-from utils.database import StockStatsRepository, get_db_manager, ActionDataRepository
+from utils.database import StockStatsRepository, get_db_manager, ActionLimitDataRepository
 from .preprocess import preprocess_image
 from .ocr_api import ocr_image_safe
 # Configure loguru for to_excel module
@@ -31,13 +34,12 @@ def _normalize_text(text: list[str], space: bool = False) -> str:
             text[idx] = label.strip()
 
 
-def _save_actionData(rec_texts: list[str], excel_path: str, date: str):
+def _save_actionData(rec_texts: list[str], excel_path: str, date: str, records_list: list[dict]):
     """
     Save OCR-recognized texts to an Excel file grouped by 8 fields:
     ["Section", "Board", "Code", "Name", "Time", "Market", "Turnover", "Keyword"].
     Automatically creates directories if needed; upserts to DB.
     """
-
     # Ensure directory exists
     os.makedirs(excel_path, exist_ok=True)
 
@@ -100,33 +102,56 @@ def _save_actionData(rec_texts: list[str], excel_path: str, date: str):
     df.to_excel(excel_file, index=False)
     logger.info(f"Saved action data to Excel: {excel_file}")
 
-    # Write to DB (upsert each row via ActionDataRepository)
     db_manager = get_db_manager()
-    repo = ActionDataRepository(db_manager)
-
+    repo = ActionLimitDataRepository(db_manager)
     data_dict_list = []
-    for _, row in df.iterrows():
-        # Convert row values to DB dict, ensure types are correct
+
+    # Build a mapping from Name to df row (for matching by stock name)
+    name_to_dfrow = collections.OrderedDict()
+    for idx, row in df.iterrows():
+        stock_name = row.get("Name")
+        if stock_name:  # it should never be empty
+            name_to_dfrow[stock_name] = row
+
+    # Now, for each record in records_list, match with df using the stock/name key
+    for record in records_list:
         try:
+            rec_name = record.get("stock", "")
+            df_row = name_to_dfrow.get(rec_name)
+            if df_row is None:
+                logger.warning(f"No matching row in OCR DataFrame for stock: '{rec_name}'")
+                continue
+
+            # Compose analysis and keywords if available from df and records_list
+            analysis = record.get("analysis", "")
+            keyword = df_row.get("Keyword", "") if "Keyword" in df_row else ""
+            combined_keyword = (analysis + "\n韭研:\n" + keyword).strip() if keyword else analysis
+
             data_dict = {
-                "date": pd.to_datetime(date).date() if isinstance(date, str) else date,
-                "section": row["Section"],
-                "board": row["Board"],
-                "code": row["Code"],
-                "name": row["Name"],
-                "d_time": row["Time"],
-                "market": row["Market"],
-                "turnover": row["Turnover"],
-                "keyword": row["Keyword"],
-                "highlight": row["Highlight"]
+                "date": pd.to_datetime(record["date"]).date() if isinstance(record["date"], str) else record["date"],
+                "section": df_row.get("Section"),
+                "board": df_row.get("Board"),
+                "stock": rec_name,
+                "code": record.get("code", ""),
+                "last_price": record.get("last_price"),
+                "change_rate": record.get("change_rate"),
+                "lock_ratio": record.get("lock_ratio"),
+                "turnover": record.get("turnover"),
+                "market_capital": record.get("market_capital"),
+                "total_capital": record.get("total_capital"),
+                "d_time_first": record.get("d_time_first"),
+                "d_time_last": record.get("d_time_last"),
+                "analysis": combined_keyword,
+                "highlight": df_row.get("Highlight")
             }
             data_dict_list.append(data_dict)
         except Exception as e:
-            logger.error(f"Failed to upsert action data row: {row.tolist()}; error: {e}")
+            logger.error(f"Failed to upsert action data record: {record}; error: {e}")
+    n = repo.delete_by_date(datetime.strptime(date, "%Y-%m-%d"))
+    logger.info(f"deleted old {n} records.")
     repo.upsert_action_data_batch(data_dict_list)
     logger.info("Action data upserted to database.")
 
-    
 
 def _get_maxEven_maxBreak(rec_texts: list[str]):
     """
@@ -211,7 +236,7 @@ def _save_stockstats(rec_texts: list[str], market_number: dict, date):
     repo.add_market_stats(new_stats)
 
 
-def excel_flow(market_number: dict, date):
+def excel_flow(market_number: dict, records_list: list[dict], date):
     scraped_dir = "images"
     img_path = f"{scraped_dir}/Image.png"
     if not os.path.isfile(img_path):
@@ -221,7 +246,7 @@ def excel_flow(market_number: dict, date):
         path = preprocess_image(img_path)
         rec_texts = ocr_image_safe(path)
         _normalize_text(rec_texts)
-        _save_actionData(rec_texts, "excel", date)
+        _save_actionData(rec_texts, "excel", date, records_list)
         _save_stockstats(rec_texts, market_number, date)
     except Exception as e:
         logger.error(f"Error while OCR: {e}")
