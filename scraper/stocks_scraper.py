@@ -1,3 +1,4 @@
+
 import json
 import os
 import asyncio
@@ -19,48 +20,10 @@ from pathlib import Path
 logger = get_stock_logger()
 
 
-async def pw_select(scope, selector: str):
-    return await scope.query_selector(selector)
-
-
-async def pw_select_all(scope, selector: str):
-    return await scope.query_selector_all(selector)
-
-
 async def pw_text(el):
     if not el:
         return None
-    return (await el.inner_text()).strip()
-
-
-async def select_el(row, selector, *, is_page_scope: bool):
-    if is_page_scope:
-        return row.select_one(selector)
-    return await row.query_selector(selector)
-
-
-async def get_text(el, *, is_page_scope: bool):
-    if not el:
-        return None
-
-    if is_page_scope:
-        return el.get_text(" ", strip=True)
-
-    return (await el.inner_text()).strip()
-
-
-async def get_section_scopes(page, section_cfg):
-    # explicit sections
-    if "selector" in section_cfg:
-        await page.wait_for_selector(
-            section_cfg["selector"],
-            state="attached",
-            timeout=30_000
-        )
-        return await page.query_selector_all(section_cfg["selector"])
-
-    # implicit single section = page itself
-    return [page]
+    return (await el.text_content()).strip()
 
 
 async def run_named_extractors(*, scope, extractors, site):
@@ -71,8 +34,26 @@ async def run_named_extractors(*, scope, extractors, site):
         record = {}
 
         for field, cfg in fields.items():
-            el = await scope.query_selector(cfg["selector"])
-            raw = (await el.inner_text()).strip() if el else None
+            selector = cfg["selector"]
+            # Handle multiple selectors as a comma-separated list
+            selectors = (
+                selector if isinstance(selector, list)
+                else [s.strip() for s in selector.split(",")]
+            )
+
+            el = None
+            raw = None
+            for sel in selectors:
+                el = await scope.query_selector(sel)
+                if el:
+                    raw = await el.text_content()
+                    raw = raw.strip() if raw else None
+                    if raw:  # Prefer the first one with content
+                        break
+
+            if cfg.get("required", False) and raw is None:
+                return None
+
             record[field] = postprocess_value(
                 raw, cfg.get("postprocess"), site
             )
@@ -82,8 +63,11 @@ async def run_named_extractors(*, scope, extractors, site):
     return result
 
 
+
 def postprocess_value(value: str | None, rules: list[str] | None, site: str | None = None):
     if value is None or not rules:
+        if rules and len(rules) == 1 and rules[0] == "prefix_by_site":
+            value = apply_prefix("", site) if site else value
         return value
 
     for rule in rules:
@@ -101,9 +85,35 @@ def postprocess_value(value: str | None, rules: list[str] | None, site: str | No
         elif rule == "keep_text":
             value = value.strip()
 
-        elif rule == "prefix_by_site" and value:
+        elif rule == "prefix_by_site":
             value = apply_prefix(value, site) if site else value
 
+        elif rule == "extract_float":
+            digits = re.sub(r'[^\d\.]', '', value)
+            try:
+                value = float(digits)
+            except ValueError:
+                value = None
+
+        elif rule == "time_format":
+            # extract time in HH:mm:ss, fallback to HH:mm if no seconds, else None
+            m = re.search(r"(\d{2}):(\d{2})(?::(\d{2}))?", value)
+            if m:
+                if m.group(3) is not None:
+                    value = f"{m.group(1)}:{m.group(2)}:{m.group(3)}"
+                else:
+                    value = f"{m.group(1)}:{m.group(2)}:00"
+            else:
+                value = None
+
+        elif rule == "text_formatter":
+            value = re.sub(r"[\s\n\t]+", "", value)
+        
+        elif rule == "extract_percent_str":
+            # Extract percent-format string, may start with + or -, e.g., "+8.00%", "-6.42%", "5.5%"
+            m = re.search(r'[+-]?\d+\.?\d*%', value)
+            value = m.group(0) if m else None
+            
         else:
             raise ValueError(f"Unknown postprocess rule: {rule}")
 
@@ -116,12 +126,17 @@ async def extract_page_data(
         site: str
 ) -> dict:
     result = {}
-
+    
     for block_name, fields in extractors.items():
         block_data = {}
 
         for field, cfg in fields.items():
             try:
+                await page.wait_for_selector(
+                    cfg["selector"],
+                    state="visible",
+                    timeout=15_000
+                )
                 el = await page.query_selector(cfg["selector"])
                 raw = await pw_text(el)
                 value = postprocess_value(
@@ -146,7 +161,7 @@ def route_scraped_data(
         action_records: list,
         limit_records: list,
         market_number_ref: dict,
-        section_reason_ref: dict,
+        section_reason_ref: list[dict],
 ):
     category = selectors["category"]
 
@@ -160,7 +175,7 @@ def route_scraped_data(
         market_number_ref.update(data["market_number"])
 
     if data["sections"].get("section_reason"):
-        section_reason_ref.update(data["section_reason"])
+        section_reason_ref.extend(data["sections"].get("section_reason"))
 
 
 def apply_prefix(value: str, site: str) -> str:
@@ -181,7 +196,7 @@ async def main_scraper(date: str):
     all_action_records: list[dict] = []
     all_limit_records: list[dict] = []
     market_number: dict = {}
-    section_reason: dict = {}
+    section_reason: list[dict] = []
 
     manager = AsyncPlaywrightManager()
     await manager.start()
@@ -209,7 +224,6 @@ async def main_scraper(date: str):
                         date=date,
                         selectors=selectors
                     )
-
                     if not data or not data.get("records"):
                         logger.warning(f"No records scraped from {url}")
                         return False, {}, []
@@ -230,18 +244,17 @@ async def main_scraper(date: str):
                     if selectors.get("image"):
                         await _prepare_image_dir("images")
                         await _scrape_images_async(page, url)
-
             except Exception as e:
                 logger.exception(f"Error scraping {url}: {e}")
 
     finally:
         await manager.shutdown()
-
+    #logger.info(all_action_records)
     # -------- persistence / downstream --------
     if all_action_records:
         db_manager = get_db_manager()
-        StockRepository(db_manager).insert_or_update_stocks(all_action_records)
-
+        count = StockRepository(db_manager).insert_or_update_stocks(datetime.strptime(date, "%Y-%m-%d"), all_action_records)
+        logger.info(count)
     if section_reason:
         db_manager = get_db_manager()
         repo = SectionReasonRepository(db_manager)
@@ -268,6 +281,13 @@ async def scrape_page(
     section_datasets = {}
     page_data = {}
 
+    if selectors.get("click_selector"): 
+        await async_safe_click(
+            page, 
+            f"xpath={selectors['click_selector']}", 
+            timeout=5_000, max_attempts=3
+        )
+
     # ---- page-level extractors ----
     if "page_extractors" in selectors:
         page_data = await extract_page_data(
@@ -275,7 +295,6 @@ async def scrape_page(
             selectors["page_extractors"],
             site
         )
-
     # ---- sections ----
     if "selector" in section_cfg:
         try:
@@ -286,16 +305,32 @@ async def scrape_page(
                 state="attached"  # 只需要元素存在于DOM中
             )
 
+            if section_cfg.get("click"):
+                await async_safe_click(
+                    page=page, 
+                    locator=f"xpath={section_cfg['click']}", 
+                    multiple=True
+                )
+                try:
+                    await page.wait_for_selector(
+                    section_cfg["wait_for"],
+                    timeout=3000,
+                    state="attached"
+                )
+                except:
+                    pass
             # Now get all matching elements
             sections = await page.query_selector_all(section_cfg["selector"])
 
         except Exception as e:
             raise RuntimeError(f"sections not loaded in time: {str(e)}")
     else:
-        # When no selector specified, we use the whole page
-        # But we still need to wait for the page to load
         try:
-            await page.wait_for_load_state("networkidle", timeout=30_000)
+            await page.wait_for_selector(
+                section_cfg["rows"]["selector"],
+                timeout=30_000,
+                state="attached"
+            )
         except Exception as e:
             raise RuntimeError(f"Page not loaded in time: {str(e)}")
 
@@ -311,6 +346,9 @@ async def scrape_page(
                 extractors=section_cfg["extractors"],
                 site=site
             )
+            if extracted_blocks is None:
+                # If any required value is None (run_named_extractors returns None), skip this section.
+                continue
             for name, data in extracted_blocks.items():
                 section_datasets.setdefault(name, []).append(data)
 
@@ -321,9 +359,9 @@ async def scrape_page(
 
         for row in rows:
             record = {"date": date}
-
             # propagate section metadata
-            record.update(extracted_blocks)
+            for _, data in extracted_blocks.items():
+                record.update(data)
 
             for field, cfg in columns.items():
                 el = await row.query_selector(cfg["selector"])
@@ -332,10 +370,11 @@ async def scrape_page(
                 record[field] = postprocess_value(
                     raw, cfg.get("postprocess"), site
                 )
-
+            
             if record.get("stock") and record.get("code"):
+                logger.info(record.get("stock"))
                 records.append(record)
-    logger.info(page_data)
+
     return {
         "records": records,
         "sections": section_datasets,

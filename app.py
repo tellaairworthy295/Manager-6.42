@@ -18,7 +18,7 @@ from exception.exception_handler import NetworkException, ValidationError, gener
     validation_exception_handler, network_exception_handler, SelectorException, selection_exception_handler
 from scraper.news_scraper import fetch_news_from_db, save_agent_data
 from scraper.stocks_scraper import main_scraper
-from image_process import excel_flow
+from image_process import main_flow
 
 from tasks.news_tasks import scrape_all_news
 from tasks.agent_tasks import display_agent_task_main
@@ -422,7 +422,6 @@ async def news_analyzer(request: Request):
     await asyncio.to_thread(save_agent_data, analysis_result)
 
     # Write content to a temporary txt file
-    from datetime import datetime
     now = datetime.now()
     formatted = now.strftime("%Y-%m-%d-%H")
     txt_path = f"news_analyses/{formatted}.txt"
@@ -439,13 +438,14 @@ async def news_analyzer(request: Request):
 
 @app.get("/api/scrape_stocks")
 async def scrape_stocks_api():
-    date = datetime.today().strftime("%Y-%m-%d")
+    from datetime import timedelta
+    date = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
     flag, market_number, all_records_limit = await main_scraper(date)
     if not flag:
         return JSONResponse(
             {"status": "ok", "msg": "Not a new date"}
         )
-    await asyncio.to_thread(excel_flow, market_number, all_records_limit, date)
+    await asyncio.to_thread(main_flow, market_number, all_records_limit, date)
 
     # config = load_email_config_from_json("json/config.json")
     # config.ATTACHMENTS = [

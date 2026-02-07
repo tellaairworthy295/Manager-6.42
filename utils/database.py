@@ -3,11 +3,11 @@ Database module with SQLAlchemy models and connection pooling for MySQL.
 Provides modular, extensible, and maintainable database operations.
 """
 import json
-from datetime import datetime, timedelta, date, timezone, time
+from datetime import datetime, timedelta, date, timezone
 import re
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from sqlalchemy import VARCHAR, Date, Float, create_engine, Column, Integer, String, Text, DateTime, Boolean, \
+from sqlalchemy import TEXT, VARCHAR, Date, Float, create_engine, Column, Integer, String, DateTime, Boolean, \
     UniqueConstraint, Index, DECIMAL, Time
 from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from sqlalchemy.pool import QueuePool
@@ -35,11 +35,11 @@ class NewsArticle(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     url = Column(String(500), unique=True, nullable=False, index=True)
     source = Column(String(100))
-    title = Column(Text)
-    content = Column(Text)
-    title_zh = Column(Text)
-    content_zh = Column(Text)
-    xml_content = Column(Text)
+    title = Column(TEXT)
+    content = Column(TEXT)
+    title_zh = Column(TEXT)
+    content_zh = Column(TEXT)
+    xml_content = Column(TEXT)
     content_fully_loaded = Column(Boolean, default=False)
     publish_at = Column(DateTime, nullable=False)
     scraped_date = Column(Date, default=date.today, index=True)
@@ -51,6 +51,7 @@ class Stock(Base):
     __tablename__ = "stocks"
     __table_args__ = (
         UniqueConstraint('date', 'stock', name='uq_date_stock'),
+        UniqueConstraint('date', 'code', name='uq_date_code'),
         {
             'mysql_charset': 'utf8mb4',
             'mysql_collate': 'utf8mb4_unicode_ci'
@@ -60,8 +61,18 @@ class Stock(Base):
     date = Column(Date, nullable=False, index=True)  # Changed from String to Date
     stock = Column(VARCHAR(64), nullable=False)
     code = Column(VARCHAR(20), nullable=False)
-    section_name = Column(VARCHAR(64), nullable=False)
-    analysis = Column(Text, nullable=False)
+    section = Column(VARCHAR(255), nullable=False)
+    # 价格数据
+    last_price = Column(DECIMAL(10, 4), nullable=False)  # 最新价
+    change_rate = Column(VARCHAR(32), nullable=False)  # 涨跌幅
+
+    # 技术指标
+    turnover = Column(DECIMAL(7, 2), nullable=True)  # 换手率 (允许空值)
+    market_capital = Column(DECIMAL(20, 2), nullable=True)  # 流通市值
+
+    # 时间数据
+    up_time = Column(Time, nullable=True)  # 封板时间
+    analysis = Column(TEXT, nullable=False)
     scraped_at = Column(DateTime, default=datetime.now())
 
     def to_dict(self) -> Dict[str, Any]:
@@ -76,7 +87,13 @@ class Stock(Base):
 
 class StockStats(Base):
     __tablename__ = "stock_stats"
-
+    __table_args__ = (
+            UniqueConstraint('date', name='uq_date'),
+            {
+                'mysql_charset': 'utf8mb4',
+                'mysql_collate': 'utf8mb4_unicode_ci'
+            }
+        )
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(Date, nullable=False, index=True)
     up_limit = Column(Integer, nullable=False)
@@ -95,23 +112,18 @@ class StockStats(Base):
 class NewsAnalysis(Base):
     """Model for news analysis table."""
     __tablename__ = "news_analysis"
-    __table_args__ = {
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
+    __table_args__ = (
+            UniqueConstraint('date', 'time', name='uq_date_time'),
+            {
+                'mysql_charset': 'utf8mb4',
+                'mysql_collate': 'utf8mb4_unicode_ci'
+            }
+        )
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(Date, nullable=False, index=True)  # Changed from String to Date
     time = Column(DateTime)
-    analysis = Column(Text)
+    analysis = Column(TEXT)
     created_at = Column(DateTime, default=datetime.now())
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert model to dictionary."""
-        return {
-            "date": self.date.isoformat() if isinstance(self.date, date) else self.date,
-            "time": self.time.isoformat() if self.time else None,
-            "analysis": self.analysis,
-        }
 
 
 class SectionReason(Base):
@@ -126,7 +138,8 @@ class SectionReason(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(Date, nullable=False, index=True)  # 交易日
     section = Column(VARCHAR(64), nullable=False)  # 板块/主题
-    reason = Column(Text, nullable=True)
+    change_rate = Column(VARCHAR(32), nullable=True)  # 涨跌幅
+    reason = Column(TEXT, nullable=True)
     scraped_at = Column(DateTime, default=datetime.now())
 
 
@@ -144,7 +157,7 @@ class ActionLimitData(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(Date, nullable=False, index=True)  # 交易日
-    section = Column(VARCHAR(64), nullable=False)  # 板块/主题
+    section = Column(VARCHAR(255), nullable=False)  # 板块/主题
     board = Column(VARCHAR(32), nullable=False)  # x天x板
     code = Column(VARCHAR(32), nullable=False, index=True)  # 股票代码
     stock = Column(VARCHAR(64), nullable=False)  # 股票名称 (长度扩展)
@@ -164,7 +177,7 @@ class ActionLimitData(Base):
     d_time_last = Column(Time, nullable=False)  # 最后封板时间
 
     # 其它信息
-    analysis = Column(Text, nullable=False)
+    analysis = Column(TEXT, nullable=False)
     highlight = Column(Boolean, default=False)
     scraped_at = Column(DateTime, default=datetime.now())
 
@@ -500,35 +513,61 @@ class StockRepository:
             ]
             return result
 
-    def insert_or_update_stocks(self, records: List[Dict[str, Any]]) -> int:
+    def get_today_section(self, _date: date):
+        """
+        Select code and section for the given date.
+        Returns a list of dicts: [{"code": ..., "section": ...}, ...]
+        """
+        with self.db_manager.get_session() as session:
+            results = (
+                session.query(Stock.stock, Stock.section)
+                .filter(Stock.date == _date)
+                .all()
+            )
+            return [
+                {
+                    "stock": stock,
+                    "section": section
+                }
+                for stock, section in results
+            ]
+
+    def insert_or_update_stocks(self, _date: date, records: List[Dict[str, Any]]) -> int:
         """
         Insert or update multiple stock records.
 
-        - If a record exists (same date + stock), merge only *new* analysis text.
-        - If not exists, insert new.
+        - Insert all column values from records (all at once on insert).
+        - If a record exists (same date + stock), update only columns where new values are not None.
+        - Merge only *new* analysis text if analysis is provided and not already present.
+        - On conflict, append the new section only if it does not already exist
+        in the comma-separated list of existing sections.
         """
         if not records:
             return 0
 
         with self.db_manager.get_session() as session:
             count = 0
+            # Gather all column names except id and scraped_at (let scraped_at default/update separately)
+            updatable_fields = [
+                "section", "stock", "code", "last_price", "change_rate",
+                "turnover", "market_capital", "up_time", "analysis"
+            ]
             for rec in records:
-                stock_date = rec["date"]
-                # Accept both string or date, but always convert to datetime.date for DB
-                if isinstance(stock_date, str):
-                    stock_date = datetime.strptime(stock_date, "%Y-%m-%d").date()
+                # Prepare insertion values (default to None when missing)
+                insert_values = {
+                    "date": _date,
+                }
+                for field in updatable_fields:
+                    insert_values[field] = rec.get(field)
+                
+                stmt = insert(Stock).values(**insert_values)
 
-                stmt = insert(Stock).values(
-                    date=stock_date,
-                    section_name=rec["section_name"],
-                    stock=rec["stock"],
-                    code=rec.get("code"),
-                    analysis=rec.get("analysis"),
-                )
+                # Prepare ON DUPLICATE KEY UPDATE conditional logic
+                ondup_kwargs = {}
 
-                # On duplicate key, merge analysis and section_name
-                stmt = stmt.on_duplicate_key_update(
-                    analysis=case(
+                # Always merge analysis text if a new non-None analysis is present
+                if rec.get("analysis") is not None:
+                    ondup_kwargs["analysis"] = case(
                         (
                             func.locate(
                                 stmt.inserted.analysis,
@@ -536,39 +575,44 @@ class StockRepository:
                             ) == 0,
                             func.trim(
                                 func.concat_ws("\n", Stock.analysis, stmt.inserted.analysis)
-                            ),
-                        ),
-                        else_=Stock.analysis,
-                    ),
-
-                    section_name=case(
-                        (
-                            stmt.inserted.section_name.isnot(None)
-                            & (stmt.inserted.section_name != ''),
-                            # Check if the new section_name is already present in the existing section_name
-                            case(
-                                (
-                                    # Split current section_name into individual sections
-                                    # and check if the new section is unique
-                                    func.locate(
-                                        func.concat(",", Stock.section_name, ","),
-                                        func.concat(",", stmt.inserted.section_name, ",")
-                                    ) == 0,
-                                    # If not found, append the new section_name
-                                    func.concat(Stock.section_name, ",", stmt.inserted.section_name)
-                                ),
-                                else_=Stock.section_name
                             )
                         ),
-                        else_=Stock.section_name
+                        else_=Stock.analysis,
                     )
-                )
+
+                # Always merge section only if new section is present and not already in set
+                if rec.get("section") is not None:
+                    ondup_kwargs["section"] = case(
+                        (
+                            func.find_in_set(stmt.inserted.section, Stock.section) == 0,
+                            func.concat_ws(",", Stock.section, stmt.inserted.section)
+                        ),
+                        else_=Stock.section
+                    )
+
+                # All other fields: update only if value is not None in the record
+                # Avoid use of _proxies; use getattr(stmt.inserted, field)
+                for field in [
+                    "last_price", "change_rate", "turnover", "market_capital", "up_time"
+                ]:
+                    if rec.get(field) is not None:
+                        ondup_kwargs[field] = getattr(stmt.inserted, field)
+
+                if not ondup_kwargs:
+                    # If only inserting, and nothing to update, just do insert
+                    try:
+                        session.execute(stmt)
+                        count += 1
+                    except IntegrityError as e:
+                        raise RuntimeError(f"error when inserting into stocks: {e}")
+                    continue
 
                 try:
+                    stmt = stmt.on_duplicate_key_update(**ondup_kwargs)
                     session.execute(stmt)
                     count += 1
-                except IntegrityError:
-                    session.rollback()
+                except IntegrityError as e:
+                    raise RuntimeError(f"error when inserting into stocks: {e}")
 
             session.commit()
             return count
@@ -607,6 +651,7 @@ class StockStatsRepository:
                 existing.down_fluctuation = market_stats.get("down_fluctuation")
                 existing.max_even = market_stats.get("max_even")
                 existing.max_break = market_stats.get("max_break")
+                existing.scraped_at = datetime.now()
             else:
                 new_stats = StockStats(
                     date=stats_date,
@@ -655,8 +700,8 @@ class SectionReasonRepository:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    def upsert_section_reason(self, date_: date, records: dict):
-        """批量插入或更新板块原因数据"""
+    def upsert_section_reason(self, date_: date, records: list[dict]):
+        """批量插入或更新板块原因数据（新内容只追加不重复，change_rate如有非None才更新）"""
         if not records:
             return
 
@@ -667,16 +712,40 @@ class SectionReasonRepository:
             values = [
                 {
                     "date": stock_date,
-                    "section": sec_name,
-                    "reason": reason
+                    "section": rec["section"],
+                    "change_rate": rec.get("change_rate"),
+                    "reason": rec["reason"],
                 }
-                for sec_name, reason in records.items()
+                for rec in records
             ]
 
-            # 使用 MySQL 的 INSERT ... ON DUPLICATE KEY UPDATE
             stmt = mysql_insert(SectionReason).values(values)
+
+            # ON DUPLICATE KEY UPDATE for reason (append if new & non-empty) and change_rate (update if not None from inserted)
+            # 这里的stmt.inserted.change_rate是插入数据，只有在不为None时才更新
             stmt = stmt.on_duplicate_key_update(
-                reason=stmt.inserted.reason
+                reason=case(
+                    (
+                        (stmt.inserted.reason != None) & (stmt.inserted.reason != ''),
+                        case(
+                            (
+                                ~func.find_in_set(
+                                    stmt.inserted.reason, func.ifnull(SectionReason.reason, "")
+                                ),
+                                func.trim(
+                                    func.concat_ws("\n", SectionReason.reason, stmt.inserted.reason)
+                                ),
+                            ),
+                            else_=SectionReason.reason,
+                        )
+                    ),
+                    else_=SectionReason.reason,
+                ),
+                change_rate=case(
+                    (stmt.inserted.change_rate != None, stmt.inserted.change_rate),
+                    else_=SectionReason.change_rate
+                ),
+                scraped_at=func.now()  # update scraped_at as current datetime
             )
 
             session.execute(stmt)
@@ -693,57 +762,6 @@ class SectionReasonRepository:
                 .delete(synchronize_session=False)
             session.commit()
             return result
-
-
-def validate_and_format_record(data: dict) -> dict:
-    """
-    Validate and format a single record to match database schema.
-    """
-    formatted_data = data.copy()
-
-    # Ensure decimal fields are properly formatted
-    decimal_fields = ["last_price", "lock_ratio", "turnover", "market_capital", "total_capital"]
-    for field in decimal_fields:
-        if field in formatted_data:
-            if isinstance(formatted_data[field], str):
-                # Remove Chinese characters and convert
-                if field in ["market_capital", "total_capital"]:
-                    # Handle "94.4亿" -> 94.4
-                    value = formatted_data[field].replace('亿', '').strip()
-                elif field == "lock_ratio" and '%' in formatted_data[field]:
-                    # Handle "1.33%" -> 1.33
-                    value = formatted_data[field].replace('%', '').strip()
-                elif field == "turnover" and '%' in formatted_data[field]:
-                    # Handle "3.71%" -> 3.71
-                    value = formatted_data[field].replace('%', '').strip()
-                else:
-                    value = formatted_data[field]
-
-                try:
-                    formatted_data[field] = float(value)
-                except ValueError:
-                    raise ValueError(f"Invalid value for {field}: {formatted_data[field]}")
-
-    # Handle time fields
-    time_fields = ["d_time_first", "d_time_last"]
-    for field in time_fields:
-        if field in formatted_data and formatted_data[field]:
-            time_str = formatted_data[field]
-            if time_str and time_str != '-':
-                try:
-                    # Convert "09:45:28" to time object
-                    if isinstance(time_str, str):
-                        h, m, s = map(int, time_str.split(':'))
-                        formatted_data[field] = time(h, m, s)
-                except (ValueError, AttributeError):
-                    # Keep as string if parsing fails, let SQLAlchemy handle it
-                    pass
-
-    # Ensure highlight has default value
-    if "highlight" not in formatted_data:
-        formatted_data["highlight"] = False
-
-    return formatted_data
 
 
 class ActionLimitDataRepository:
@@ -775,21 +793,17 @@ class ActionLimitDataRepository:
             "total_capital", "d_time_first", "d_time_last", "analysis", "highlight"
         ]
 
-        validated_data_list = []
         for i, data in enumerate(data_list):
             # Check required fields
             missing_fields = [f for f in required_fields if f not in data]
             if missing_fields:
                 raise ValueError(f"Record {i} missing required fields: {missing_fields}")
 
-            # Validate field types and formats
-            validated_data = validate_and_format_record(data)
-            validated_data_list.append(validated_data)
 
         with self.db_manager.get_session() as session:
             # 使用 MySQL 的 INSERT ... ON DUPLICATE KEY UPDATE
             # 批量插入
-            stmt = mysql_insert(ActionLimitData).values(validated_data_list)
+            stmt = mysql_insert(ActionLimitData).values(data_list)
 
             # 正确的 ON DUPLICATE KEY UPDATE 语法
             stmt = stmt.on_duplicate_key_update(
@@ -805,7 +819,8 @@ class ActionLimitDataRepository:
                 highlight=stmt.inserted.highlight,
                 section=stmt.inserted.section,
                 board=stmt.inserted.board,
-                stock=stmt.inserted.stock
+                stock=stmt.inserted.stock,
+                scraped_at=func.now()  # update scraped_at as current datetime
             )
 
             session.execute(stmt)

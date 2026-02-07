@@ -5,7 +5,7 @@ from datetime import datetime
 
 import unicodedata
 import pandas as pd
-from utils.database import StockStatsRepository, get_db_manager, ActionLimitDataRepository
+from utils.database import StockRepository, StockStatsRepository, get_db_manager, ActionLimitDataRepository
 from .preprocess import preprocess_image
 from .ocr_api import ocr_image_safe
 # Configure loguru for to_excel module
@@ -34,18 +34,11 @@ def _normalize_text(text: list[str], space: bool = False) -> str:
             text[idx] = label.strip()
 
 
-def _save_actionData(rec_texts: list[str], excel_path: str, date: str, records_list: list[dict]):
+def _parse_actionData_to_df(rec_texts: list[str], cols: list[str]) -> pd.DataFrame:
     """
-    Save OCR-recognized texts to an Excel file grouped by 8 fields:
-    ["Section", "Board", "Code", "Name", "Time", "Market", "Turnover", "Keyword"].
-    Automatically creates directories if needed; upserts to DB.
+    Parse rec_texts into DataFrame for action data.
+    Returns the DataFrame with expected columns.
     """
-    # Ensure directory exists
-    os.makedirs(excel_path, exist_ok=True)
-
-    # Expected columns
-    cols = ["Section", "Board", "Code", "Name", "Time", "Market", "Turnover", "Keyword", "Highlight"]
-
     # Clean text list (remove empty/blank items)
     rec_texts = [t.strip() for t in rec_texts if t and t.strip()]
 
@@ -92,26 +85,44 @@ def _save_actionData(rec_texts: list[str], excel_path: str, date: str, records_l
 
     if not data:
         logger.error("No valid data to save.")
-        return
-
-    # Convert to DataFrame
+        return pd.DataFrame(columns=cols)
     df = pd.DataFrame(data, columns=cols)
+    return df
 
-    # Save to Excel file (one file, named by date if you want, or on given path)
+def _save_actionData_excel(df: pd.DataFrame, excel_path: str, date: str):
+    """
+    Save DataFrame to excel file.
+    """
+    os.makedirs(excel_path, exist_ok=True)
     excel_file = os.path.join(excel_path, f"actionData_{date}.xlsx")
     df.to_excel(excel_file, index=False)
     logger.info(f"Saved action data to Excel: {excel_file}")
 
+def _save_actionData_db(df: pd.DataFrame, date: str, records_list: list[dict]):
+    """
+    Save DataFrame and records_list to database.
+    """
     db_manager = get_db_manager()
-    repo = ActionLimitDataRepository(db_manager)
+    repoALD = ActionLimitDataRepository(db_manager)
+    repoStock = StockRepository(db_manager)
+    stock_section = repoStock.get_today_section(pd.to_datetime(date).date() if isinstance(date, str) else date)
+
     data_dict_list = []
 
     # Build a mapping from Name to df row (for matching by stock name)
     name_to_dfrow = collections.OrderedDict()
-    for idx, row in df.iterrows():
+    for _, row in df.iterrows():
         stock_name = row.get("Name")
         if stock_name:  # it should never be empty
             name_to_dfrow[stock_name] = row
+
+    # Build a mapping from stock to section from stock_section
+    stock_to_section = {}
+    for item in stock_section:
+        stock = item.get("stock")
+        section = item.get("section")
+        if stock:
+            stock_to_section[stock] = section
 
     # Now, for each record in records_list, match with df using the stock/name key
     for record in records_list:
@@ -127,12 +138,17 @@ def _save_actionData(rec_texts: list[str], excel_path: str, date: str, records_l
             keyword = df_row.get("Keyword", "") if "Keyword" in df_row else ""
             combined_keyword = (analysis + "\n韭研:\n" + keyword).strip() if keyword else analysis
 
+            # Section from stock_section, fallback to df_row Section if needed
+            section_val = stock_to_section.get(rec_name)
+            if not section_val:
+                section_val = df_row.get("Section")
+
             data_dict = {
                 "date": pd.to_datetime(record["date"]).date() if isinstance(record["date"], str) else record["date"],
-                "section": df_row.get("Section"),
+                "section": section_val,
                 "board": df_row.get("Board"),
                 "stock": rec_name,
-                "code": record.get("code", ""),
+                "code": record.get("code"),
                 "last_price": record.get("last_price"),
                 "change_rate": record.get("change_rate"),
                 "lock_ratio": record.get("lock_ratio"),
@@ -147,10 +163,23 @@ def _save_actionData(rec_texts: list[str], excel_path: str, date: str, records_l
             data_dict_list.append(data_dict)
         except Exception as e:
             logger.error(f"Failed to upsert action data record: {record}; error: {e}")
-    n = repo.delete_by_date(datetime.strptime(date, "%Y-%m-%d"))
+    n = repoALD.delete_by_date(datetime.strptime(date, "%Y-%m-%d"))
     logger.info(f"deleted old {n} records.")
-    repo.upsert_action_data_batch(data_dict_list)
+    repoALD.upsert_action_data_batch(data_dict_list)
     logger.info("Action data upserted to database.")
+
+def _save_actionData(rec_texts: list[str], excel_path: str, date: str, records_list: list[dict]):
+    """
+    Separates excel and database operations for saving OCR-recognized texts.
+    """
+    # Expected columns
+    cols = ["Section", "Board", "Code", "Name", "Time", "Market", "Turnover", "Keyword", "Highlight"]
+    df = _parse_actionData_to_df(rec_texts, cols)
+    if df.empty:
+        logger.error("No valid data to save.")
+        return
+    _save_actionData_excel(df, excel_path, date)
+    _save_actionData_db(df, date, records_list)
 
 
 def _get_maxEven_maxBreak(rec_texts: list[str]):
@@ -236,7 +265,7 @@ def _save_stockstats(rec_texts: list[str], market_number: dict, date):
     repo.add_market_stats(new_stats)
 
 
-def excel_flow(market_number: dict, records_list: list[dict], date):
+def main_flow(market_number: dict, records_list: list[dict], date):
     scraped_dir = "images"
     img_path = f"{scraped_dir}/Image.png"
     if not os.path.isfile(img_path):

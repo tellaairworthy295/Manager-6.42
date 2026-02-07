@@ -23,6 +23,13 @@
     "DB_PASSWORD": "lmh@123456",
     "DB_NAME": "selfdev_test"
   },
+  "DatabaseConfig1": {
+    "DB_HOST": "localhost",
+    "DB_PORT": 3306,
+    "DB_USER": "muheng",
+    "DB_PASSWORD": "idempotentTask$",
+    "DB_NAME": "dify_data"
+  },
   "AgentSitesConfig":[
     {
       "site_name": "alphapai",

@@ -34,21 +34,24 @@
     "https://www.jiuyangongshe.com/action": {
       "category": "action",
       "name": "jiuyan",
+      "click_selector": "//div[text()='全部异动解析']",
       "cookies": true,
       "image": true,
       "section": {
+        "click": "//div[text()='展开板块']",
+        "wait_for": ".mtb8.fs16.text-justify",
         "selector": "li.module",
         "extractors": {
           "section_reason": {
-            "mode": "per_section",
             "fields": {
-              "section_name": {
+              "section": {
                 "selector": ".fs18-bold.lf",
+                "required": true,
                 "postprocess": ["strip_spaces"]
               },
               "reason": {
-                "selector": ".text-justify span.fs16",
-                "postprocess": ["strip_spaces"]
+                "selector": ".mtb8.fs16.text-justify > span.fs16-bold + text, .mtb8.fs16.text-justify > span.fs16-bold + span, .mtb8.fs16.text-justify",
+                "postprocess": ["prefix_by_site"]
               }
             }
           }
@@ -66,6 +69,18 @@
           "selector": ".fs12-bold-ash",
           "postprocess": ["extract_6_digits"]
         },
+        "last_price": {
+          "selector": ".number",
+          "postprocess": ["extract_float"]
+        },
+        "change_rate": {
+          "selector": ".cred, .cgreen",
+          "postprocess": []
+        },
+        "up_time": {
+          "selector": ".fs15",
+          "postprocess": ["time_format"]
+        },
         "analysis": {
           "selector": "pre",
           "postprocess": ["prefix_by_site"]
@@ -77,19 +92,24 @@
       "name": "xuangutong",
       "cookies": true,
       "image": false,
+      "click_selector": null,
       "section": {
         "selector": "div.topgainer-tag",
         "extractors": {
           "section_reason": {
-            "mode": "per_section",
             "fields": {
-              "section_name": {
-                "selector": "header h3 a",
+              "section": {
+                "selector": "header h3 a, header h3 span",
+                "required": true,
                 "postprocess": ["strip_spaces"]
               },
               "reason": {
                 "selector": "p span:nth-child(2)",
-                "postprocess": ["strip_spaces"]
+                "postprocess": ["prefix_by_site"]
+              },
+              "change_rate": {
+                "selector": "header span",
+                "postprocess": ["extract_percent_str"]
               }
             }
           }
@@ -107,9 +127,29 @@
           "selector": "td:nth-child(1) a span:nth-of-type(2)",
           "postprocess": ["extract_6_digits"]
         },
+        "last_price": {
+          "selector": "td:nth-child(3) span",
+          "postprocess": ["extract_float"]
+        },
+        "change_rate": {
+          "selector": "td:nth-child(4) span",
+          "postprocess": []
+        },
+        "up_time": {
+          "selector": "td:nth-child(5)",
+          "postprocess": ["time_format"]
+        },
+        "turnover": {
+          "selector": "td:nth-child(6)",
+          "postprocess": ["extract_float"]
+        },
+        "market_capital": {
+          "selector": "td:nth-child(7)",
+          "postprocess": ["extract_float"]
+        },
         "analysis": {
-          "selector": "td:nth-child(8) div span",
-          "postprocess": ["prefix_by_site"]
+          "selector": "td:nth-child(8) div",
+          "postprocess": ["text_formatter", "prefix_by_site"]
         }
       }
     },
@@ -118,6 +158,7 @@
       "name": "xuangutong",
       "cookies": true,
       "image": false,
+      "click_selector": null,
       "section": {
         "rows": {
           "selector": "tbody.hit-pool__table-body tr"
@@ -139,32 +180,41 @@
         "analysis": {
           "selector": ".stock-reason span.line-clamp",
           "postprocess": [
+            "text_formatter",
             "prefix_by_site"
           ]
         },
         "last_price": {
-          "selector": "td:nth-child(4) span.-market-color--rise, td:nth-child(4)"
+          "selector": "td:nth-child(4) span.-market-color--rise, td:nth-child(4)",
+          "postprocess": ["extract_float"]
         },
         "change_rate": {
-          "selector": "td:nth-child(5) span.-market-color--rise, td:nth-child(5)"
+          "selector": "td:nth-child(5) span.-market-color--rise, td:nth-child(5)",
+          "postprocess": []
         },
         "lock_ratio": {
-          "selector": "td:nth-child(6)"
+          "selector": "td:nth-child(6)",
+          "postprocess": ["extract_float"]
         },
         "turnover": {
-          "selector": "td:nth-child(7)"
+          "selector": "td:nth-child(7)",
+          "postprocess": ["extract_float"]
         },
         "market_capital": {
-          "selector": "td:nth-child(8)"
+          "selector": "td:nth-child(8)",
+          "postprocess": ["extract_float"]
         },
         "total_capital": {
-          "selector": "td:nth-child(9)"
+          "selector": "td:nth-child(9)",
+          "postprocess": ["extract_float"]
         },
         "d_time_first": {
-          "selector": "td:nth-child(10)"
+          "selector": "td:nth-child(10)",
+          "postprocess": ["time_format"]
         },
         "d_time_last": {
-          "selector": "td:nth-child(11)"
+          "selector": "td:nth-child(11)",
+          "postprocess": ["time_format"]
         }
       },
       "page_extractors": {

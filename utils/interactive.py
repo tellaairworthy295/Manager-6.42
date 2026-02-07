@@ -93,40 +93,97 @@ def safe_fill(page: SyncPage, locator: str, text: str, max_attempts: int = 3,
             time.sleep(attempt)
     raise RuntimeError(f"Failed to fill {locator}: {last_err}")
 
-async def async_safe_click(page: AsyncPage, locator: str,
-                     max_attempts: int = 3, timeout: int = 5_000):
+async def async_safe_click(
+    page: "AsyncPage",
+    locator: str,
+    max_attempts: int = 3,
+    timeout: int = 5_000,
+    multiple: bool = False
+):
+    """
+    Safe click function. Compatible with both single and multiple elements.
+
+    Args:
+        page: Playwright async page
+        locator: Selector or locator string
+        max_attempts: Number of attempts for clicking
+        timeout: Timeout for click in ms
+        multiple: If True, click all matching elements, else only the first
+
+    Notes:
+        - For backward compatibility, the default behavior is single-click (.first)
+        - If multiple=True, all elements found for the locator are tried in sequence
+        - If no elements found: raises an error (with clear message)
+    """
     last_err = None
     for attempt in range(1, max_attempts + 1):
         try:
-            loc = page.locator(locator).first
-            await loc.scroll_into_view_if_needed()
-            await loc.click(timeout=timeout)
-            return
+            if multiple:
+                elements = await page.query_selector_all(locator)
+                if not elements:
+                    raise RuntimeError(f"No elements found for locator: {locator}")
+                for elem in elements:
+                    try:
+                        await elem.scroll_into_view_if_needed()
+                    except Exception:
+                        pass  # Not all elements support this
+                    try:
+                        await elem.click(timeout=timeout)
+                    except Exception:
+                        # Fallback to JS click
+                        try:
+                            await page.evaluate(
+                                """(el) => {
+                                    const evt = new MouseEvent('click', {
+                                        bubbles: true,
+                                        cancelable: true,
+                                        view: window
+                                    });
+                                    el.dispatchEvent(evt);
+                                }""",
+                                elem
+                            )
+                        except Exception as js_e:
+                            last_err = f"{last_err}; JS click (multi): {js_e}"
+                            if attempt == max_attempts:
+                                raise
+                return
+            else:
+                loc = page.locator(locator).first
+                await loc.scroll_into_view_if_needed()
+                await loc.click(timeout=timeout)
+                return
         except Exception as e:
             last_err = e
             if attempt == max_attempts:
                 try:
-                    loc = page.locator(locator).first
-                    try:
-                        await loc.click(timeout=timeout, force=True)
-                        return
-                    except Exception:
-                        await page.evaluate(
-                            """(el) => {
-                                const evt = new MouseEvent('click', {
-                                    bubbles: true,
-                                    cancelable: true,
-                                    view: window
-                                });
-                                el.dispatchEvent(evt);
-                            }""",
-                            loc
-                        )
-                        return
+                    if multiple:
+                        # On last attempt, do nothing: already tried above
+                        pass
+                    else:
+                        loc = page.locator(locator).first
+                        try:
+                            await loc.click(timeout=timeout, force=True)
+                            return
+                        except Exception:
+                            await page.evaluate(
+                                """(el) => {
+                                    const evt = new MouseEvent('click', {
+                                        bubbles: true,
+                                        cancelable: true,
+                                        view: window
+                                    });
+                                    el.dispatchEvent(evt);
+                                }""",
+                                loc
+                            )
+                            return
                 except Exception as js_e:
                     last_err = f"{last_err}; JS click: {js_e}"
             await asyncio.sleep(attempt)
-    raise RuntimeError(f"Failed to click {locator}: {last_err}")
+    raise RuntimeError(
+        f"Failed to click {locator}{' (multiple)' if multiple else ''}: {last_err}"
+    )
 
 
 async def async_safe_fill(page: AsyncPage, locator: str, text: str,
