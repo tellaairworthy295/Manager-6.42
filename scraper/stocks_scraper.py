@@ -253,8 +253,7 @@ async def main_scraper(date: str):
     # -------- persistence / downstream --------
     if all_action_records:
         db_manager = get_db_manager()
-        count = StockRepository(db_manager).insert_or_update_stocks(datetime.strptime(date, "%Y-%m-%d"), all_action_records)
-        logger.info(count)
+        StockRepository(db_manager).insert_or_update_stocks(datetime.strptime(date, "%Y-%m-%d"), all_action_records)
     if section_reason:
         db_manager = get_db_manager()
         repo = SectionReasonRepository(db_manager)
@@ -372,7 +371,6 @@ async def scrape_page(
                 )
             
             if record.get("stock") and record.get("code"):
-                logger.info(record.get("stock"))
                 records.append(record)
 
     return {
