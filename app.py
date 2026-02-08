@@ -2,8 +2,9 @@ import ast
 import asyncio
 from contextlib import asynccontextmanager
 import json
-import os
+import pandas_market_calendars as mcal
 from datetime import datetime
+import pandas as pd
 from pathlib import Path
 import re
 import shutil
@@ -438,15 +439,76 @@ async def news_analyzer(request: Request):
 
 @app.get("/api/scrape_stocks")
 async def scrape_stocks_api():
-    from datetime import timedelta
-    date = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    flag, market_number, all_records_limit = await main_scraper(date)
-    if not flag:
-        return JSONResponse(
-            {"status": "ok", "msg": "Not a new date"}
-        )
-    await asyncio.to_thread(main_flow, market_number, all_records_limit, date)
+    """
+    API endpoint for scraping A股 stock data
+    Only runs on trading days
+    """
+    try:
+        date = datetime.now()
+        def is_a_share_trading_day(date_obj=None):
+            """Check if a date is a trading day for Chinese A-shares"""
+            if date_obj is None:
+                date_obj = datetime.now()
+            
+            # Get Shanghai Stock Exchange calendar (same as Shenzhen for A-shares)
+            exchange = mcal.get_calendar('XSHG')
+            
+            # Convert to pandas Timestamp
+            if isinstance(date_obj, datetime):
+                timestamp = pd.Timestamp(date_obj.date())
+            else:
+                timestamp = pd.Timestamp(date_obj)
+            
+            # Check if this date is in the trading schedule
+            # Get schedule for a small window to minimize API calls
+            start_date = timestamp - pd.Timedelta(days=1)
+            end_date = timestamp + pd.Timedelta(days=1)
+            
+            schedule = exchange.schedule(start_date=start_date, end_date=end_date)
+            
+            # Return True if the date is in the schedule
+            return timestamp in schedule.index
 
+        # Check if today is an A-share trading day
+        if not is_a_share_trading_day(date):
+            return JSONResponse({
+                "status": "skipped",
+                "msg": "Today is not an A-share trading day, skipping",
+                "date": date.strftime("%Y-%m-%d")
+            })
+        
+        # Today is a trading day, proceed with normal scraping
+        # from datetime import timedelta
+        # date = (date - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        date = date.strftime("%Y-%m-%d")
+        flag, market_number, all_records_limit = await main_scraper(date)
+        
+        if not flag:
+            return JSONResponse({
+                "status": "success",
+                "msg": "No data found",
+                "date": date
+            })
+        
+        await asyncio.to_thread(main_flow, market_number, all_records_limit, date)
+        
+        return JSONResponse({
+            "status": "success",
+            "date": date,
+            "market": "A-share",
+            "today_is_trading_day": True
+        })
+        
+    except Exception as e:
+        # Add proper error logging here
+        import logging
+        logging.error(f"Error in scrape_stocks_api: {str(e)}")
+        
+        return JSONResponse({
+            "status": "error",
+            "msg": f"Internal server error: {str(e)}"
+        }, status_code=500)
     # config = load_email_config_from_json("json/config.json")
     # config.ATTACHMENTS = [
     #     f"excel/{date}.xlsx",
@@ -463,9 +525,6 @@ async def scrape_stocks_api():
     #     os.remove(f"excel/{date}.txt")
     # except Exception:
     #     pass
-    return JSONResponse(
-        {"status": "ok", "date": date}
-    )
 
 
 @app.get("/api/get_news")

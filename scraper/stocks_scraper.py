@@ -4,11 +4,9 @@ import os
 import asyncio
 import re
 from datetime import datetime
-
 import aiohttp
 from urllib.parse import urljoin
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
-
 from pwright.async_pm import AsyncPlaywrightManager
 from pwright.async_cm import PlaywrightContext
 from pwright.async_pf import new_stealth_page
@@ -61,7 +59,6 @@ async def run_named_extractors(*, scope, extractors, site):
         result[name] = record
 
     return result
-
 
 
 def postprocess_value(value: str | None, rules: list[str] | None, site: str | None = None):
@@ -249,7 +246,7 @@ async def main_scraper(date: str):
 
     finally:
         await manager.shutdown()
-    #logger.info(all_action_records)
+
     # -------- persistence / downstream --------
     if all_action_records:
         db_manager = get_db_manager()
