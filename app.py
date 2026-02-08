@@ -502,8 +502,7 @@ async def scrape_stocks_api():
         
     except Exception as e:
         # Add proper error logging here
-        import logging
-        logging.error(f"Error in scrape_stocks_api: {str(e)}")
+        logger.error(f"Error in scrape_stocks_api: {str(e)}")
         
         return JSONResponse({
             "status": "error",
