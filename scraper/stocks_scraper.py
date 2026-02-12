@@ -10,7 +10,7 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from pwright.async_pm import AsyncPlaywrightManager
 from pwright.async_cm import PlaywrightContext
 from pwright.async_pf import new_stealth_page
-from utils.database import get_db_manager, StockRepository, SectionReasonRepository
+from utils.database import get_db_manager, StockRepository, SectionReasonRepository, ActionLimitDataRepository
 from utils.interactive import async_safe_click
 from utils.logging_config import get_stock_logger
 from pathlib import Path
@@ -223,7 +223,7 @@ async def main_scraper(date: str):
                     )
                     if not data or not data.get("records"):
                         logger.warning(f"No records scraped from {url}")
-                        return False, {}, []
+                        return False, {}
 
                     route_scraped_data(
                         selectors=selectors,
@@ -248,19 +248,44 @@ async def main_scraper(date: str):
         await manager.shutdown()
 
     # -------- persistence / downstream --------
-    if all_action_records:
-        db_manager = get_db_manager()
-        StockRepository(db_manager).insert_or_update_stocks(datetime.strptime(date, "%Y-%m-%d"), all_action_records)
-    if section_reason:
-        db_manager = get_db_manager()
-        repo = SectionReasonRepository(db_manager)
-        repo.delete_by_date(datetime.strptime(date, "%Y-%m-%d"))
-        repo.upsert_section_reason(
-            datetime.strptime(date, "%Y-%m-%d"),
-            section_reason
-        )
+    db_manager = get_db_manager()
+    repo_stock = StockRepository(db_manager)
+    repo_al = ActionLimitDataRepository(db_manager)
+    repo_sr = SectionReasonRepository(db_manager)
+    date_obj = datetime.strptime(date, "%Y-%m-%d")
 
-    return True, market_number, all_limit_records
+    if all_action_records:
+        repo_stock.insert_or_update_stocks(date_obj, all_action_records)
+
+    if all_limit_records:
+        code_section = repo_stock.get_code_section(date_obj)
+        # Build a mapping from code (six-digit string) to section from stock_section
+        code_to_section = {}
+        for item in code_section:
+            code = item.get("code")
+            section = item.get("section")
+            if code:
+                code_to_section[code] = section
+
+        for record in all_limit_records:
+            try:
+                rec_code = record.get("code")
+                section_val = code_to_section.get(rec_code)
+                record["section"] = section_val
+                record["turnover_abs"] = record["turnover"] * record["total_capital"]
+            except Exception as e:
+                raise RuntimeError(f"No matching section found for code: '{rec_code}'")
+
+        n = repo_al.delete_by_date(date_obj)
+        logger.info(f"deleted old {n} records.")
+        repo_al.insert_action_data_batch(all_limit_records)
+        logger.info("Action data upserted to database.")
+
+    if section_reason:
+        repo_sr.delete_by_date(date_obj)
+        repo_sr.upsert_section_reason(date_obj, section_reason)
+
+    return True, market_number
 
 
 async def scrape_page(

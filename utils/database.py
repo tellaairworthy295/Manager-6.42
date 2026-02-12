@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from sqlalchemy import TEXT, VARCHAR, Date, Float, create_engine, Column, Integer, String, DateTime, Boolean, \
-    UniqueConstraint, Index, DECIMAL, Time
+    UniqueConstraint, Index, DECIMAL, Time, BigInteger
 from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.dialects.mysql import insert
@@ -45,12 +45,48 @@ class NewsArticle(Base):
     scraped_date = Column(Date, default=date.today, index=True)
     scraped_at = Column(DateTime, default=datetime.now)
 
+class HistoryKChart(Base):
+    __tablename__ = "history_k_chart"
+    __table_args__ = (
+        UniqueConstraint('date', 'code', name='uq_date_code'),
+        {
+            'mysql_charset': 'utf8mb4',
+            'mysql_collate': 'utf8mb4_unicode_ci'
+        }
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    code = Column(VARCHAR(20), nullable=False)
+    open = Column(DECIMAL(10, 3), nullable=False)
+    close = Column(DECIMAL(10, 3), nullable=False)
+    high = Column(DECIMAL(10, 3), nullable=False)
+    low = Column(DECIMAL(10, 3), nullable=False)
+    volume = Column(BigInteger, nullable=False)
+    scraped_at = Column(DateTime, default=datetime.now())
+
+
+class RealTimeChart(Base):
+    __tablename__ = "real_time_chart"
+    __table_args__ = (
+        UniqueConstraint('data_time', 'code', name='uq_data_time_code'),
+        {
+            'mysql_charset': 'utf8mb4',
+            'mysql_collate': 'utf8mb4_unicode_ci'
+        }
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    data_time = Column(DateTime, nullable=False, index=True)
+    code = Column(VARCHAR(20), nullable=False)
+    close = Column(DECIMAL(10, 3), nullable=False)
+    volume = Column(BigInteger, nullable=False)
+    scraped_at = Column(DateTime, default=datetime.now())
+
 
 class Stock(Base):
     """Model for stocks table."""
     __tablename__ = "stocks"
     __table_args__ = (
-        UniqueConstraint('date', 'stock', name='uq_date_stock'),
         UniqueConstraint('date', 'code', name='uq_date_code'),
         {
             'mysql_charset': 'utf8mb4',
@@ -158,22 +194,23 @@ class ActionLimitData(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(Date, nullable=False, index=True)  # 交易日
     section = Column(VARCHAR(255), nullable=False)  # 板块/主题
-    board = Column(VARCHAR(32), nullable=False)  # x天x板
+    board = Column(VARCHAR(32), nullable=True)  # x天x板
     code = Column(VARCHAR(32), nullable=False, index=True)  # 股票代码
     stock = Column(VARCHAR(64), nullable=False)  # 股票名称 (长度扩展)
 
     # 价格数据
-    last_price = Column(DECIMAL(10, 4), nullable=False)  # 最新价
-    change_rate = Column(VARCHAR(32), nullable=False)  # 涨跌幅
+    last_price = Column(DECIMAL(10, 4), nullable=True)  # 最新价
+    change_rate = Column(VARCHAR(32), nullable=True)  # 涨跌幅
 
     # 技术指标
-    lock_ratio = Column(DECIMAL(5, 2), nullable=False)  # 封单比 (允许空值)
-    turnover = Column(DECIMAL(7, 2), nullable=False)  # 换手率 (允许空值)
+    lock_ratio = Column(DECIMAL(5, 2), nullable=True)  # 封单比
+    turnover = Column(DECIMAL(7, 2), nullable=True)  # 换手率
+    turnover_abs = Column(DECIMAL(7, 2), nullable=False)  # 换手率
     market_capital = Column(DECIMAL(20, 2), nullable=False)  # 流通市值
-    total_capital = Column(DECIMAL(20, 2), nullable=False)  # 总市值
+    total_capital = Column(DECIMAL(20, 2), nullable=True)  # 总市值
 
     # 时间数据
-    d_time_first = Column(Time, nullable=False)  # 首次封板时间
+    d_time_first = Column(Time, nullable=True)  # 首次封板时间
     d_time_last = Column(Time, nullable=False)  # 最后封板时间
 
     # 其它信息
@@ -491,45 +528,40 @@ class StockRepository:
                 for record in records
             ]
 
-    def get_today_stocks(self):
+    def get_codes_by_date(self, date_: date):
         """
         Retrieve today's stocks and their analysis.
         Returns a list of dicts: [{"stock": ..., "code": ..., "analysis": ...}, ...]
         """
-        today = datetime.now().date()
         with self.db_manager.get_session() as session:
             stocks = (
                 session.query(Stock)
-                .filter(Stock.date == today)
+                .filter(Stock.date == date_)
                 .all()
             )
             result = [
-                {
-                    "stock": s.stock,
-                    "code": s.code,
-                    "analysis": s.analysis,
-                }
+                s.code
                 for s in stocks
             ]
             return result
 
-    def get_today_section(self, _date: date):
+    def get_code_section(self, _date: date):
         """
         Select code and section for the given date.
         Returns a list of dicts: [{"code": ..., "section": ...}, ...]
         """
         with self.db_manager.get_session() as session:
             results = (
-                session.query(Stock.stock, Stock.section)
+                session.query(Stock.code, Stock.section)
                 .filter(Stock.date == _date)
                 .all()
             )
             return [
                 {
-                    "stock": stock,
+                    "code": code,
                     "section": section
                 }
-                for stock, section in results
+                for code, section in results
             ]
 
     def insert_or_update_stocks(self, _date: date, records: List[Dict[str, Any]]) -> int:
@@ -559,7 +591,7 @@ class StockRepository:
                 }
                 for field in updatable_fields:
                     insert_values[field] = rec.get(field)
-                
+
                 stmt = insert(Stock).values(**insert_values)
 
                 # Prepare ON DUPLICATE KEY UPDATE conditional logic
@@ -772,59 +804,111 @@ class ActionLimitDataRepository:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    def upsert_action_data_batch(self, data_list: List[dict]):
+    def insert_action_data_batch(self, rows: list[dict]) -> int:
         """
-        Upsert (insert or update) batch for action_limit_data table.
-        First deletes all records for the specific date, then inserts all new records.
-
-        Args:
-            data_list: List of dictionaries, each containing all columns needed for ActionLimitData
-
-        Returns:
-            List of inserted ActionLimitData objects
+        Insert full ActionLimitData rows.
+        All NOT NULL columns MUST be present.
         """
-        if not data_list:
-            return []
+        if not rows:
+            return 0
 
-        # Validate all records based on new table structure
-        required_fields = [
-            "date", "section", "board", "code", "stock", "last_price",
-            "change_rate", "lock_ratio", "turnover", "market_capital",
-            "total_capital", "d_time_first", "d_time_last", "analysis", "highlight"
-        ]
+        required_fields = {"date", "code"}
 
-        for i, data in enumerate(data_list):
-            # Check required fields
-            missing_fields = [f for f in required_fields if f not in data]
-            if missing_fields:
-                raise ValueError(f"Record {i} missing required fields: {missing_fields}")
-
+        for row in rows:
+            missing = required_fields - row.keys()
+            if missing:
+                raise ValueError(f"missing required fields {missing}, row={row}")
 
         with self.db_manager.get_session() as session:
-            # 使用 MySQL 的 INSERT ... ON DUPLICATE KEY UPDATE
-            # 批量插入
-            stmt = mysql_insert(ActionLimitData).values(data_list)
-
-            # 正确的 ON DUPLICATE KEY UPDATE 语法
-            stmt = stmt.on_duplicate_key_update(
-                last_price=stmt.inserted.last_price,
-                change_rate=stmt.inserted.change_rate,
-                lock_ratio=stmt.inserted.lock_ratio,
-                turnover=stmt.inserted.turnover,
-                market_capital=stmt.inserted.market_capital,
-                total_capital=stmt.inserted.total_capital,
-                d_time_first=stmt.inserted.d_time_first,
-                d_time_last=stmt.inserted.d_time_last,
-                analysis=stmt.inserted.analysis,
-                highlight=stmt.inserted.highlight,
-                section=stmt.inserted.section,
-                board=stmt.inserted.board,
-                stock=stmt.inserted.stock,
-                scraped_at=func.now()  # update scraped_at as current datetime
+            session.execute(
+                mysql_insert(ActionLimitData),
+                rows,
             )
-
-            session.execute(stmt)
             session.commit()
+
+        return len(rows)
+
+    def update_action_data_batch(self, rows: list[dict]) -> int:
+        """
+        Partial UPDATE for existing rows.
+        Unique key: (date, code)
+        """
+        if not rows:
+            return 0
+
+        with self.db_manager.get_session() as session:
+            for row in rows:
+                if "date" not in row or "code" not in row:
+                    raise ValueError(
+                        f"update requires 'date' and 'code': {row}"
+                    )
+
+                where = {
+                    "date": row["date"],
+                    "code": row["code"],
+                }
+
+                updates = {
+                    k: v for k, v in row.items()
+                    if k not in ("date", "code")
+                }
+
+                if not updates:
+                    continue
+
+                # ---- analysis: append if new ----
+                if "analysis" in updates:
+                    updates["analysis"] = case(
+                        (
+                            func.locate(
+                                updates["analysis"],
+                                func.ifnull(ActionLimitData.analysis, "")
+                            ) == 0,
+                            func.trim(
+                                func.concat_ws(
+                                    "\n",
+                                    ActionLimitData.analysis,
+                                    updates["analysis"]
+                                )
+                            ),
+                        ),
+                        else_=ActionLimitData.analysis,
+                    )
+
+                # ---- section: append CSV if not present ----
+                if "section" in updates:
+                    updates["section"] = case(
+                        (
+                            func.find_in_set(
+                                updates["section"],
+                                ActionLimitData.section
+                            ) == 0,
+                            func.concat_ws(
+                                ",",
+                                ActionLimitData.section,
+                                updates["section"]
+                            ),
+                        ),
+                        else_=ActionLimitData.section,
+                    )
+
+                # ---- market_capital: update only if existing is 0 ----
+                if "market_capital" in updates:
+                    updates["market_capital"] = case(
+                        (
+                            ActionLimitData.market_capital == 0,
+                            updates["market_capital"],
+                        ),
+                        else_=ActionLimitData.market_capital,
+                    )
+
+                session.query(ActionLimitData) \
+                    .filter_by(**where) \
+                    .update(updates, synchronize_session=False)
+
+            session.commit()
+
+        return len(rows)
 
     def get_by_date(self, date_: date) -> List[ActionLimitData]:
         """
@@ -855,6 +939,66 @@ class ActionLimitDataRepository:
             result = session.query(ActionLimitData) \
                 .filter_by(date=date_) \
                 .delete(synchronize_session=False)
+            session.commit()
+            return result
+
+class HistoryKChartRepository:
+    """Repository for HistoryKChart operations."""
+
+    def __init__(self, db_manager: 'DatabaseManager'):
+        self.db_manager = db_manager
+
+    def save_kcharts(self, kcharts: list[dict]):
+        if not kcharts:
+            return 0
+
+        with self.db_manager.get_session() as session:
+            session.execute(
+                mysql_insert(HistoryKChart),
+                kcharts,
+            )
+            session.commit()
+
+        return len(kcharts)
+
+    def delete_kchart_by_code(self, code: str):
+        with self.db_manager.get_session() as session:
+            result = (
+                session.query(HistoryKChart)
+                .filter_by(code=code)
+                .delete(synchronize_session=False)
+            )
+            session.commit()
+            return result
+
+
+class RealTimeChartRepository:
+    """Repository for RealTimeChart operations."""
+
+    def __init__(self, db_manager: 'DatabaseManager'):
+        self.db_manager = db_manager
+
+    def save_realtime_charts(
+            self,
+            charts: list[dict],
+    ):
+        if not charts:
+            return 0
+
+        with self.db_manager.get_session() as session:
+            stmt = mysql_insert(RealTimeChart)
+            session.execute(stmt, charts)
+            session.commit()
+
+        return len(charts)
+
+    def delete_rt_by_date(self, date_: date):
+        with self.db_manager.get_session() as session:
+            result = (
+                session.query(RealTimeChart)
+                .filter_by(date=date_)
+                .delete(synchronize_session=False)
+            )
             session.commit()
             return result
 

@@ -479,10 +479,10 @@ async def scrape_stocks_api():
         
         # Today is a trading day, proceed with normal scraping
         # from datetime import timedelta
-        # date = (date - timedelta(days=1)).strftime("%Y-%m-%d")
+        # date = (date - timedelta(days=7)).strftime("%Y-%m-%d")
 
         date = date.strftime("%Y-%m-%d")
-        flag, market_number, all_records_limit = await main_scraper(date)
+        flag, market_number = await main_scraper(date)
         
         if not flag:
             return JSONResponse({
@@ -491,7 +491,7 @@ async def scrape_stocks_api():
                 "date": date
             })
         
-        await asyncio.to_thread(main_flow, market_number, all_records_limit, date)
+        await asyncio.to_thread(main_flow, market_number, date, flag)
         
         return JSONResponse({
             "status": "success",

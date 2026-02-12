@@ -18,7 +18,7 @@ def horizontal_projection(bin_img):
 def find_safe_cut_lines(
         bin_img,
         min_gap_height=20,
-        max_ink_ratio=0.002
+        max_ink_ratio=0.006
 ):
     """
     Returns y positions suitable for slicing

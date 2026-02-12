@@ -1,11 +1,13 @@
 import collections
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
+import phoenixc
 import unicodedata
 import pandas as pd
-from utils.database import StockRepository, StockStatsRepository, get_db_manager, ActionLimitDataRepository
+from utils.database import StockRepository, StockStatsRepository, get_db_manager, ActionLimitDataRepository, \
+    HistoryKChartRepository, RealTimeChartRepository
 from .preprocess import preprocess_image
 from .ocr_api import ocr_image_safe
 # Configure loguru for to_excel module
@@ -16,22 +18,23 @@ logger = get_stock_logger()
 
 FONT_PATH = "fonts/NotoSansSC-VariableFont_wght.ttf"
 
+
 def _normalize_text(text: list[str], space: bool = False) -> str:
-        """Clean and normalize a label string (Chinese/English mixed)."""
-        for idx, label in enumerate(text):
-            if not label:
-                continue
-            label = unicodedata.normalize('NFKC', label)
-            label = (label.replace("–", "-")
-                        .replace("－", "-")
-                        .replace("—", "-")
-                        .replace("／", "/")
-                        .replace("\\", "/")
-                        .replace("：", ":"))
-            if not space:
-                label = re.sub(r"[\s\u3000\u00A0]+", "", label)
-            label = label.replace("（", "(").replace("）", ")")
-            text[idx] = label.strip()
+    """Clean and normalize a label string (Chinese/English mixed)."""
+    for idx, label in enumerate(text):
+        if not label:
+            continue
+        label = unicodedata.normalize('NFKC', label)
+        label = (label.replace("–", "-")
+                 .replace("－", "-")
+                 .replace("—", "-")
+                 .replace("／", "/")
+                 .replace("\\", "/")
+                 .replace("：", ":"))
+        if not space:
+            label = re.sub(r"[\s\u3000\u00A0]+", "", label)
+        label = label.replace("（", "(").replace("）", ")")
+        text[idx] = label.strip()
 
 
 def _parse_actionData_to_df(rec_texts: list[str], cols: list[str]) -> pd.DataFrame:
@@ -89,6 +92,7 @@ def _parse_actionData_to_df(rec_texts: list[str], cols: list[str]) -> pd.DataFra
     df = pd.DataFrame(data, columns=cols)
     return df
 
+
 def _save_actionData_excel(df: pd.DataFrame, excel_path: str, date: str):
     """
     Save DataFrame to excel file.
@@ -98,88 +102,62 @@ def _save_actionData_excel(df: pd.DataFrame, excel_path: str, date: str):
     df.to_excel(excel_file, index=False)
     logger.info(f"Saved action data to Excel: {excel_file}")
 
-def _save_actionData_db(df: pd.DataFrame, date: str, records_list: list[dict]):
+
+def _save_actionData_db(df: pd.DataFrame, date: str, flag: bool):
     """
     Save DataFrame and records_list to database.
+    Each record is a dict with date, section, board, code, market_capital, turnover_abs, analysis, highlight fields.
+    Code field (six digits) should be extracted via extract_six_digit_code before upsert.
     """
-    db_manager = get_db_manager()
-    repoALD = ActionLimitDataRepository(db_manager)
-    repoStock = StockRepository(db_manager)
-    stock_section = repoStock.get_today_section(pd.to_datetime(date).date() if isinstance(date, str) else date)
+    def extract_six_digit_code(code: str):
+        if not isinstance(code, str):
+            return None
+        match = re.search(r"\d{6}", code)
+        return match.group(0) if match else None
 
+    db_manager = get_db_manager()
+    repo_al = ActionLimitDataRepository(db_manager)
+
+    # build dicts for batch upsert
     data_dict_list = []
 
-    # Build a mapping from Name to df row (for matching by stock name)
-    name_to_dfrow = collections.OrderedDict()
     for _, row in df.iterrows():
-        stock_name = row.get("Name")
-        if stock_name:  # it should never be empty
-            name_to_dfrow[stock_name] = row
+        code_val = extract_six_digit_code(row.get("code", ""))
+        analysis = "韭研:\n" + row.get("analysis") + "\n"
+        record = {
+            "date": date,
+            "section": row.get("section"),
+            "board": row.get("board"),
+            "code": code_val,
+            "market_capital": row.get("market_capital"),
+            "turnover_abs": row.get("turnover_abs"),
+            "analysis": analysis,
+            "highlight": row.get("highlight"),
+        }
+        data_dict_list.append(record)
 
-    # Build a mapping from stock to section from stock_section
-    stock_to_section = {}
-    for item in stock_section:
-        stock = item.get("stock")
-        section = item.get("section")
-        if stock:
-            stock_to_section[stock] = section
+    if not flag:
+        n = repo_al.delete_by_date(datetime.strptime(date, "%Y-%m-%d"))
+        logger.info(f"deleted old {n} records.")
+        repo_al.insert_action_data_batch(data_dict_list)
+        #add stock field
 
-    # Now, for each record in records_list, match with df using the stock/name key
-    for record in records_list:
-        try:
-            rec_name = record.get("stock", "")
-            df_row = name_to_dfrow.get(rec_name)
-            if df_row is None:
-                logger.warning(f"No matching row in OCR DataFrame for stock: '{rec_name}'")
-                continue
-
-            # Compose analysis and keywords if available from df and records_list
-            analysis = record.get("analysis", "")
-            keyword = df_row.get("Keyword", "") if "Keyword" in df_row else ""
-            combined_keyword = (analysis + "\n韭研:\n" + keyword).strip() if keyword else analysis
-
-            # Section from stock_section, fallback to df_row Section if needed
-            section_val = stock_to_section.get(rec_name)
-            if not section_val:
-                section_val = df_row.get("Section")
-
-            data_dict = {
-                "date": pd.to_datetime(record["date"]).date() if isinstance(record["date"], str) else record["date"],
-                "section": section_val,
-                "board": df_row.get("Board"),
-                "stock": rec_name,
-                "code": record.get("code"),
-                "last_price": record.get("last_price"),
-                "change_rate": record.get("change_rate"),
-                "lock_ratio": record.get("lock_ratio"),
-                "turnover": record.get("turnover"),
-                "market_capital": record.get("market_capital"),
-                "total_capital": record.get("total_capital"),
-                "d_time_first": record.get("d_time_first"),
-                "d_time_last": record.get("d_time_last"),
-                "analysis": combined_keyword,
-                "highlight": df_row.get("Highlight")
-            }
-            data_dict_list.append(data_dict)
-        except Exception as e:
-            logger.error(f"Failed to upsert action data record: {record}; error: {e}")
-    n = repoALD.delete_by_date(datetime.strptime(date, "%Y-%m-%d"))
-    logger.info(f"deleted old {n} records.")
-    repoALD.upsert_action_data_batch(data_dict_list)
+    repo_al.update_action_data_batch(data_dict_list)
     logger.info("Action data upserted to database.")
 
-def _save_actionData(rec_texts: list[str], excel_path: str, date: str, records_list: list[dict]):
+
+def _save_actionData(rec_texts: list[str], excel_path: str, date: str, flag: bool):
     """
     Separates excel and database operations for saving OCR-recognized texts.
     """
     # Expected columns
-    cols = ["Section", "Board", "Code", "Name", "Time", "Market", "Turnover", "Keyword", "Highlight"]
+    cols = ["section", "board", "code", "stock", "time", "market_capital", "turnover_abs", "analysis", "highlight"]
     df = _parse_actionData_to_df(rec_texts, cols)
     if df.empty:
         logger.error("No valid data to save.")
         return
     _save_actionData_excel(df, excel_path, date)
-    _save_actionData_db(df, date, records_list)
+    _save_actionData_db(df, date, flag)
 
 
 def _get_maxEven_maxBreak(rec_texts: list[str]):
@@ -206,9 +184,10 @@ def _get_maxEven_maxBreak(rec_texts: list[str]):
     maxBreak = max(break_list) if break_list else 0
     return maxEven, maxBreak
 
+
 def _get_trendings(rec_texts: list[str]):
     trendings = {
-        "limit_up":  r"涨停(\d+)家",
+        "limit_up": r"涨停(\d+)家",
         "limit_down": r"跌停(\d+)家",
         "even_board": r"连板(\d+)家",
         "breaking_rate": r"破板率(\d+\.?\d+?)%"
@@ -232,6 +211,7 @@ def _get_trendings(rec_texts: list[str]):
         "even": results["even_board"],
         "break_rate": results["breaking_rate"]
     }
+
 
 def _save_stockstats(rec_texts: list[str], market_number: dict, date):
     """
@@ -264,22 +244,161 @@ def _save_stockstats(rec_texts: list[str], market_number: dict, date):
     }
     repo.add_market_stats(new_stats)
 
+def _save_chart_data(date: str):
+    phoenixc.init("guhao_ind", "kQ4@ks0u", ("10.29.92.42", 9081))
 
-def main_flow(market_number: dict, records_list: list[dict], date):
+    end_date: date = datetime.strptime(date, "%Y-%m-%d").date()
+    start_date = (end_date - timedelta(days=366)).strftime("%Y-%m-%d")
+    end_date_str = end_date.strftime("%Y-%m-%d")
+
+    db_manager = get_db_manager()
+    repo_stock = StockRepository(db_manager)
+    repo_k_chart = HistoryKChartRepository(db_manager)
+    repo_real_time_chart = RealTimeChartRepository(db_manager)
+
+    # -----------------------------
+    # helpers
+    # -----------------------------
+    def add_exchange_suffix(code: str) -> str:
+        if not code or len(code) < 6:
+            raise ValueError(f"not a valid code format: {code}")
+
+        first_digit = code[0]
+        if first_digit in ("0", "3"):
+            return f"{code}.SZ"
+        if first_digit == "6":
+            return f"{code}.SH"
+        if first_digit in ("4", "8", "9"):
+            return f"{code}.BJ"
+
+        raise ValueError(f"unknown code format: {code}")
+
+    # -----------------------------
+    # preprocess codes
+    # -----------------------------
+    codes = repo_stock.get_codes_by_date(end_date)
+    codes = [add_exchange_suffix(code) for code in codes]
+
+    # -----------------------------
+    # delete existing records (once)
+    # -----------------------------
+    repo_real_time_chart.delete_rt_by_date(end_date)
+
+    # -----------------------------
+    # main loop (per code batching)
+    # -----------------------------
+    for code in codes:
+        # if code != '603533.SH':
+        #     continue
+        logger.info("processing %s", code)
+        repo_k_chart.delete_kchart_by_code(code)
+        # =============================
+        # Daily K data (batch per code)
+        # =============================
+        try:
+            k_df = phoenixc.get_price(
+                unified_code=code,
+                start_date=start_date,
+                end_date=end_date_str,
+                frequency="1d",
+            )
+        except Exception:
+            logger.exception("failed to fetch daily k for %s", code)
+            continue
+
+        if isinstance(k_df, pd.DataFrame) and not k_df.empty:
+            k_df = k_df.reset_index()
+
+            kcharts: list[dict] = []
+            for _, row in k_df.iterrows():
+                trading_date = row.get("trading_date")
+                if pd.isna(trading_date):
+                    continue
+
+                record = {
+                    "code": row["unified_code"],
+                    "date": trading_date,
+                    "open": row["open"],
+                    "close": row["close"],
+                    "high": row["high"],
+                    "low": row["low"],
+                    "volume": row["volume"],
+                }
+
+                if any(pd.isna(record[f]) for f in ("open", "close", "high", "low", "volume")):
+                    continue
+
+                kcharts.append(record)
+
+            if kcharts:
+                repo_k_chart.save_kcharts(kcharts)
+        else:
+            logger.warning("no daily k data for %s", code)
+
+        # =============================
+        # Tick data (chunked batch)
+        # =============================
+        try:
+            tick_df = phoenixc.get_price(
+                unified_code=code,
+                start_date=end_date_str,
+                end_date=end_date_str,
+                frequency="1m",
+                time_slice=("09:25:00", "15:00"),
+            )
+        except Exception:
+            logger.exception("failed to fetch tick data for %s", code)
+            continue
+
+        if isinstance(tick_df, pd.DataFrame) and not tick_df.empty:
+            tick_df = tick_df.reset_index()
+
+            # Process cumulative volume to per-tick volume
+            # Assume the column is named "volume"
+            # tick_df["per_tick_volume"] = tick_df["volume"].diff().fillna(tick_df["volume"])
+            # # Sometimes the first volume can be negative or wrong after diff, make sure all >=0
+            # tick_df["per_tick_volume"] = tick_df["per_tick_volume"].clip(lower=0)
+
+            rt_charts: list[dict] = []
+            for idx, row in tick_df.iterrows():
+                data_time = row.get("data_time")
+                if pd.isna(data_time):
+                    continue
+
+                record = {
+                    "code": row["unified_code"],
+                    "date": end_date,
+                    "data_time": data_time,
+                    "close": row["close"],
+                    "volume": row["volume"] / 100,
+                }
+
+                if any(pd.isna(record[f]) for f in ("volume", "close")):
+                    continue
+
+                rt_charts.append(record)
+
+            if rt_charts:
+                repo_real_time_chart.save_realtime_charts(rt_charts)
+        else:
+            logger.warning("no tick data for %s", code)
+
+
+def main_flow(market_number: dict, date, flag: bool = False):
     scraped_dir = "images"
     img_path = f"{scraped_dir}/Image.png"
     if not os.path.isfile(img_path):
         logger.error(f"Image file does not exist: {img_path}")
         return None
     try:
-        path = preprocess_image(img_path)
-        rec_texts = ocr_image_safe(path)
-        _normalize_text(rec_texts)
-        _save_actionData(rec_texts, "excel", date, records_list)
-        _save_stockstats(rec_texts, market_number, date)
+        # path = preprocess_image(img_path)
+        # rec_texts = ocr_image_safe(path)
+        # _normalize_text(rec_texts)
+        # _save_actionData(rec_texts, "excel", date, flag)
+        # _save_stockstats(rec_texts, market_number, date)
+        _save_chart_data(date)
     except Exception as e:
-        logger.error(f"Error while OCR: {e}")
-        raise RuntimeError(f"Error while OCR: {e}")
+        raise RuntimeError(f"Error while Processing saving data: {e}")
 
-# if __name__ == "__main__":
-#     excel_flow({}, "2026-02-02")
+if __name__ == "__main__":
+    main_flow({}, "2026-02-11", True)
