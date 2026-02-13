@@ -370,10 +370,12 @@ def _save_chart_data(date: str):
                     "date": end_date,
                     "data_time": data_time,
                     "close": row["close"],
+                    "pre_close": row["pre_close"],
+                    "change_rate": (row["close"] - row["pre_close"])/row["pre_close"],
                     "volume": row["volume"] / 100,
                 }
 
-                if any(pd.isna(record[f]) for f in ("volume", "close")):
+                if any(pd.isna(record[f]) for f in ("volume", "close", "pre_close")):
                     continue
 
                 rt_charts.append(record)
@@ -391,14 +393,14 @@ def main_flow(market_number: dict, date, flag: bool = False):
         logger.error(f"Image file does not exist: {img_path}")
         return None
     try:
-        # path = preprocess_image(img_path)
-        # rec_texts = ocr_image_safe(path)
-        # _normalize_text(rec_texts)
-        # _save_actionData(rec_texts, "excel", date, flag)
-        # _save_stockstats(rec_texts, market_number, date)
+        path = preprocess_image(img_path)
+        rec_texts = ocr_image_safe(path)
+        _normalize_text(rec_texts)
+        _save_actionData(rec_texts, "excel", date, flag)
+        _save_stockstats(rec_texts, market_number, date)
         _save_chart_data(date)
     except Exception as e:
         raise RuntimeError(f"Error while Processing saving data: {e}")
 
 if __name__ == "__main__":
-    main_flow({}, "2026-02-11", True)
+    main_flow({}, "2026-02-12", True)

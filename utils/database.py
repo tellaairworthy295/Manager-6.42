@@ -79,6 +79,8 @@ class RealTimeChart(Base):
     data_time = Column(DateTime, nullable=False, index=True)
     code = Column(VARCHAR(20), nullable=False)
     close = Column(DECIMAL(10, 3), nullable=False)
+    pre_close = Column(DECIMAL(10, 3), nullable=False)
+    change_rate = Column(DECIMAL(9, 6), nullable=False)
     volume = Column(BigInteger, nullable=False)
     scraped_at = Column(DateTime, default=datetime.now())
 

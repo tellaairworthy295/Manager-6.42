@@ -72,12 +72,12 @@ if __name__ == "__main__":
     date = (today - timedelta(days=1)).strftime("%Y-%m-%d")
     #today = '2025-12-03'
     # 获取主力合约
-    tick_df = phoenixc.get_price(unified_code='603533.SH', start_date=date, end_date=date, frequency='1m', time_slice=("09:25:00", "15:00"))
+    tick_df = phoenixc.get_price(unified_code='300277.SZ', start_date=date, end_date=date, frequency='1m', time_slice=("09:25:00", "15:00"))
     # tick_df["per_tick_volume"] = tick_df["volume"].diff().fillna(tick_df["volume"])
     # # Sometimes the first volume can be negative or wrong after diff, make sure all >=0
     # tick_df["per_tick_volume"] = tick_df["per_tick_volume"].clip(lower=0)
     
-    print(f"主力合约数据: \n{tick_df["volume"]/100}")
+    print(f"主力合约数据: \n{tick_df["limit_down"]}")
     
     # 保存到数据库
     # if rs is not None and len(rs) > 0:
