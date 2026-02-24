@@ -25,22 +25,34 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, group_
     logger.info(f"Starting scraping task for site: {source}, query: {query}")
 
     urls = None
-    try:
-        urls = fetch_urls_from_page(query, site)
-    except Exception as e:
-        logger.error(f"Failed to fetch URLs for {source}: {e}")
-        result = {
-            "source": source,
-            "total_content": [],
-            "success_count": 0,
-            "failed_count": 0,
-            "failed_urls": [],
-            "message": f"Error fetching URLs: {str(e)}"
-        }
-        _record_site_result(group_key, source, result, now_str)
-        logger.info(f"Task completed for {source} with error: {result}")
-        return
+    # Retry fetching URLs in the same way as scraping content
+    total_url_fetch_attempts = 3
+    for attempt in range(total_url_fetch_attempts):
+        try:
+            urls = fetch_urls_from_page(query, site)
+            # If successful, break out of the loop
+            break
+        except Exception as e:
+            if attempt == total_url_fetch_attempts - 1:
+                # Final attempt failed, log and proceed to record failure
+                logger.error(f"Failed to fetch URLs for {source} after {total_url_fetch_attempts} attempts: {e}")
+                result = {
+                    "source": source,
+                    "total_content": [],
+                    "success_count": 0,
+                    "failed_count": 0,
+                    "failed_urls": [],
+                    "message": f"Error fetching URLs after {total_url_fetch_attempts} attempts: {str(e)}"
+                }
+                _record_site_result(group_key, source, result, now_str)
+                logger.info(f"Task completed for {source} with error: {result}")
+                return
+            else:
+                # Log the retry attempt and sleep before retrying
+                logger.warning(f"Fetching URLs failed for {source} on attempt {attempt + 1}, will retry. Error: {e}")
+                time.sleep(random.uniform(2.0, 10.0))
 
+    # Check if urls list is empty after all attempts
     if not urls:
         logger.info(f"No new URLs found for {source}")
         result = {
@@ -70,6 +82,7 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, group_
             try:
                 content = scrape_news(url, source)
             except Exception as e:
+                # Treat exceptions during scraping as an empty content failure
                 content = ""
             if content:
                 success_count += 1

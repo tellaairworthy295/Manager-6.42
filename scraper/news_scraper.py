@@ -1,5 +1,5 @@
-
 # news_scraper.py
+import codecs
 from datetime import datetime
 import json
 import random
@@ -13,8 +13,10 @@ from utils.translation_service import translate_article_to_chinese
 from selen.stealth_driver import get_chrome_driver
 from utils.database import get_db_manager, NewsArticleRepository
 from utils.logging_config import get_news_task_logger
+import base64
 
 logger = get_news_task_logger()
+
 
 def _human_pause(min_delay: float = 1.5, max_delay: float = 3.8):
     """Sleep with jitter to mimic human dwell time."""
@@ -31,62 +33,171 @@ def fetch_news_from_db():
 
 
 def fetch_urls_from_page(query: str, site: str):
-    """Fetch URLs from Google News search for a specific site with anti-CAPTCHA measures.
-
-    When scraping and checking urls, if the URL contains 'srnd', remove 'srnd' and everything after it (including "?srnd...", "&srnd...", etc).
     """
-    import re
+    Fetch URLs using a randomized cascade of strategies (Google News, Google Search, Site Latest).
+    A successful scrape simply means valid URLs were extracted from the search page (bypassed bot checks).
+    Post-processing (normalization, filtering, de-duplication) occurs after a successful scrape.
+    """
 
     def normalize_url(link):
-        # Remove everything starting from 'srnd' and following, including srnd itself
         if link is None:
             return None
-        # Find '?srnd' or '&srnd' and remove it and everything after
-        m = re.search(r'([?&])srnd=', link)
+        # 处理可能的Unicode转义序列，然后匹配srnd参数
+        processed_link = codecs.decode(link, 'unicode_escape')
+        m = re.search(r'([?&])srnd(?:=|%3D|\\u003d)', processed_link, re.IGNORECASE)
         if m:
-            link = link[:m.start()]
+            cleaned_link = processed_link[:m.start()]
             # Remove trailing ? or & if left behind
-            link = re.sub(r'[?&]$', '', link)
-        return link
+            cleaned_link = re.sub(r'[?&]$', '', cleaned_link)
+            return cleaned_link
+        return processed_link
 
-    search_url = f"https://www.google.com/search?q={query}&tbs=qdr:d,sbd:1&tbm=nws"
-    logger.info(f"Fetching URLs from Google News: {query}")
+    def decode_google_news_url(jslog_str):
+        """Extracts and decodes the hidden URL from Google News jslog attribute."""
+        if not jslog_str:
+            return None
+        # Google News embeds base64 string after '5:'
+        m = re.search(r'5:([A-Za-z0-9+/\-_]+)', jslog_str)
+        if not m:
+            return None
+
+        b64_str = m.group(1)
+        # Fix missing padding
+        b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
+        # Handle both standard and url-safe base64 variations
+        b64_str = b64_str.replace('-', '+').replace('_', '/')
+
+        try:
+            decoded = base64.b64decode(b64_str).decode('utf-8')
+            # Extract the actual URL from the decoded JSON array string
+            url_m = re.search(r'"(https?://[^"]+)"', decoded)
+            if url_m:
+                return url_m.group(1)
+        except Exception:
+            pass
+        return None
+
+    # Define the target URLs
+    news_search_url = f"https://news.google.com/search?q={query} when:1h&hl=en-US&gl=US&ceid=US:en"
+    google_search_url = f"https://www.google.com/search?q={query}&tbs=qdr:d,sbd:1&tbm=nws"
+    bloomberg_search_url = f"https://www.bloomberg.com/latest"
+
+    # Define the 3 strategies using robust semantic attributes and paths
+    pages_to_scrape = [
+        {
+            "name": "google_news",
+            "url": news_search_url,
+            "wait_css": "a[jslog]"  # Reliable attribute used for tracking/routing
+        },
+        {
+            "name": "google_search",
+            "url": google_search_url,
+            "wait_css": "a[data-ved][ping]" # Ensures we target actual outbound search results
+        },
+        {
+            "name": "bloomberg_latest",
+            "url": bloomberg_search_url,
+            "wait_css": "a[href*='/news/articles/']"  # Ensures we only pull actual articles
+        }
+    ]
+
+    # 1. Randomize the starting point of the iteration
+    random.shuffle(pages_to_scrape)
+
     driver = None
+    site_domain = site.replace("www.", "")
+    extracted_raw_links = []
+    successful_strategy = None
+
     try:
         driver = get_chrome_driver("")
-        driver.get(search_url)
-        # Wait until at least one link containing the site appears
-        try:
-            WebDriverWait(driver, 15).until(
-                lambda d: any(
-                    site in (a.get_attribute("href") or "")
-                    for a in d.find_elements(By.CSS_SELECTOR, "a")
+
+        # --- SCRAPING PHASE ---
+        for page in pages_to_scrape:
+            logger.info(f"Trying {page['name']} strategy: {page['url']}")
+            raw_links = []
+
+            try:
+                driver.get(page['url'])
+
+                # Wait for target links to populate
+                WebDriverWait(driver, 15).until(
+                    lambda d: len(d.find_elements(By.CSS_SELECTOR, page['wait_css'])) > 0
                 )
-            )
-        except TimeoutException:
-            raise RuntimeError("No links found - page may not have loaded correctly")
-        # Collect all matching links, removing everything after srnd
+
+                # Fetch only the relevant links using our robust selectors
+                elements = driver.find_elements(By.CSS_SELECTOR, page['wait_css'])
+
+                for a in elements:
+                    href = a.get_attribute("href")
+
+                    if page['name'] == "google_news":
+                        jslog = a.get_attribute("jslog")
+                        decoded_url = decode_google_news_url(jslog)
+                        if decoded_url:
+                            raw_links.append(decoded_url)
+                        elif href and href.startswith("http"):
+                            raw_links.append(href)
+
+                    elif page['name'] == "bloomberg_latest":
+                        if href:
+                            if href.startswith("/"):
+                                domain = site if "bloomberg" in site else "www.bloomberg.com"
+                                href = f"https://{domain}{href}"
+                            raw_links.append(href)
+
+                    else:  # Google Search
+                        if href:
+                            raw_links.append(href)
+
+            except TimeoutException:
+                logger.warning(f"Timeout waiting for links on {page['name']}. Trying next strategy...")
+                continue
+            except Exception as e:
+                logger.warning(f"Error extracting links from {page['name']}: {e}. Trying next strategy...")
+                continue
+
+            # 2. Check for scraping success (Did we get valid URLs?)
+            if raw_links:
+                logger.info(f"Scraping success! Extracted {len(raw_links)} raw URLs via {page['name']}.")
+                extracted_raw_links = raw_links
+                successful_strategy = page['name']
+                break  # Exit the cascade immediately
+            else:
+                logger.info(f"{page['name']} yielded 0 valid URLs. Moving to next strategy...")
+
+        # --- POST-PROCESSING PHASE ---
+        if not extracted_raw_links:
+            logger.warning(f"All scraping strategies failed or were blocked for query: {query}")
+            return []
+
+        logger.info(f"Beginning post-processing on {len(extracted_raw_links)} links from {successful_strategy}...")
+
+        # 3. Stripping / Normalization
+        links = [normalize_url(link) for link in extracted_raw_links]
+
+        # 4. Filter strictly by site domain
         links = [
-            normalize_url(a.get_attribute("href"))
-            for a in driver.find_elements(By.CSS_SELECTOR, "a")
-            if a.get_attribute("href") and site in a.get_attribute("href")
+            link for link in links
+            if link and (link.startswith(f"https://{site_domain}") or link.startswith(f"https://www.{site_domain}"))
         ]
 
-        # Remove duplicates and filter by site after normalization
-        links = [link for link in links if link and link.startswith(f"https://{site}")]
+        # 5. De-duplication
         links = list(set(links))
 
-        # Filter out recently scraped URLs after normalizing them
+        # 6. Database Filtering
         db_manager = get_db_manager()
         repo = NewsArticleRepository(db_manager)
         recent_links_raw = repo.get_recent_urls(hours=2)
         recent_links = set(filter(None, [normalize_url(link) for link in recent_links_raw]))
+
         links = [link for link in links if link not in recent_links]
 
-        logger.info(f"Found {len(links)} {query} article links")
-        return links[:2]
+        logger.info(f"Post-processing complete. Found {len(links)} new, unique {query} article links matching {site}.")
+        return links[:4]
+
     except Exception as e:
-        logger.error(f"Error fetching URLs: {e}")
+        logger.error(f"Critical error in fetch_urls_from_page: {e}")
         raise
     finally:
         if driver:
@@ -94,6 +205,8 @@ def fetch_urls_from_page(query: str, site: str):
                 driver.quit()
             except Exception:
                 pass
+
+
 # ============================== Helper Functions ==============================================
 
 def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_content, timeout=15, min_paragraphs=4):
@@ -109,7 +222,7 @@ def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_conte
     best_publish_at = None
     best_count = 0
 
-    while time.time() - start < timeout:        
+    while time.time() - start < timeout:
         soup = BeautifulSoup(driver.page_source, "html.parser")
         paragraphs = soup.select(selector)
         count = len(paragraphs)
@@ -145,7 +258,7 @@ def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_conte
             # Vary scroll behavior: sometimes smooth, sometimes jump
             scroll_amount = random.randint(500, 1000)
             driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
-            
+
         _human_pause(1.5, 2.5)
 
     # On exit, always use the best version found, even if content_fully_loaded is False or anti-bot blanked page
@@ -164,9 +277,9 @@ def extract_and_format_time(soup):
         ".ArticleTimestamp_articleTimestamp__zlcvt time[datetime]",
         "meta[property='article:published_time']"
     ]
-    
+
     time_str = None
-    
+
     for selector in selectors:
         element = soup.select_one(selector)
         if element:
@@ -180,59 +293,61 @@ def extract_and_format_time(soup):
                 if element.has_attr('datetime'):
                     time_str = element['datetime']
                     break
-    
+
     if not time_str:
         return None
-    
+
     # 格式化时间
     try:
         # 移除时区信息，只保留基本时间
         clean_time = re.sub(r'\.\d+', '', time_str)  # 移除毫秒
         clean_time = re.sub(r'Z$', '', clean_time)  # 移除Z
-        
+
         # 尝试解析为datetime
         if 'T' in clean_time:
             dt = datetime.strptime(clean_time, "%Y-%m-%dT%H:%M:%S")
         else:
             dt = datetime.strptime(clean_time, "%Y-%m-%d %H:%M:%S")
-        
+
         # 格式化为需要的字符串
         return dt.strftime("%Y-%m-%d %H:%M:%S")
-        
+
     except Exception as e:
         print(f"时间解析错误: {e}, 原始时间: {time_str}")
         return None
 
+
 def _extract_article_content(soup, selector, unwanted_content=None):
     paragraphs = []
-    
+
     paragraphs_elements = soup.select(selector)
-    
+
     # 先提取文本並進行基本過濾
     paragraphs = [p.get_text(" ", strip=True) for p in paragraphs_elements if p.get_text(strip=True)]
 
     # 過濾不想要的內容
     if unwanted_content:
         paragraphs = [p for p in paragraphs if not any(pattern in p for pattern in unwanted_content)]
-    
+
     # 新增：過濾以數字:數字格式開頭的段落
     paragraphs = [
         re.sub(r'^\d+:\d+\s*', '', p)  # 去掉開頭的數字:數字格式
         for p in paragraphs
         if not re.match(r'^\d+:\d+\s*$', p)  # 完全匹配數字:數字格式的整行去掉
     ]
-    
+
     # 再次過濾可能變空的段落
     paragraphs = [p for p in paragraphs if p.strip()]
-    
+
     # 合併段落
     content = "\n\n".join(paragraphs)
-    
+
     # 提取標題
     title_tag = soup.find("h1")
     title = title_tag.get_text(strip=True) if title_tag else ""
 
     return {"title": title, "content": content}
+
 
 def save_agent_data(analysis_result: str):
     """Save agent analysis result to database."""
@@ -245,9 +360,10 @@ def save_agent_data(analysis_result: str):
     except Exception as e:
         logger.info(f"Failed to save analysis to database, {e}")
 
+
 def extract_xml_content(
-    soup: BeautifulSoup,
-    xml_selector: str | None,
+        soup: BeautifulSoup,
+        xml_selector: str | None,
 ) -> str:
     """
     Extracts raw XML / HTML content using a selector.
@@ -292,12 +408,12 @@ def scrape_news(url: str, source: str):
         unwanted_content = site_config.get("unwanted_content", [])
 
         logger.info(f"Scraping URL: {url}")
-        
+
         # Create driver with fresh fingerprint
         driver = get_chrome_driver()
         # Now navigate to URL
         driver.get(url)
-        
+
         logger.info("Page loaded, waiting for content...")
 
         # Wait for progressive content with human-like scrolling
@@ -309,7 +425,7 @@ def scrape_news(url: str, source: str):
             timeout=15,
             min_paragraphs=min_paragraphs,
         )
-        
+
         # if not content_fully_loaded:
         #     logger.info("Content not fully loaded, refreshing page and retrying ...")
         #     driver.refresh()
