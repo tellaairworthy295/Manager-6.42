@@ -14,6 +14,8 @@ from selen.stealth_driver import get_chrome_driver
 from utils.database import get_db_manager, NewsArticleRepository
 from utils.logging_config import get_news_task_logger
 import base64
+from xml.etree import ElementTree as ET
+from curl_cffi import requests
 
 logger = get_news_task_logger()
 
@@ -34,7 +36,7 @@ def fetch_news_from_db():
 
 def fetch_urls_from_page(query: str, site: str):
     """
-    Fetch URLs using a randomized cascade of strategies (Google News, Google Search, Site Latest).
+    Fetch URLs using a randomized cascade of strategies (Google News, Sitemap Search, Site Latest).
     A successful scrape simply means valid URLs were extracted from the search page (bypassed bot checks).
     Post-processing (normalization, filtering, de-duplication) occurs after a successful scrape.
     """
@@ -77,32 +79,108 @@ def fetch_urls_from_page(query: str, site: str):
             pass
         return None
 
-    # Define the target URLs
-    news_search_url = f"https://news.google.com/search?q={query} when:1h&hl=en-US&gl=US&ceid=US:en"
-    google_search_url = f"https://www.google.com/search?q={query}&tbs=qdr:d,sbd:1&tbm=nws"
-    bloomberg_search_url = f"https://www.bloomberg.com/latest"
+    def fetch_and_parse_sitemap():
+        """Fetches the sitemap using curl_cffi and returns sorted URLs based on publication date."""
+        # Use the specific URL provided in the example
+        sitemap_url = "https://www.bloomberg.com/sitemaps/news/latest.xml"
+        logger.info(f"Fetching sitemap from {sitemap_url}")
 
-    # Define the 3 strategies using robust semantic attributes and paths
+        try:
+            # Use curl_cffi with impersonate
+            response = requests.get(sitemap_url, impersonate="chrome")
+
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch sitemap from {sitemap_url}, Status Code: {response.status_code}")
+                return []  # Return empty list if fetching fails
+
+            # Get the text content
+            sitemap_content = response.text
+
+        except Exception as e:
+            logger.error(f"An error occurred while fetching the sitemap with curl_cffi: {e}")
+            return []  # Return empty list if fetching fails
+
+        try:
+            root = ET.fromstring(sitemap_content)
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse sitemap XML from {sitemap_url}: {e}")
+            return []  # Return empty list if parsing fails
+
+        urls_with_dates = []
+        # Define the namespace map if the XML uses one (common for sitemaps)
+        # The default sitemap namespace is usually 'http://www.sitemaps.org/schemas/sitemap/0.9'
+        # The news namespace might be 'http://www.google.com/schemas/sitemap-news/0.9'
+        namespaces = {
+            'sitemap': 'http://www.sitemaps.org/schemas/sitemap/0.9',
+            'news': 'http://www.google.com/schemas/sitemap-news/0.9'
+        }
+
+        for url_elem in root.findall('sitemap:url', namespaces):
+            loc_elem = url_elem.find('sitemap:loc', namespaces)
+            pub_date_elem = url_elem.find('news:news/news:publication_date', namespaces)
+
+            if loc_elem is not None and pub_date_elem is not None:
+                url = loc_elem.text.strip()
+                pub_date_str = pub_date_elem.text.strip()
+
+                try:
+                    # Parse the ISO format timestamp string into a datetime object
+                    # Handle 'Z' suffix for UTC
+                    if pub_date_str.endswith('Z'):
+                        pub_date_str = pub_date_str[:-1] + '+00:00'
+                    pub_date_obj = datetime.fromisoformat(pub_date_str)
+                except ValueError as e:
+                    logger.warning(f"Could not parse date '{pub_date_str}' for URL {url}: {e}")
+                    continue  # Skip this entry if date parsing fails
+
+                urls_with_dates.append((url, pub_date_obj))
+            else:
+                # If an entry doesn't have both loc and publication_date, skip it
+                continue
+
+        # Sort the list of tuples (URL, pub_date_obj) by the pub_date_obj in descending order (newest first)
+        urls_with_dates.sort(key=lambda x: x[1], reverse=True)
+
+        # Extract just the URLs from the sorted list, taking the first 20
+        sorted_urls = [item[0] for item in urls_with_dates[:20]]
+
+        logger.info(f"Parsed and sorted {len(sorted_urls)} URLs from the sitemap.")
+        return sorted_urls
+
+    # Define the target URLs for other strategies
+    news_search_url = f"https://news.google.com/search?q={query} when:1h&hl=en-US&gl=US&ceid=US:en"
+    bloomberg_search_url = "https://www.bloomberg.com/latest"
+    google_search_url = f"https://www.google.com/search?q={query}&tbs=qdr:h,sbd:1&tbm=nws"
+    # Define the strategies using robust semantic attributes and paths
     pages_to_scrape = [
         {
             "name": "google_news",
             "url": news_search_url,
             "wait_css": "a[jslog]"  # Reliable attribute used for tracking/routing
         },
-        {
-            "name": "google_search",
-            "url": google_search_url,
-            "wait_css": "a[data-ved][ping]" # Ensures we target actual outbound search results
-        },
+        # {
+        #     "name": "google_search",
+        #     "url": google_search_url,
+        #     "wait_css": "a[data-ved][ping]" # Ensures we target actual outbound search results
+        # },
+        # Sitemap search will be handled separately
         {
             "name": "bloomberg_latest",
             "url": bloomberg_search_url,
-            "wait_css": "a[href*='/news/articles/']"  # Ensures we only pull actual articles
+            "wait_css": "a[href*='/news/articles/']"  # Ensure we only pull actual articles
         }
     ]
 
-    # 1. Randomize the starting point of the iteration
-    random.shuffle(pages_to_scrape)
+    # 1. Prepare the Sitemap Strategy
+    sitemap_strategy = {"name": "sitemap_search"}
+
+    # Add the Sitemap strategy randomly into the list of existing strategies
+    all_strategies = pages_to_scrape.copy()  # Copy the original list
+    sitemap_index = random.randint(0, len(all_strategies))  # Generate a random index
+    all_strategies.insert(sitemap_index, sitemap_strategy)  # Insert the sitemap strategy
+
+    # Now, shuffle the entire combined list
+    random.shuffle(all_strategies)
 
     driver = None
     site_domain = site.replace("www.", "")
@@ -110,65 +188,73 @@ def fetch_urls_from_page(query: str, site: str):
     successful_strategy = None
 
     try:
-        driver = get_chrome_driver("")
-
-        # --- SCRAPING PHASE ---
-        for page in pages_to_scrape:
-            logger.info(f"Trying {page['name']} strategy: {page['url']}")
+        # --- SCRAPING PHASE with Sitemap Strategy Integration ---
+        for strategy in all_strategies:
+            logger.info(f"Trying {strategy['name']} strategy.")
             raw_links = []
 
-            try:
-                driver.get(page['url'])
+            if strategy['name'] == "sitemap_search":
+                # Execute the sitemap fetching and parsing logic
+                sitemap_urls = fetch_and_parse_sitemap()
+                if sitemap_urls:
+                    raw_links = sitemap_urls
+                    logger.info(f"Sitemap search yielded {len(raw_links)} URLs.")
+                else:
+                    logger.info("Sitemap search yielded no URLs.")
+                    continue  # Move to the next strategy if sitemap fails/returns empty
 
-                # Wait for target links to populate
-                WebDriverWait(driver, 15).until(
-                    lambda d: len(d.find_elements(By.CSS_SELECTOR, page['wait_css'])) > 0
-                )
+            else:  # It's a Selenium-based strategy (google_news, bloomberg_latest)
+                if driver is None:
+                    driver = get_chrome_driver()  # Initialize driver only if needed
 
-                # Fetch only the relevant links using our robust selectors
-                elements = driver.find_elements(By.CSS_SELECTOR, page['wait_css'])
+                try:
+                    driver.get(strategy['url'])
 
-                for a in elements:
-                    href = a.get_attribute("href")
+                    # Wait for target links to populate
+                    WebDriverWait(driver, 30).until(
+                        lambda d: len(d.find_elements(By.CSS_SELECTOR, strategy['wait_css'])) > 0
+                    )
 
-                    if page['name'] == "google_news":
-                        jslog = a.get_attribute("jslog")
-                        decoded_url = decode_google_news_url(jslog)
-                        if decoded_url:
-                            raw_links.append(decoded_url)
-                        elif href and href.startswith("http"):
-                            raw_links.append(href)
+                    # Fetch only the relevant links using our robust selectors
+                    elements = driver.find_elements(By.CSS_SELECTOR, strategy['wait_css'])
+                    # _human_pause(1.0, 3.0) # Consider if needed after API call
+                    for a in elements:
+                        href = a.get_attribute("href")
 
-                    elif page['name'] == "bloomberg_latest":
-                        if href:
-                            if href.startswith("/"):
-                                domain = site if "bloomberg" in site else "www.bloomberg.com"
-                                href = f"https://{domain}{href}"
-                            raw_links.append(href)
+                        if strategy['name'] == "google_news":
+                            jslog = a.get_attribute("jslog")
+                            decoded_url = decode_google_news_url(jslog)
+                            if decoded_url:
+                                raw_links.append(decoded_url)
+                            elif href and href.startswith("http"):
+                                raw_links.append(href)
 
-                    else:  # Google Search
-                        if href:
-                            raw_links.append(href)
+                        elif strategy['name'] == "bloomberg_latest":
+                            if href:
+                                if href.startswith("/"):
+                                    domain = site if "bloomberg" in site else f"www.{site}"
+                                    href = f"https://{domain}{href}"
+                                raw_links.append(href)
 
-            except TimeoutException:
-                logger.warning(f"Timeout waiting for links on {page['name']}. Trying next strategy...")
-                continue
-            except Exception as e:
-                logger.warning(f"Error extracting links from {page['name']}: {e}. Trying next strategy...")
-                continue
+                except TimeoutException:
+                    logger.warning(f"Timeout waiting for links on {strategy['name']}. Trying next strategy...")
+                    continue
+                except Exception as e:
+                    logger.warning(f"Error extracting links from {strategy['name']}: {e}. Trying next strategy...")
+                    continue
 
             # 2. Check for scraping success (Did we get valid URLs?)
             if raw_links:
-                logger.info(f"Scraping success! Extracted {len(raw_links)} raw URLs via {page['name']}.")
+                logger.info(f"Scraping success! Extracted {len(raw_links)} raw URLs via {strategy['name']}.")
                 extracted_raw_links = raw_links
-                successful_strategy = page['name']
+                successful_strategy = strategy['name']
                 break  # Exit the cascade immediately
             else:
-                logger.info(f"{page['name']} yielded 0 valid URLs. Moving to next strategy...")
+                logger.info(f"{strategy['name']} yielded 0 valid URLs. Moving to next strategy...")
 
         # --- POST-PROCESSING PHASE ---
         if not extracted_raw_links:
-            logger.warning(f"All scraping strategies failed or were blocked for query: {query}")
+            logger.warning(f"All scraping strategies (including sitemap_search) failed for query: {query}")
             return []
 
         logger.info(f"Beginning post-processing on {len(extracted_raw_links)} links from {successful_strategy}...")
@@ -179,7 +265,7 @@ def fetch_urls_from_page(query: str, site: str):
         # 4. Filter strictly by site domain
         links = [
             link for link in links
-            if link and (link.startswith(f"https://{site_domain}") or link.startswith(f"https://www.{site_domain}"))
+            if link and (site_domain in link)  # More flexible than just startswith
         ]
 
         # 5. De-duplication
@@ -188,13 +274,13 @@ def fetch_urls_from_page(query: str, site: str):
         # 6. Database Filtering
         db_manager = get_db_manager()
         repo = NewsArticleRepository(db_manager)
-        recent_links_raw = repo.get_recent_urls(hours=2)
+        recent_links_raw = repo.get_recent_urls(hours=6)
         recent_links = set(filter(None, [normalize_url(link) for link in recent_links_raw]))
 
         links = [link for link in links if link not in recent_links]
 
         logger.info(f"Post-processing complete. Found {len(links)} new, unique {query} article links matching {site}.")
-        return links[:4]
+        return links[:4]  # Return up to 4 links
 
     except Exception as e:
         logger.error(f"Critical error in fetch_urls_from_page: {e}")
@@ -204,7 +290,7 @@ def fetch_urls_from_page(query: str, site: str):
             try:
                 driver.quit()
             except Exception:
-                pass
+                pass  # Or log the exception if desired
 
 
 # ============================== Helper Functions ==============================================
@@ -349,7 +435,7 @@ def _extract_article_content(soup, selector, unwanted_content=None):
     return {"title": title, "content": content}
 
 
-def save_agent_data(analysis_result: str):
+def save_agent_data(analysis_result: dict):
     """Save agent analysis result to database."""
     from utils.database import NewsAnalysisRepository
     try:

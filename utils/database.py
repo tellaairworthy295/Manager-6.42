@@ -33,16 +33,16 @@ class NewsArticle(Base):
         'mysql_collate': 'utf8mb4_unicode_ci'
     }
     id = Column(Integer, primary_key=True, autoincrement=True)
-    url = Column(String(500), unique=True, nullable=False, index=True)
-    source = Column(String(100))
-    title = Column(TEXT)
+    url = Column(VARCHAR(255), unique=True, nullable=False)
+    source = Column(VARCHAR(20))
+    title = Column(VARCHAR(255))
     content = Column(TEXT)
-    title_zh = Column(TEXT)
+    title_zh = Column(VARCHAR(255))
     content_zh = Column(TEXT)
     xml_content = Column(TEXT)
     content_fully_loaded = Column(Boolean, default=False)
     publish_at = Column(DateTime, nullable=False)
-    scraped_date = Column(Date, default=date.today, index=True)
+    scraped_date = Column(Date, default=date.today, index=True, nullable=False)
     scraped_at = Column(DateTime, default=datetime.now)
 
 class HistoryKChart(Base):
@@ -151,16 +151,15 @@ class NewsAnalysis(Base):
     """Model for news analysis table."""
     __tablename__ = "news_analysis"
     __table_args__ = (
-            UniqueConstraint('date', 'time', name='uq_date_time'),
             {
                 'mysql_charset': 'utf8mb4',
                 'mysql_collate': 'utf8mb4_unicode_ci'
             }
         )
     id = Column(Integer, primary_key=True, autoincrement=True)
-    date = Column(Date, nullable=False, index=True)  # Changed from String to Date
-    time = Column(DateTime)
-    analysis = Column(TEXT)
+    url = Column(VARCHAR(255), unique=True, nullable=False)
+    stocks = Column(VARCHAR(255))
+    scraped_date = Column(Date, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.now())
 
 
@@ -400,8 +399,11 @@ class NewsArticleRepository:
     def fetch_recent_articles(self, hours: int = 6) -> List[Dict[str, Any]]:
         """Fetch articles scraped within the last N hours."""
         from datetime import datetime, timedelta, date
+        if hours == 0:
+            cutoff_time = datetime.now() - timedelta(minutes=15)
+        else:
+            cutoff_time = datetime.now() - timedelta(hours=hours)
 
-        cutoff_time = datetime.now() - timedelta(hours=hours)
         cutoff_date = cutoff_time.date()
         today = date.today()
 
@@ -1011,20 +1013,21 @@ class NewsAnalysisRepository:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    def save_analysis(self, analysis_result: str) -> NewsAnalysis:
+    def save_analysis(self, data: dict) -> NewsAnalysis | None:
         """
         Save analysis result.
         """
-        now = datetime.now()
-        today_date = now.date()
+        if not data:
+            return
+
         with self.db_manager.get_session() as session:
             analysis = NewsAnalysis(
-                date=today_date,  # Now a Date column
-                time=now,  # 直接使用 DateTime 对象
-                analysis=analysis_result,
+                url=data['url'],
+                scraped_date=data['scraped_date'],
+                stocks=data['stocks'],
             )
             session.add(analysis)
-            session.commit()  # 或 session.flush()
+            session.commit()  # or session.flush()
             return analysis
 
 

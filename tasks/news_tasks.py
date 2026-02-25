@@ -26,7 +26,7 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, group_
 
     urls = None
     # Retry fetching URLs in the same way as scraping content
-    total_url_fetch_attempts = 3
+    total_url_fetch_attempts = 2
     for attempt in range(total_url_fetch_attempts):
         try:
             urls = fetch_urls_from_page(query, site)

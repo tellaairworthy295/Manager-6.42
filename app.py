@@ -25,7 +25,7 @@ from tasks.news_tasks import scrape_all_news
 from tasks.agent_tasks import display_agent_task_main
 from scraper.cookies_getter import update_common_cookies, update_agent_cookies
 #from utils.sender import send_email_with_attachments, load_email_config_from_json
-from utils.database import StockStatsRepository, get_db_manager, UsersRepository, StockRepository
+from utils.database import StockStatsRepository, get_db_manager, UsersRepository, StockRepository, NewsArticleRepository
 from utils.validators import split_prompt_to_list, validate_and_prepare_cookies
 from utils.logging_config import get_others_logger
 from utils.redis_utils import create_aioredis, close_loop_redis, get_aioredis_client
@@ -412,31 +412,6 @@ async def display_agent_api(request: Request):
                                  conversation_id=conversation_id, dia_count=dia_count)
 
 
-@app.post("/api/news_analysis")
-async def news_analyzer(request: Request):
-    # Receive form-data with a "result" key
-    form = await request.form()
-    analysis_result = form.get("result")
-    if analysis_result is None:
-        return JSONResponse({"error": "No 'result' field found in form-data."}, status_code=400)
-
-    await asyncio.to_thread(save_agent_data, analysis_result)
-
-    # Write content to a temporary txt file
-    now = datetime.now()
-    formatted = now.strftime("%Y-%m-%d-%H")
-    txt_path = f"news_analyses/{formatted}.txt"
-    with open(txt_path, "w", encoding="utf-8") as f:
-        f.write(str(analysis_result))
-    # config = load_email_config_from_json("json/config.json")
-    # config.SUBJECT = "【新闻】彭博社最近6小时新闻AI总结"
-    # config.BODY = "AI总结结果见附件。"
-    # config.ATTACHMENTS = [txt_path]
-    # await asyncio.to_thread(send_email_with_attachments, **config.as_dict())
-
-    return JSONResponse({"status": "200", "message": "Sent results successfully."})
-
-
 @app.get("/api/scrape_stocks")
 async def scrape_stocks_api():
     """
@@ -445,27 +420,28 @@ async def scrape_stocks_api():
     """
     try:
         date = datetime.now()
+
         def is_a_share_trading_day(date_obj=None):
             """Check if a date is a trading day for Chinese A-shares"""
             if date_obj is None:
                 date_obj = datetime.now()
-            
+
             # Get Shanghai Stock Exchange calendar (same as Shenzhen for A-shares)
             exchange = mcal.get_calendar('XSHG')
-            
+
             # Convert to pandas Timestamp
             if isinstance(date_obj, datetime):
                 timestamp = pd.Timestamp(date_obj.date())
             else:
                 timestamp = pd.Timestamp(date_obj)
-            
+
             # Check if this date is in the trading schedule
             # Get schedule for a small window to minimize API calls
             start_date = timestamp - pd.Timedelta(days=1)
             end_date = timestamp + pd.Timedelta(days=1)
-            
+
             schedule = exchange.schedule(start_date=start_date, end_date=end_date)
-            
+
             # Return True if the date is in the schedule
             return timestamp in schedule.index
 
@@ -476,34 +452,34 @@ async def scrape_stocks_api():
                 "msg": "Today is not an A-share trading day, skipping",
                 "date": date.strftime("%Y-%m-%d")
             })
-        
+
         # Today is a trading day, proceed with normal scraping
         # from datetime import timedelta
         # date = (date - timedelta(days=7)).strftime("%Y-%m-%d")
 
         date = date.strftime("%Y-%m-%d")
         flag, market_number = await main_scraper(date)
-        
+
         if not flag:
             return JSONResponse({
                 "status": "success",
                 "msg": "No data found",
                 "date": date
             })
-        
+
         await asyncio.to_thread(main_flow, market_number, date, flag)
-        
+
         return JSONResponse({
             "status": "success",
             "date": date,
             "market": "A-share",
             "today_is_trading_day": True
         })
-        
+
     except Exception as e:
         # Add proper error logging here
         logger.error(f"Error in scrape_stocks_api: {str(e)}")
-        
+
         return JSONResponse({
             "status": "error",
             "msg": f"Internal server error: {str(e)}"
@@ -529,7 +505,7 @@ async def scrape_stocks_api():
 @app.get("/api/get_news")
 async def fetch_news():
     """
-    Fetch Bloomberg articles data from the local SQLite database.
+    Fetch Bloomberg articles data from the MySQL database.
     Returns a list[str], each string combines 15 articles (url/title/content, one per line).
     """
     data = await asyncio.to_thread(fetch_news_from_db)  # list[dict] with keys: url, title, content
@@ -572,6 +548,13 @@ async def fetch_stocks_and_analyses(stocks: list[str] = Field(min_length=1,
     data = await asyncio.to_thread(stock_repo.get_analysis_by_stock, stocks, days)
     return {"data": data}
 
+
+@mcp.tool(name="fetch_news", description="Fetch recent news articles from local MySQL database.")
+async def fetch_news():
+    db_manager = get_db_manager()
+    news_repo = NewsArticleRepository(db_manager)
+    data = await asyncio.to_thread(news_repo.fetch_recent_articles, 1)
+    return {"data": data}
 
 # =====================================================
 # Entry point
