@@ -6,11 +6,12 @@ from fastapi.responses import JSONResponse
 
 from exception.exception_handler import ValidationError
 from scraper.cookies_getter import update_agent_cookies
-from tasks.agent_tasks import display_agent_task_main
+from tasks.agent_tasks import display_agent_task_main, scrape_agent_task
 from utils.database import UsersRepository, get_db_manager
 from utils.logging_config import get_others_logger
-from utils.validators import split_prompt_to_list, validate_and_prepare_cookies
-
+from utils.redis_utils import get_redis_client
+from utils.validators import split_prompt_to_list, validate_and_prepare_cookies, validate_scrape_agent_request, \
+    save_user_prompt
 
 logger = get_others_logger()
 
@@ -146,3 +147,39 @@ async def display_agent_api(request: Request):
     )
 
 
+@app.post("/api/scrape_agent")
+async def scrape_agent_api(request: Request):
+    data = await validate_scrape_agent_request(request)
+    current_prompt = None
+    user_id = data["user_id"]
+    sources = data["sources"]
+    stocks = data["stocks"]
+    prompt = data["prompt"]
+
+    r = get_redis_client()
+    # 1️⃣ Per-user lock
+    if not r.set(f"agent:lock:user:{user_id}", "1", nx=True, ex=3600):
+        raise ValidationError("您的任务正在处理中，请稍后再试。")
+
+    current_prompt = save_user_prompt(user_id, prompt)
+    with open("json/selectors.json", "r", encoding="utf-8") as f:
+        s_locators_map = json.load(f)["agent"]
+    all_cookies = await validate_and_prepare_cookies(user_id.split("_")[-1], sources, True)
+    scrape_agent_task.send(
+        stocks=stocks,
+        user_id=user_id,
+        prompt=current_prompt,
+        all_cookies=all_cookies,
+        s_locators_map=s_locators_map
+    )
+
+    r.incr("agent:global:processing")
+    tasks = int(r.get("agent:global:processing") or 0)
+    return JSONResponse(
+        {
+            "已有任務": tasks,
+            "detail": "您的任务提交成功，请耐心等待。",
+            "prompt": current_prompt,
+        },
+        status_code=202,
+    )
