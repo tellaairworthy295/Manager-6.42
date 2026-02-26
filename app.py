@@ -253,7 +253,7 @@ async def fetch_stocks_and_analyses(stocks: list[str] = Field(min_length=1,
 async def fetch_news():
     db_manager = get_db_manager()
     news_repo = NewsArticleRepository(db_manager)
-    data = await asyncio.to_thread(news_repo.fetch_recent_articles, 1)
+    data = await asyncio.to_thread(news_repo.fetch_recent_articles, 0)
     return {"data": data}
 
 # =====================================================

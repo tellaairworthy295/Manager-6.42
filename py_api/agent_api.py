@@ -147,10 +147,9 @@ async def display_agent_api(request: Request):
     )
 
 
-@app.post("/api/scrape_agent")
+@router.post("/scrape_agent")
 async def scrape_agent_api(request: Request):
     data = await validate_scrape_agent_request(request)
-    current_prompt = None
     user_id = data["user_id"]
     sources = data["sources"]
     stocks = data["stocks"]
