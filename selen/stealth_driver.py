@@ -29,16 +29,13 @@ def get_chrome_driver(
     selected_version = random.choice(_AVAILABLE_VERSIONS)
     print(f"[INFO] Randomly selected Chrome version: {selected_version}")
 
-    # 构建 Chrome 可执行文件路径
-    # 格式: chrome/chrome-141/chrome-win64/chrome.exe
+    # 构建 Chrome 可执行文件路径（假设 chrome 目录在项目根目录）
     chrome_exe_rel_path = os.path.join(base_chrome_dir, f"chrome-{selected_version}", "chrome-win64", "chrome.exe")
-    browser_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), chrome_exe_rel_path)
+    browser_executable_path = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), chrome_exe_rel_path))
 
-    # 构建 Chromedriver 可执行文件路径
-    # 格式: chromedriver/chromedriver-141/chromedriver-win64/chromedriver.exe
-    driver_exe_rel_path = os.path.join(base_chromedriver_dir, f"chromedriver-{selected_version}", "chromedriver-win64",
-                                       "chromedriver.exe")
-    driver_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), driver_exe_rel_path)
+    # 构建 Chromedriver 可执行文件路径（假设 chromedriver 目录在项目根目录）
+    driver_exe_rel_path = os.path.join(base_chromedriver_dir, f"chromedriver-{selected_version}", "chromedriver-win64", "chromedriver.exe")
+    driver_executable_path = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), driver_exe_rel_path))
 
     # 验证文件是否存在，避免启动报错
     if not os.path.exists(browser_executable_path):

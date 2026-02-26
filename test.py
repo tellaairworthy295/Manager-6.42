@@ -4,7 +4,7 @@ from datetime import datetime
 import requests
 
 # Configuration
-API_URL = "http://localhost:5000/api/scrape_news"
+API_URL = "http://localhost:5000/news/scrape_news"
 REQUEST_PAYLOAD = {
     # Using your provided request structure
     "requests": [
