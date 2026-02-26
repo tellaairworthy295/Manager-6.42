@@ -27,3 +27,4 @@ openpyxl
 aiofiles
 pandas_market_calendars
 pymysql==1.1.2
+curl_cffi
