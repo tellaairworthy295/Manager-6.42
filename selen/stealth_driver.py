@@ -3,65 +3,6 @@ import random
 import os
 from selenium_stealth import stealth
 
-# Your Webshare API Key
-WEBSHARE_API_KEY = "arazreewnhmcfhfbmgcbfwtlqecbnlsscxxgyyzf"
-WEBSHARE_API_URL = "https://proxy.webshare.io/api/v2/proxy/list/download/arazreewnhmcfhfbmgcbfwtlqecbnlsscxxgyyzf/-/any/username/direct/-/?plan_id=12692553"
-
-# 更改和强化user agents参数以提升绕过检测的概率
-_USER_AGENTS = [
- # ---- Windows ----
-    # Chrome
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.147 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.207 Safari/537.36",
-    # Edge
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.147 Safari/537.36 Edg/125.0.2535.51",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Safari/537.36 Edg/126.0.2592.56",
-    # Firefox
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
-    # Brave
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Brave/1.66.115 Chrome/125.0.6422.147 Safari/537.36",
-    # Opera
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Safari/537.36 OPR/109.0.5097.38",
-    # ---- Mac ----
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.147 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5; rv:126.0) Gecko/20100101 Firefox/126.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Safari/537.36",
-    # Edge (Mac)
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Safari/537.36 Edg/126.0.2592.56",
-    # Opera (Mac)
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Safari/537.36 OPR/109.0.5097.38",
-    # Brave (Mac)
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Brave/1.66.115 Chrome/126.0.6478.31 Safari/537.36",
-    # ---- Linux ----
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.147 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Brave/1.66.115 Chrome/126.0.6478.31 Safari/537.36",
-    # Opera (Linux)
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Safari/537.36 OPR/109.0.5097.38",
-    # ---- Mobile / Tablet ----
-    # iPhone (Safari)
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/605.1.15",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/605.1.15",
-    # iPad (Safari)
-    "Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15F5347a Safari/605.1.15",
-    # Android Chrome
-    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro Build/AP1A.240405.002) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Mobile Safari/537.36",
-    "Mozilla/5.0 (Linux; Android 13; SM-S918U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.147 Mobile Safari/537.36",
-    "Mozilla/5.0 (Linux; Android 14; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Mobile Safari/537.36",
-    # Samsung Browser (Android)
-    "Mozilla/5.0 (Linux; Android 14; SAMSUNG SM-G998N) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/125.0.6422.147 Mobile Safari/537.36",
-    # Edge Mobile
-    "Mozilla/5.0 (Linux; Android 14; SM-G998N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.31 Mobile Safari/537.36 EdgA/126.0.2592.56",
-    # Rare/Uncommon UAs for more diversity
-    "Mozilla/5.0 (PlayStation 5 5.00) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.00 Safari/605.1.15",
-    "Mozilla/5.0 (CrOS x86_64 16414.67.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.147 Safari/537.36",
-    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
-]
-
 _WINDOW_SIZES = [
     (1920, 1080),
     (1600, 900),
@@ -69,9 +10,8 @@ _WINDOW_SIZES = [
     (1366, 768),
 ]
 
-
-def _pick_user_agent(user_agent_override: str | None = None) -> str:
-    return user_agent_override or random.choice(_USER_AGENTS)
+# 定义可用的 Chrome 主版本号列表
+_AVAILABLE_VERSIONS = [141, 142, 143, 144, 145]
 
 
 def _pick_window_size() -> str:
@@ -80,13 +20,31 @@ def _pick_window_size() -> str:
 
 
 def get_chrome_driver(
-    base_bypass_ext_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bypass-paywalls-chrome-clean-master"),
-    user_agent: str | None = None,
-    proxy_url: str | None = None,
+        base_bypass_ext_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+                                                 "bypass-paywalls-chrome-clean-master"),
+        base_chrome_dir: str = "chrome",
+        base_chromedriver_dir: str = "chromedriver"
 ):
+    # 随机选择一个版本号
+    selected_version = random.choice(_AVAILABLE_VERSIONS)
+    print(f"[INFO] Randomly selected Chrome version: {selected_version}")
 
-    ua = _pick_user_agent(user_agent)
-    proxy = proxy_url or os.getenv("SCRAPER_PROXY")
+    # 构建 Chrome 可执行文件路径
+    # 格式: chrome/chrome-141/chrome-win64/chrome.exe
+    chrome_exe_rel_path = os.path.join(base_chrome_dir, f"chrome-{selected_version}", "chrome-win64", "chrome.exe")
+    browser_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), chrome_exe_rel_path)
+
+    # 构建 Chromedriver 可执行文件路径
+    # 格式: chromedriver/chromedriver-141/chromedriver-win64/chromedriver.exe
+    driver_exe_rel_path = os.path.join(base_chromedriver_dir, f"chromedriver-{selected_version}", "chromedriver-win64",
+                                       "chromedriver.exe")
+    driver_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), driver_exe_rel_path)
+
+    # 验证文件是否存在，避免启动报错
+    if not os.path.exists(browser_executable_path):
+        raise FileNotFoundError(f"Chrome executable not found at: {browser_executable_path}")
+    if not os.path.exists(driver_executable_path):
+        raise FileNotFoundError(f"ChromeDriver executable not found at: {driver_executable_path}")
 
     # MUST use UC's option class, not Selenium's
     chrome_options = uc.ChromeOptions()
@@ -95,19 +53,18 @@ def get_chrome_driver(
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--disable-background-networking")
     chrome_options.add_argument("--disable-default-apps")
+
+    # 防止浏览器更新弹窗干扰
+    chrome_options.add_argument("--disable-notifications")
+    chrome_options.add_argument("--disable-software-rasterizer")
 
     # Viewport
     chrome_options.add_argument(_pick_window_size())
 
-    # UA + headers
-    chrome_options.add_argument(f"--user-agent={ua}")
+    # headers
     chrome_options.add_argument("--lang=en-US,en;q=0.9")
-
-    if proxy:
-        chrome_options.add_argument(f"--proxy-server={proxy}")
 
     # Extension
     if base_bypass_ext_path and os.path.exists(base_bypass_ext_path):
@@ -115,11 +72,12 @@ def get_chrome_driver(
 
     try:
         driver = uc.Chrome(
-            driver_executable_path="chromedriver-win64/chromedriver.exe",
-            browser_executable_path="chrome-win64/chrome.exe",
+            driver_executable_path=driver_executable_path,
+            browser_executable_path=browser_executable_path,
             options=chrome_options,
-            version_main=145,
+            version_main=selected_version,  # 必须与选择的版本一致
             headless=False,
+            use_subprocess=True,  # 推荐开启子进程模式以增加稳定性
         )
     except Exception as e:
         raise RuntimeError(f"driver error: {e}")
@@ -134,14 +92,20 @@ def get_chrome_driver(
             webgl_vendor="Intel Inc.",
             renderer="Intel Iris OpenGL",
             fix_hairline=False,
-            user_agent=ua,
         )
-    except:
-        pass
+    except Exception as e:
+        print(f"[WARNING] Stealth module failed: {e}")
 
     return driver
 
 
 if __name__ == "__main__":
-    driver = get_chrome_driver()
-    driver.get("https://www.google.com")
+    try:
+        driver = get_chrome_driver()
+        driver.get("https://www.google.com")
+        print("Success! Browser launched with randomized version.")
+        # 保持浏览器打开以便观察，实际使用时可根据需要关闭
+        # input("Press Enter to close...")
+        # driver.quit()
+    except Exception as e:
+        print(f"Failed to start browser: {e}")
