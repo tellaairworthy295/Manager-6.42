@@ -34,7 +34,7 @@ def fetch_news_from_db():
     return articles
 
 
-def fetch_urls_from_page(query: str, site: str):
+def fetch_urls_from_page(query: str, site: str, rate_limit: int):
     """
     Fetch URLs using a randomized cascade of strategies (Google News, Sitemap Search, Site Latest).
     A successful scrape simply means valid URLs were extracted from the search page (bypassed bot checks).
@@ -280,7 +280,7 @@ def fetch_urls_from_page(query: str, site: str):
         links = [link for link in links if link not in recent_links]
 
         logger.info(f"Post-processing complete. Found {len(links)} new, unique {query} article links matching {site}.")
-        return links[:4]  # Return up to 4 links
+        return links[:rate_limit]  # Return up to 4 links
 
     except Exception as e:
         logger.error(f"Critical error in fetch_urls_from_page: {e}")

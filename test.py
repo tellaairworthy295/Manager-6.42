@@ -5,23 +5,57 @@ import requests
 
 # Configuration
 API_URL = "http://localhost:5000/news/scrape_news"
-REQUEST_PAYLOAD = {
-    # Using your provided request structure
-    "requests": [
-        {"query": 'site:bloomberg.com/news/articles', "site": "www.bloomberg.com/news/articles", "source": "bloomberg"}
-    ]
-}
+
+
+def get_rate_limit():
+    """
+    Determines the rate limit based on whether it's a weekend or not.
+    Returns 6 for weekends, 4 for weekdays.
+    """
+    today = datetime.now()
+    if today.weekday() >= 5:  # Saturday (5) or Sunday (6)
+        return 6
+    else:
+        return 4
+
+
+def get_payload_with_dynamic_rate_limit():
+    """
+    Generates the REQUEST_PAYLOAD with the appropriate rate_limit for the current day.
+    """
+    current_rate_limit = get_rate_limit()
+
+    return {
+        "requests": [
+            {
+                "query": 'site:bloomberg.com/news/articles',
+                "site": "www.bloomberg.com/news/articles",
+                "source": "bloomberg",
+                "rate_limit": current_rate_limit
+            }
+            # Add more requests here if needed, ensuring the 'rate_limit' is set correctly
+            # {
+            #     "query": 'site:another-site.com/news',
+            #     "site": "www.another-site.com/news",
+            #     "source": "another_source",
+            #     "rate_limit": current_rate_limit # Use the same dynamic value
+            # },
+        ]
+    }
 
 
 def send_scrape_request():
-    """Sends a single request to the scraping API."""
+    """Sends a single request to the scraping API with the current day's rate limit."""
+    # Get the payload with the correct rate limit for today
+    payload_to_send = get_payload_with_dynamic_rate_limit()
+
     try:
-        response = requests.post(API_URL, json=REQUEST_PAYLOAD)
+        response = requests.post(API_URL, json=payload_to_send)
 
         if response.status_code == 200:
             result = response.json()
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
-                  f"Request sent successfully. Task ID: {result.get('task_id')}")
+                  f"Request sent successfully with rate_limit={get_rate_limit()}. Task ID: {result.get('task_id')}")
         else:
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
                   f"Request failed with status code: {response.status_code}. Error: {response.text}")
@@ -40,10 +74,14 @@ async def main():
         # Send the request
         send_scrape_request()
 
-        # Generate a random delay between 300 (5 min) and 1000 seconds
-        wait_time = random.randint(330, 1000)
-
-        print(f"Waiting for {wait_time // 60} minutes and {wait_time % 60} seconds...")
+        # Determine the wait time based on the day of the week
+        today = datetime.now()
+        if today.weekday() >= 5:  # Weekend logic
+            wait_time = random.randint(25 * 60, 55 * 60)  # 30-60 minutes
+            print(f"It's the weekend. Waiting for {wait_time // 60} minutes...")
+        else:  # Weekday logic
+            wait_time = random.randint(6 * 60, 17 * 60)
+            print(f"Waiting for {wait_time // 60} minutes and {wait_time % 60} seconds...")
 
         # Wait asynchronously for the specified time
         await asyncio.sleep(wait_time)

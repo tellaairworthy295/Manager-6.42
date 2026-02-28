@@ -16,7 +16,7 @@ logger = get_news_task_logger()
     time_limit=25*60*1000,
     max_retries=0,  # Fail fast: a failed site is considered failed
 )
-def scrape_news_task(*, query: str, site: str = None, source: str = None, group_key: str = None, now_str: str = None):
+def scrape_news_task(*, query: str, site: str = None, source: str = None, rate_limit: int = 4, group_key: str = None, now_str: str = None):
     """
     Scrape news articles for ONE website.
     Records results straight to Redis.
@@ -29,7 +29,7 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, group_
     total_url_fetch_attempts = 2
     for attempt in range(total_url_fetch_attempts):
         try:
-            urls = fetch_urls_from_page(query, site)
+            urls = fetch_urls_from_page(query, site, rate_limit)
             # If successful, break out of the loop
             break
         except Exception as e:
@@ -199,7 +199,7 @@ def scrape_all_news(requests: list[dict], now_str):
     group_key = f"{now_str}-{random.randint(10000, 99999)}"
     messages = []
     for req in requests:
-        q, s, src = req.get("query"), req.get("site"), req.get("source")
+        q, s, src, rl = req.get("query"), req.get("site"), req.get("source"), req.get("rate_limit")
         if q and s and src:
             messages.append(
                 scrape_news_task.message(
@@ -207,6 +207,7 @@ def scrape_all_news(requests: list[dict], now_str):
                     site=s,
                     source=src,
                     group_key=group_key,
+                    rate_limit=rl,
                     now_str=now_str
                 )
             )
