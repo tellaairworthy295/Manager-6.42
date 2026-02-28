@@ -34,7 +34,7 @@ curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: appli
 
 curl.exe -X POST "http://localhost:5000/api/scrape_news" -H "Content-Type: application/json" -d "{\"requests\": [{\"query\": \"site:reuters.com/world\", \"site\": \"www.reuters.com/world\", \"source\": \"reuters\"}]}"
 
-curl.exe -X POST "http://localhost:5000/api/refresh_cookies" -H "Content-Type: application/json" -d "{\"sources\": [\"jiuyan\", \"xuangutong\"]}
+curl.exe -X POST "http://localhost:5000/stocks/refresh_cookies" -H "Content-Type: application/json" -d "{\"sources\": [\"jiuyan\", \"xuangutong\"]}
 
 curl.exe -X GET "http://localhost:5000/api/scrape_stocks"
 

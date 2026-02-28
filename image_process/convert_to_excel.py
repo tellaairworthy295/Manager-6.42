@@ -63,7 +63,7 @@ def _parse_actionData_to_df(rec_texts: list[str], cols: list[str]) -> pd.DataFra
                     skip = 7
                     chunk = rec_texts[i:i + 7]
                     m_first_code = re.match(r"^(\d{6})", chunk[0].strip())
-                    m_first_board = re.match(r"^(\d+天\d+板)$", chunk[0].strip())
+                    # m_first_board = re.match(r"^(\d+天\d+板)$", chunk[0].strip())
                     m_last_board = re.match(r"^(1|\d+天\d+板)$", chunk[-1].strip())
                     m_last_section = re.match(r"^(.+)\*(\d+)$", chunk[-1].strip())
                     if m_last_board or m_last_section:
@@ -75,10 +75,7 @@ def _parse_actionData_to_df(rec_texts: list[str], cols: list[str]) -> pd.DataFra
 
                     if chunk[0] == "7":
                         chunk[0] = "1"
-                    if num_row < 2 and m_first_board:
-                        chunk = chunk + [True]
-                    else:
-                        chunk = chunk + [False]
+
                     data.append([section_name] + chunk)
                     i += skip
                 else:
@@ -95,7 +92,7 @@ def _parse_actionData_to_df(rec_texts: list[str], cols: list[str]) -> pd.DataFra
 
 def _save_actionData_excel(df: pd.DataFrame, excel_path: str, date: str):
     """
-    Save DataFrame to excel file.
+    Save DataFrame to Excel file.
     """
     os.makedirs(excel_path, exist_ok=True)
     excel_file = os.path.join(excel_path, f"actionData_{date}.xlsx")
@@ -106,7 +103,7 @@ def _save_actionData_excel(df: pd.DataFrame, excel_path: str, date: str):
 def _save_actionData_db(df: pd.DataFrame, date: str, flag: bool):
     """
     Save DataFrame and records_list to database.
-    Each record is a dict with date, section, board, code, market_capital, turnover_abs, analysis, highlight fields.
+    Each record is a dict with date, section, board, code, market_capital, turnover_abs, analysis fields.
     Code field (six digits) should be extracted via extract_six_digit_code before upsert.
     """
     def extract_six_digit_code(code: str):
@@ -115,6 +112,7 @@ def _save_actionData_db(df: pd.DataFrame, date: str, flag: bool):
         match = re.search(r"\d{6}", code)
         return match.group(0) if match else None
 
+    date_obj = datetime.strptime(date, "%Y-%m-%d")
     db_manager = get_db_manager()
     repo_al = ActionLimitDataRepository(db_manager)
 
@@ -125,14 +123,13 @@ def _save_actionData_db(df: pd.DataFrame, date: str, flag: bool):
         code_val = extract_six_digit_code(row.get("code", ""))
         analysis = "韭研:\n" + row.get("analysis") + "\n"
         record = {
-            "date": date,
+            "date": date_obj,
             "section": row.get("section"),
             "board": row.get("board"),
             "code": code_val,
             "market_capital": row.get("market_capital"),
             "turnover_abs": row.get("turnover_abs"),
             "analysis": analysis,
-            "highlight": row.get("highlight"),
         }
         data_dict_list.append(record)
 
@@ -140,7 +137,7 @@ def _save_actionData_db(df: pd.DataFrame, date: str, flag: bool):
         n = repo_al.delete_by_date(datetime.strptime(date, "%Y-%m-%d"))
         logger.info(f"deleted old {n} records.")
         repo_al.insert_action_data_batch(data_dict_list)
-        #add stock field
+        return
 
     repo_al.update_action_data_batch(data_dict_list)
     logger.info("Action data upserted to database.")
@@ -151,7 +148,7 @@ def _save_actionData(rec_texts: list[str], excel_path: str, date: str, flag: boo
     Separates excel and database operations for saving OCR-recognized texts.
     """
     # Expected columns
-    cols = ["section", "board", "code", "stock", "time", "market_capital", "turnover_abs", "analysis", "highlight"]
+    cols = ["section", "board", "code", "stock", "time", "market_capital", "turnover_abs", "analysis"]
     df = _parse_actionData_to_df(rec_texts, cols)
     if df.empty:
         logger.error("No valid data to save.")

@@ -39,7 +39,6 @@ async def run_named_extractors(*, scope, extractors, site):
                 else [s.strip() for s in selector.split(",")]
             )
 
-            el = None
             raw = None
             for sel in selectors:
                 el = await scope.query_selector(sel)
@@ -86,7 +85,7 @@ def postprocess_value(value: str | None, rules: list[str] | None, site: str | No
             value = apply_prefix(value, site) if site else value
 
         elif rule == "extract_float":
-            digits = re.sub(r'[^\d\.]', '', value)
+            digits = re.sub(r'[^\d.]', '', value)
             try:
                 value = float(digits)
             except ValueError:
@@ -183,6 +182,7 @@ def apply_prefix(value: str, site: str) -> str:
 
 async def main_scraper(date: str):
     PROJECT_ROOT = Path(__file__).parent.parent
+    date_obj = datetime.strptime(date, "%Y-%m-%d")
 
     with open(PROJECT_ROOT / "json/selectors.json", "r", encoding="utf-8") as f:
         selectors_map = json.load(f)["stocks"]
@@ -218,7 +218,7 @@ async def main_scraper(date: str):
                     await page.goto(url, wait_until="domcontentloaded", timeout=50_000)
                     data = await scrape_page(
                         page=page,
-                        date=date,
+                        date=date_obj,
                         selectors=selectors
                     )
                     if not data or not data.get("records"):
@@ -252,10 +252,12 @@ async def main_scraper(date: str):
     repo_stock = StockRepository(db_manager)
     repo_al = ActionLimitDataRepository(db_manager)
     repo_sr = SectionReasonRepository(db_manager)
-    date_obj = datetime.strptime(date, "%Y-%m-%d")
 
     if all_action_records:
-        repo_stock.insert_or_update_stocks(date_obj, all_action_records)
+        n = repo_stock.delete_by_date(date_obj)
+        logger.info(f"deleted old {n} records from stocks.")
+        repo_stock.insert_or_update_stocks(all_action_records)
+        logger.info("Action data upserted to database.")
 
     if all_limit_records:
         code_section = repo_stock.get_code_section(date_obj)
@@ -277,13 +279,15 @@ async def main_scraper(date: str):
                 raise RuntimeError(f"No matching section found for code: '{rec_code}'")
 
         n = repo_al.delete_by_date(date_obj)
-        logger.info(f"deleted old {n} records.")
+        logger.info(f"deleted old {n} records from action limit data.")
         repo_al.insert_action_data_batch(all_limit_records)
-        logger.info("Action data upserted to database.")
+        logger.info("Limit data upserted to database.")
 
     if section_reason:
-        repo_sr.delete_by_date(date_obj)
+        n = repo_sr.delete_by_date(date_obj)
+        logger.info(f"deleted old {n} records from section reason.")
         repo_sr.upsert_section_reason(date_obj, section_reason)
+        logger.info("Section reason data upserted to database.")
 
     return True, market_number
 
@@ -291,7 +295,7 @@ async def main_scraper(date: str):
 async def scrape_page(
         *,
         page,
-        date: str,
+        date,
         selectors: dict
 ) -> dict:
     site = selectors["name"]

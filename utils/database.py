@@ -216,7 +216,6 @@ class ActionLimitData(Base):
 
     # 其它信息
     analysis = Column(TEXT, nullable=False)
-    highlight = Column(Boolean, default=False)
     scraped_at = Column(DateTime, default=datetime.now())
 
 
@@ -266,11 +265,11 @@ class DatabaseManager:
             with open(PROJECT_ROOT / "json/config.json", "r", encoding="utf-8") as f:
                 self._config_cache = json.load(f)
         db_config = self._config_cache.get("DatabaseConfig", {})
-        db_host = db_config.get("DB_HOST", "localhost")
-        db_port = db_config.get("DB_PORT", 35300)
-        db_user = db_config.get("DB_USER", "root")
-        db_password = db_config.get("DB_PASSWORD", "112358@gh")
-        db_name = db_config.get("DB_NAME", "dify_data")
+        db_host = db_config.get("DB_HOST")
+        db_port = db_config.get("DB_PORT")
+        db_user = db_config.get("DB_USER")
+        db_password = db_config.get("DB_PASSWORD")
+        db_name = db_config.get("DB_NAME")
 
         # Create connection string
         connection_string = (
@@ -568,12 +567,24 @@ class StockRepository:
                 for code, section in results
             ]
 
-    def insert_or_update_stocks(self, _date: date, records: List[Dict[str, Any]]) -> int:
+    def delete_by_date(self, date_: date) -> int:
+        """
+        Delete all records for a specific date.
+        Returns number of deleted records.
+        """
+        with self.db_manager.get_session() as session:
+            result = session.query(Stock) \
+                .filter_by(date=date_) \
+                .delete(synchronize_session=False)
+            session.commit()
+            return result
+
+    def insert_or_update_stocks(self, records: List[Dict[str, Any]]) -> int:
         """
         Insert or update multiple stock records.
 
         - Insert all column values from records (all at once on insert).
-        - If a record exists (same date + stock), update only columns where new values are not None.
+        - If a record exists (same date + code), update only columns where new values are not None.
         - Merge only *new* analysis text if analysis is provided and not already present.
         - On conflict, append the new section only if it does not already exist
         in the comma-separated list of existing sections.
@@ -585,13 +596,14 @@ class StockRepository:
             count = 0
             # Gather all column names except id and scraped_at (let scraped_at default/update separately)
             updatable_fields = [
-                "section", "stock", "code", "last_price", "change_rate",
+                "section", "stock", "last_price", "change_rate",
                 "turnover", "market_capital", "up_time", "analysis"
             ]
             for rec in records:
                 # Prepare insertion values (default to None when missing)
                 insert_values = {
-                    "date": _date,
+                    "date": rec['date'],
+                    "code": rec['code'],
                 }
                 for field in updatable_fields:
                     insert_values[field] = rec.get(field)
