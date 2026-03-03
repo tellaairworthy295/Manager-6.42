@@ -25,32 +25,21 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, rate_l
     logger.info(f"Starting scraping task for site: {source}, query: {query}")
 
     urls = None
-    # Retry fetching URLs in the same way as scraping content
-    total_url_fetch_attempts = 2
-    for attempt in range(total_url_fetch_attempts):
-        try:
-            urls = fetch_urls_from_page(query, site, rate_limit)
-            # If successful, break out of the loop
-            break
-        except Exception as e:
-            if attempt == total_url_fetch_attempts - 1:
-                # Final attempt failed, log and proceed to record failure
-                logger.error(f"Failed to fetch URLs for {source} after {total_url_fetch_attempts} attempts: {e}")
-                result = {
-                    "source": source,
-                    "total_content": [],
-                    "success_count": 0,
-                    "failed_count": 0,
-                    "failed_urls": [],
-                    "message": f"Error fetching URLs after {total_url_fetch_attempts} attempts: {str(e)}"
-                }
-                _record_site_result(group_key, source, result, now_str)
-                logger.info(f"Task completed for {source} with error: {result}")
-                return
-            else:
-                # Log the retry attempt and sleep before retrying
-                logger.warning(f"Fetching URLs failed for {source} on attempt {attempt + 1}, will retry. Error: {e}")
-                time.sleep(random.uniform(2.0, 10.0))
+    try:  # <--- 确保这里是 4 个空格，而不是 Tab
+        urls = fetch_urls_from_page(query, site, rate_limit) # <--- 确保这里是 4 个空格
+    except Exception as e: # <--- 确保这里是 4 个空格
+        logger.error(f"Failed to fetch URLs for {source}: {e}")
+        result = {
+            "source": source,
+            "total_content": [],
+            "success_count": 0,
+            "failed_count": 0,
+            "failed_urls": [],
+            "message": f"Error fetching URLs: {str(e)}"
+        }
+        _record_site_result(group_key, source, result, now_str)
+        logger.info(f"Task completed for {source} with error: {result}")
+        return
 
     # Check if urls list is empty after all attempts
     if not urls:

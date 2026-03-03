@@ -5,6 +5,7 @@ import requests
 
 # Configuration
 API_URL = "http://localhost:5000/news/scrape_news"
+search_query = 'site:bloomberg.com/news/articles China OR "Hong Kong" OR AI'
 
 
 def get_rate_limit():
@@ -28,7 +29,7 @@ def get_payload_with_dynamic_rate_limit():
     return {
         "requests": [
             {
-                "query": 'site:bloomberg.com/news/articles',
+                "query": search_query,
                 "site": "www.bloomberg.com/news/articles",
                 "source": "bloomberg",
                 "rate_limit": current_rate_limit
@@ -77,10 +78,10 @@ async def main():
         # Determine the wait time based on the day of the week
         today = datetime.now()
         if today.weekday() >= 5:  # Weekend logic
-            wait_time = random.randint(25 * 60, 55 * 60)  # 30-60 minutes
+            wait_time = random.randint(30 * 60, 60 * 60)  # 30-60 minutes
             print(f"It's the weekend. Waiting for {wait_time // 60} minutes...")
         else:  # Weekday logic
-            wait_time = random.randint(6 * 60, 17 * 60)
+            wait_time = random.randint(7 * 60, 19 * 60)
             print(f"Waiting for {wait_time // 60} minutes and {wait_time % 60} seconds...")
 
         # Wait asynchronously for the specified time

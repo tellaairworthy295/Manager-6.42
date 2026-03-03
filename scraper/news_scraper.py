@@ -16,8 +16,15 @@ from utils.logging_config import get_news_task_logger
 import base64
 from xml.etree import ElementTree as ET
 from curl_cffi import requests
+from selenium.webdriver.common.action_chains import ActionChains
 
 logger = get_news_task_logger()
+
+captcha_signatures = [
+    "We've detected unusual activity from your computer network",
+    "px-captcha",
+    "cf-browser-verification"
+]
 
 
 def _human_pause(min_delay: float = 1.5, max_delay: float = 3.8):
@@ -189,6 +196,7 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
 
     try:
         # --- SCRAPING PHASE with Sitemap Strategy Integration ---
+        # --- SCRAPING PHASE with Sitemap Strategy Integration ---
         for strategy in all_strategies:
             logger.info(f"Trying {strategy['name']} strategy.")
             raw_links = []
@@ -204,44 +212,69 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
                     continue  # Move to the next strategy if sitemap fails/returns empty
 
             else:  # It's a Selenium-based strategy (google_news, bloomberg_latest)
-                if driver is None:
-                    driver = get_chrome_driver()  # Initialize driver only if needed
+                # Apply 3 retries specifically for bloomberg_latest, 1 for others
+                max_attempts = 3 if strategy['name'] == "bloomberg_latest" else 1
 
-                try:
-                    driver.get(strategy['url'])
+                for attempt in range(max_attempts):
+                    if driver is None:
+                        driver = get_chrome_driver()
 
-                    # Wait for target links to populate
-                    WebDriverWait(driver, 30).until(
-                        lambda d: len(d.find_elements(By.CSS_SELECTOR, strategy['wait_css'])) > 0
-                    )
+                    try:
+                        driver.get(strategy['url'])
 
-                    # Fetch only the relevant links using our robust selectors
-                    elements = driver.find_elements(By.CSS_SELECTOR, strategy['wait_css'])
-                    # _human_pause(1.0, 3.0) # Consider if needed after API call
-                    for a in elements:
-                        href = a.get_attribute("href")
+                        # Check for CAPTCHA first to "Fast-Fail" instead of waiting 30 seconds
+                        _human_pause(1.5, 3.0)  # Wait a moment for JS challenge to load
+                        page_source = driver.page_source
+                        if any(sig in page_source for sig in captcha_signatures) and len(page_source) < 4000:
+                            raise Exception("CAPTCHA or Anti-Bot challenge detected on search page!")
 
-                        if strategy['name'] == "google_news":
-                            jslog = a.get_attribute("jslog")
-                            decoded_url = decode_google_news_url(jslog)
-                            if decoded_url:
-                                raw_links.append(decoded_url)
-                            elif href and href.startswith("http"):
-                                raw_links.append(href)
+                        # Wait for target links to populate
+                        WebDriverWait(driver, 30).until(
+                            lambda d: len(d.find_elements(By.CSS_SELECTOR, strategy['wait_css'])) > 0
+                        )
 
-                        elif strategy['name'] == "bloomberg_latest":
-                            if href:
-                                if href.startswith("/"):
-                                    domain = site if "bloomberg" in site else f"www.{site}"
-                                    href = f"https://{domain}{href}"
-                                raw_links.append(href)
+                        # Fetch only the relevant links using our robust selectors
+                        elements = driver.find_elements(By.CSS_SELECTOR, strategy['wait_css'])
 
-                except TimeoutException:
-                    logger.warning(f"Timeout waiting for links on {strategy['name']}. Trying next strategy...")
-                    continue
-                except Exception as e:
-                    logger.warning(f"Error extracting links from {strategy['name']}: {e}. Trying next strategy...")
-                    continue
+                        for a in elements:
+                            href = a.get_attribute("href")
+
+                            if strategy['name'] == "google_news":
+                                jslog = a.get_attribute("jslog")
+                                decoded_url = decode_google_news_url(jslog)
+                                if decoded_url:
+                                    raw_links.append(decoded_url)
+                                elif href and href.startswith("http"):
+                                    raw_links.append(href)
+
+                            elif strategy['name'] == "bloomberg_latest":
+                                if href:
+                                    if href.startswith("/"):
+                                        domain = site if "bloomberg" in site else f"www.{site}"
+                                        href = f"https://{domain}{href}"
+                                    raw_links.append(href)
+
+                        # If we successfully got links, break out of the retry loop
+                        if raw_links:
+                            break
+
+                    except Exception as e:
+                        logger.warning(
+                            f"Error extracting links from {strategy['name']} (Attempt {attempt + 1}/{max_attempts}): {e}")
+
+                        if attempt < max_attempts - 1:
+                            logger.info(
+                                f"Retrying {strategy['name']}... Quitting current driver to rotate proxy/fingerprint.")
+                            try:
+                                driver.quit()  # Destroy the burned session
+                            except Exception:
+                                pass
+                            driver = None  # Force a new driver creation on the next loop iteration
+                            _human_pause(3.0, 7.0)  # Cool down before retry
+                        else:
+                            logger.warning(
+                                f"Failed {strategy['name']} after {max_attempts} attempts. Moving to next strategy...")
+                            continue
 
             # 2. Check for scraping success (Did we get valid URLs?)
             if raw_links:
@@ -309,7 +342,16 @@ def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_conte
     best_count = 0
 
     while time.time() - start < timeout:
-        soup = BeautifulSoup(driver.page_source, "html.parser")
+        # Fetch page source ONCE per loop to optimize performance
+        page_source = driver.page_source
+
+        # 1. Fast-fail Anti-Bot / CAPTCHA check
+        if any(sig in page_source for sig in captcha_signatures) and len(page_source) < 4000:
+            # Break immediately to save time and return empty markers
+            return False, "", {"title": "", "content": ""}, None
+
+        # 2. Parse and evaluate content
+        soup = BeautifulSoup(page_source, "html.parser")
         paragraphs = soup.select(selector)
         count = len(paragraphs)
 
@@ -336,15 +378,33 @@ def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_conte
             # Use the current best, which should be this one
             break
 
-        # Human-like scrolling: sometimes scroll down gradually, sometimes jump
+        # 3. Human-like interactions: Smooth scrolling
         at_bottom = driver.execute_script(
-            "return (window.innerHeight + window.scrollY) > (document.body.scrollHeight - 500);"
+            "return (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 500);"
         )
-        if not at_bottom:
-            # Vary scroll behavior: sometimes smooth, sometimes jump
-            scroll_amount = random.randint(500, 1000)
-            driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
 
+        if not at_bottom:
+            scroll_amount = random.randint(300, 800)
+            driver.execute_script(f"""
+                window.scrollBy({{
+                    top: {scroll_amount},
+                    left: 0,
+                    behavior: 'smooth'
+                }});
+            """)
+
+        # 4. Human-like interactions: Mouse movement
+        try:
+            paragraphs_elems = driver.find_elements(By.CSS_SELECTOR, "p")
+            if paragraphs_elems:
+                # Pick a random paragraph from the top 5 available and hover over it
+                target = random.choice(paragraphs_elems[:5])
+                ActionChains(driver).move_to_element(target).perform()
+        except Exception:
+            # Ignore stale element references or elements out of bounds
+            pass
+
+        # 5. Human dwell time before next check
         _human_pause(1.5, 2.5)
 
     # On exit, always use the best version found, even if content_fully_loaded is False or anti-bot blanked page
@@ -435,18 +495,6 @@ def _extract_article_content(soup, selector, unwanted_content=None):
     return {"title": title, "content": content}
 
 
-def save_agent_data(analysis_result: dict):
-    """Save agent analysis result to database."""
-    from utils.database import NewsAnalysisRepository
-    try:
-        db_manager = get_db_manager()
-        repo = NewsAnalysisRepository(db_manager)
-        repo.save_analysis(analysis_result)
-        logger.info(f"Saved analysis to database")
-    except Exception as e:
-        logger.info(f"Failed to save analysis to database, {e}")
-
-
 def extract_xml_content(
         soup: BeautifulSoup,
         xml_selector: str | None,
@@ -497,6 +545,7 @@ def scrape_news(url: str, source: str):
 
         # Create driver with fresh fingerprint
         driver = get_chrome_driver()
+
         # Now navigate to URL
         driver.get(url)
 
@@ -527,8 +576,6 @@ def scrape_news(url: str, source: str):
 
         title = result.get("title")
         content = result.get("content")
-        title_zh = None
-        content_zh = None
 
         if content and title:
             logger.info("Starting Chinese translation...")
@@ -574,3 +621,9 @@ def scrape_news(url: str, source: str):
             return content.replace('\n\n', '\n').replace('\n', ' ')
         else:
             raise
+
+
+if __name__ == "__main__":
+    scrape_news(
+        "https://www.bloomberg.com/news/articles/2026-03-02/xi-eyes-consumers-to-lead-new-era-for-china-s-unbalanced-economy",
+        "bloomberg")

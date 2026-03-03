@@ -274,7 +274,7 @@ async def main_scraper(date: str):
                 rec_code = record.get("code")
                 section_val = code_to_section.get(rec_code)
                 record["section"] = section_val
-                record["turnover_abs"] = record["turnover"] * record["total_capital"]
+                record["turnover_abs"] = round(record["turnover"] * record["total_capital"] / 100, 2)
             except Exception as e:
                 raise RuntimeError(f"No matching section found for code: '{rec_code}'")
 
