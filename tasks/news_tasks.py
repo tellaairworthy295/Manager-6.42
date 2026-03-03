@@ -13,79 +13,93 @@ logger = get_news_task_logger()
 # ================= Main per-site scraping task ==================
 @dramatiq.actor(
     queue_name="news",
-    time_limit=25*60*1000,
-    max_retries=0,  # Fail fast: a failed site is considered failed
+    time_limit=25 * 60 * 1000,
+    max_retries=0,
 )
-def scrape_news_task(*, query: str, site: str = None, source: str = None, rate_limit: int = 4, group_key: str = None, now_str: str = None):
-    """
-    Scrape news articles for ONE website.
-    Records results straight to Redis.
-    group_key: used for aggregator/stream sync (see scrape_all_news)
-    """
-    logger.info(f"Starting scraping task for site: {source}, query: {query}")
+def scrape_news_task(
+        *,
+        query: str,
+        site: str = None,
+        source: str = None,
+        rate_limit: int = 4,
+        group_key: str = None,
+        now_str: str = None
+):
+    logger.info(f"[Task] Starting: source={source}, query={query}")
 
+    # ── 1. Fetch URLs ────────────────────────────────────────────────────
     urls = None
-    try:  # <--- 确保这里是 4 个空格，而不是 Tab
-        urls = fetch_urls_from_page(query, site, rate_limit) # <--- 确保这里是 4 个空格
-    except Exception as e: # <--- 确保这里是 4 个空格
-        logger.error(f"Failed to fetch URLs for {source}: {e}")
-        result = {
+    try:
+        urls = fetch_urls_from_page(query, site, rate_limit)
+    except Exception as e:
+        logger.error(f"[Task] URL fetch failed for {source}: {e}")
+        _record_site_result(group_key, source, {
             "source": source,
             "total_content": [],
             "success_count": 0,
             "failed_count": 0,
             "failed_urls": [],
-            "message": f"Error fetching URLs: {str(e)}"
-        }
-        _record_site_result(group_key, source, result, now_str)
-        logger.info(f"Task completed for {source} with error: {result}")
+            "message": f"Error fetching URLs: {e}"
+        }, now_str)
         return
 
-    # Check if urls list is empty after all attempts
     if not urls:
-        logger.info(f"No new URLs found for {source}")
-        result = {
+        logger.info(f"[Task] No new URLs for {source}")
+        _record_site_result(group_key, source, {
             "source": source,
             "total_content": [],
             "success_count": 0,
             "failed_count": 0,
             "failed_urls": [],
             "message": "No new URLs to scrape"
-        }
-        _record_site_result(group_key, source, result, now_str)
-        logger.info(f"Task completed for {source}: {result}")
+        }, now_str)
         return
 
-    total = len(urls)
-    logger.info(f"Scraping {total} URLs for {source}")
+    logger.info(f"[Task] Scraping {len(urls)} URLs for {source}")
+
+    # ── 2. Scrape articles using a shared warm session ───────────────────
+    # max_articles_per_driver: rotate the browser after N articles
+    # so no single session fingerprint is overexposed.
+    # 3–4 is a sweet spot: enough to amortize warm-up cost, few enough
+    # to avoid pattern detection.
+    session = ArticleScrapeSession(max_articles_per_driver=4)
 
     total_content = []
     success_count = 0
     failed_count = 0
     failed_urls = []
 
-    for url in urls:
-        time.sleep(random.uniform(2.0, 10.0))
-        content = ""
-        for attempt in range(3):
-            try:
-                content = scrape_news(url, source)
-            except Exception as e:
-                # Treat exceptions during scraping as an empty content failure
-                content = ""
-            if content:
-                success_count += 1
-                break
-            else:
-                if attempt == 2:
-                    failed_count += 1
-                    failed_urls.append(url)
-                    logger.warning(f"Giving up on {url} after 2 retries")
+    try:
+        for url in urls:
+            # Inter-article human delay — varies to avoid rhythmic patterns
+            _human_pause_inter = random.uniform(4.0, 12.0)
+            logger.info(f"[Task] Waiting {_human_pause_inter:.1f}s before next article...")
+            time.sleep(_human_pause_inter)
+
+            content = ""
+            for attempt in range(3):
+                try:
+                    content = session.scrape(url, source)
+                except Exception as e:
+                    logger.error(f"[Task] scrape() raised on attempt {attempt + 1}: {e}")
+                    content = ""
+
+                if content:
+                    success_count += 1
+                    total_content.append(content)
+                    break
                 else:
-                    logger.warning(f"Content empty for {url}, will retry")
-                    time.sleep(random.uniform(2.0, 10.0))
-        if content:
-            total_content.append(content)
+                    if attempt == 2:
+                        failed_count += 1
+                        failed_urls.append(url)
+                        logger.warning(f"[Task] Giving up on {url} after 3 attempts")
+                    else:
+                        logger.warning(f"[Task] Empty content for {url}, retrying...")
+                        time.sleep(random.uniform(3.0, 8.0))
+
+    finally:
+        # Always clean up the browser, even if an exception occurs mid-loop
+        session.close()
 
     final_result = {
         "source": source,
@@ -96,7 +110,8 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, rate_l
         "message": "Done"
     }
     _record_site_result(group_key, source, final_result, now_str)
-    logger.info(f"Completed scraping task for {source}: {success_count} success, {failed_count} failed")
+    logger.info(f"[Task] Done: {source} — {success_count} success, {failed_count} failed")
+    
 
 def _record_site_result(group_key: str, source: str, result: dict, now_str: str):
     """

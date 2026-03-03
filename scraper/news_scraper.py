@@ -1,4 +1,3 @@
-# news_scraper.py
 import codecs
 from datetime import datetime
 import json
@@ -26,10 +25,86 @@ captcha_signatures = [
     "cf-browser-verification"
 ]
 
+# Realistic referrers to spoof navigation origin
+_BLOOMBERG_REFERRERS = [
+    "https://www.google.com/",
+    "https://news.google.com/",
+    "https://www.twitter.com/",
+    "https://www.reddit.com/",
+    "https://www.linkedin.com/",
+]
+
+# Warm-up pages — low-JS Bloomberg pages that build session trust
+_BLOOMBERG_WARMUP_PAGES = [
+    "https://www.bloomberg.com/",
+    "https://www.bloomberg.com/markets",
+    "https://www.bloomberg.com/technology",
+    "https://www.bloomberg.com/politics",
+]
+
 
 def _human_pause(min_delay: float = 1.5, max_delay: float = 3.8):
     """Sleep with jitter to mimic human dwell time."""
     time.sleep(random.uniform(min_delay, max_delay))
+
+
+def _is_blocked(page_source: str) -> bool:
+    """Check if the current page is a bot challenge/CAPTCHA page."""
+    return any(sig in page_source for sig in captcha_signatures)
+
+
+def _warm_up_session(driver, target_domain: str = "bloomberg.com"):
+    """
+    Visit 1–2 low-risk pages on the target domain before hitting article URLs.
+    Builds session cookies and trust score with Akamai/PerimeterX.
+    Real users don't cold-open article pages — they browse first.
+    """
+    warmup_pages = random.sample(_BLOOMBERG_WARMUP_PAGES, k=random.randint(1, 2))
+
+    for page_url in warmup_pages:
+        try:
+            logger.info(f"[Warmup] Visiting: {page_url}")
+            driver.get(page_url)
+            _human_pause(3.0, 6.0)
+
+            # Scroll slightly to mimic reading
+            scroll_amount = random.randint(200, 600)
+            driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
+            _human_pause(1.5, 3.0)
+
+            # Check if even the warmup page is blocked
+            if _is_blocked(driver.page_source):
+                logger.warning(f"[Warmup] Blocked on {page_url}, aborting warmup early.")
+                return False
+
+        except Exception as e:
+            logger.warning(f"[Warmup] Failed on {page_url}: {e}")
+            return False
+
+    logger.info("[Warmup] Session warm-up complete.")
+    return True
+
+
+def _set_referrer_and_navigate(driver, url: str, referrer: str = None):
+    """
+    Navigate to a URL while spoofing a realistic referrer.
+    Direct navigation (no referrer) to paywalled articles is a strong bot signal.
+    """
+    if referrer is None:
+        referrer = random.choice(_BLOOMBERG_REFERRERS)
+
+    # Use CDP to override the referrer for this navigation
+    # This makes Bloomberg think you arrived from Google/Twitter/etc.
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": f"""
+            Object.defineProperty(document, 'referrer', {{
+                get: () => '{referrer}',
+                configurable: true
+            }});
+        """
+    })
+
+    driver.get(url)
 
 
 def fetch_news_from_db():
@@ -43,42 +118,31 @@ def fetch_news_from_db():
 
 def fetch_urls_from_page(query: str, site: str, rate_limit: int):
     """
-    Fetch URLs using a randomized cascade of strategies (Google News, Sitemap Search, Site Latest).
-    A successful scrape simply means valid URLs were extracted from the search page (bypassed bot checks).
-    Post-processing (normalization, filtering, de-duplication) occurs after a successful scrape.
+    Fetch URLs using a randomized cascade of strategies.
     """
 
     def normalize_url(link):
         if link is None:
             return None
-        # 处理可能的Unicode转义序列，然后匹配srnd参数
         processed_link = codecs.decode(link, 'unicode_escape')
         m = re.search(r'([?&])srnd(?:=|%3D|\\u003d)', processed_link, re.IGNORECASE)
         if m:
             cleaned_link = processed_link[:m.start()]
-            # Remove trailing ? or & if left behind
             cleaned_link = re.sub(r'[?&]$', '', cleaned_link)
             return cleaned_link
         return processed_link
 
     def decode_google_news_url(jslog_str):
-        """Extracts and decodes the hidden URL from Google News jslog attribute."""
         if not jslog_str:
             return None
-        # Google News embeds base64 string after '5:'
         m = re.search(r'5:([A-Za-z0-9+/\-_]+)', jslog_str)
         if not m:
             return None
-
         b64_str = m.group(1)
-        # Fix missing padding
         b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
-        # Handle both standard and url-safe base64 variations
         b64_str = b64_str.replace('-', '+').replace('_', '/')
-
         try:
             decoded = base64.b64decode(b64_str).decode('utf-8')
-            # Extract the actual URL from the decoded JSON array string
             url_m = re.search(r'"(https?://[^"]+)"', decoded)
             if url_m:
                 return url_m.group(1)
@@ -87,106 +151,68 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
         return None
 
     def fetch_and_parse_sitemap():
-        """Fetches the sitemap using curl_cffi and returns sorted URLs based on publication date."""
-        # Use the specific URL provided in the example
         sitemap_url = "https://www.bloomberg.com/sitemaps/news/latest.xml"
         logger.info(f"Fetching sitemap from {sitemap_url}")
-
         try:
-            # Use curl_cffi with impersonate
             response = requests.get(sitemap_url, impersonate="chrome")
-
             if response.status_code != 200:
-                logger.error(f"Failed to fetch sitemap from {sitemap_url}, Status Code: {response.status_code}")
-                return []  # Return empty list if fetching fails
-
-            # Get the text content
+                logger.error(f"Failed to fetch sitemap: {response.status_code}")
+                return []
             sitemap_content = response.text
-
         except Exception as e:
-            logger.error(f"An error occurred while fetching the sitemap with curl_cffi: {e}")
-            return []  # Return empty list if fetching fails
+            logger.error(f"Sitemap fetch failed: {e}")
+            return []
 
         try:
             root = ET.fromstring(sitemap_content)
         except ET.ParseError as e:
-            logger.error(f"Failed to parse sitemap XML from {sitemap_url}: {e}")
-            return []  # Return empty list if parsing fails
+            logger.error(f"Sitemap XML parse failed: {e}")
+            return []
 
         urls_with_dates = []
-        # Define the namespace map if the XML uses one (common for sitemaps)
-        # The default sitemap namespace is usually 'http://www.sitemaps.org/schemas/sitemap/0.9'
-        # The news namespace might be 'http://www.google.com/schemas/sitemap-news/0.9'
         namespaces = {
             'sitemap': 'http://www.sitemaps.org/schemas/sitemap/0.9',
             'news': 'http://www.google.com/schemas/sitemap-news/0.9'
         }
-
         for url_elem in root.findall('sitemap:url', namespaces):
             loc_elem = url_elem.find('sitemap:loc', namespaces)
             pub_date_elem = url_elem.find('news:news/news:publication_date', namespaces)
-
             if loc_elem is not None and pub_date_elem is not None:
                 url = loc_elem.text.strip()
                 pub_date_str = pub_date_elem.text.strip()
-
                 try:
-                    # Parse the ISO format timestamp string into a datetime object
-                    # Handle 'Z' suffix for UTC
                     if pub_date_str.endswith('Z'):
                         pub_date_str = pub_date_str[:-1] + '+00:00'
                     pub_date_obj = datetime.fromisoformat(pub_date_str)
-                except ValueError as e:
-                    logger.warning(f"Could not parse date '{pub_date_str}' for URL {url}: {e}")
-                    continue  # Skip this entry if date parsing fails
-
+                except ValueError:
+                    continue
                 urls_with_dates.append((url, pub_date_obj))
-            else:
-                # If an entry doesn't have both loc and publication_date, skip it
-                continue
 
-        # Sort the list of tuples (URL, pub_date_obj) by the pub_date_obj in descending order (newest first)
         urls_with_dates.sort(key=lambda x: x[1], reverse=True)
-
-        # Extract just the URLs from the sorted list, taking the first 20
         sorted_urls = [item[0] for item in urls_with_dates[:20]]
-
-        logger.info(f"Parsed and sorted {len(sorted_urls)} URLs from the sitemap.")
+        logger.info(f"Sitemap: parsed {len(sorted_urls)} URLs.")
         return sorted_urls
 
-    # Define the target URLs for other strategies
     news_search_url = f"https://news.google.com/search?q={query} when:1h&hl=en-US&gl=US&ceid=US:en"
     bloomberg_search_url = "https://www.bloomberg.com/latest"
-    google_search_url = f"https://www.google.com/search?q={query}&tbs=qdr:h,sbd:1&tbm=nws"
-    # Define the strategies using robust semantic attributes and paths
+
     pages_to_scrape = [
         {
             "name": "google_news",
             "url": news_search_url,
-            "wait_css": "a[jslog]"  # Reliable attribute used for tracking/routing
+            "wait_css": "a[jslog]"
         },
-        # {
-        #     "name": "google_search",
-        #     "url": google_search_url,
-        #     "wait_css": "a[data-ved][ping]" # Ensures we target actual outbound search results
-        # },
-        # Sitemap search will be handled separately
         {
             "name": "bloomberg_latest",
             "url": bloomberg_search_url,
-            "wait_css": "a[href*='/news/articles/']"  # Ensure we only pull actual articles
+            "wait_css": "a[href*='/news/articles/']"
         }
     ]
 
-    # 1. Prepare the Sitemap Strategy
     sitemap_strategy = {"name": "sitemap_search"}
-
-    # Add the Sitemap strategy randomly into the list of existing strategies
-    all_strategies = pages_to_scrape.copy()  # Copy the original list
-    sitemap_index = random.randint(0, len(all_strategies))  # Generate a random index
-    all_strategies.insert(sitemap_index, sitemap_strategy)  # Insert the sitemap strategy
-
-    # Now, shuffle the entire combined list
+    all_strategies = pages_to_scrape.copy()
+    sitemap_index = random.randint(0, len(all_strategies))
+    all_strategies.insert(sitemap_index, sitemap_strategy)
     random.shuffle(all_strategies)
 
     driver = None
@@ -195,50 +221,46 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
     successful_strategy = None
 
     try:
-        # --- SCRAPING PHASE with Sitemap Strategy Integration ---
-        # --- SCRAPING PHASE with Sitemap Strategy Integration ---
         for strategy in all_strategies:
-            logger.info(f"Trying {strategy['name']} strategy.")
+            logger.info(f"Trying strategy: {strategy['name']}")
             raw_links = []
 
             if strategy['name'] == "sitemap_search":
-                # Execute the sitemap fetching and parsing logic
                 sitemap_urls = fetch_and_parse_sitemap()
                 if sitemap_urls:
                     raw_links = sitemap_urls
-                    logger.info(f"Sitemap search yielded {len(raw_links)} URLs.")
+                    logger.info(f"Sitemap yielded {len(raw_links)} URLs.")
                 else:
-                    logger.info("Sitemap search yielded no URLs.")
-                    continue  # Move to the next strategy if sitemap fails/returns empty
+                    logger.info("Sitemap yielded no URLs.")
+                    continue
 
-            else:  # It's a Selenium-based strategy (google_news, bloomberg_latest)
-                # Apply 3 retries specifically for bloomberg_latest, 1 for others
+            else:
                 max_attempts = 3 if strategy['name'] == "bloomberg_latest" else 1
 
                 for attempt in range(max_attempts):
                     if driver is None:
                         driver = get_chrome_driver()
+                        # ── Warm up the session before scraping ──────────────
+                        # Only warm up if we're hitting Bloomberg directly
+                        if strategy['name'] == "bloomberg_latest":
+                            _warm_up_session(driver)
 
                     try:
-                        driver.get(strategy['url'])
+                        _set_referrer_and_navigate(driver, strategy['url'])
 
-                        # Check for CAPTCHA first to "Fast-Fail" instead of waiting 30 seconds
-                        _human_pause(1.5, 3.0)  # Wait a moment for JS challenge to load
+                        _human_pause(1.5, 3.0)
                         page_source = driver.page_source
-                        if any(sig in page_source for sig in captcha_signatures) and len(page_source) < 4000:
-                            raise Exception("CAPTCHA or Anti-Bot challenge detected on search page!")
+                        if _is_blocked(page_source):
+                            raise Exception("Bot challenge detected on search page!")
 
-                        # Wait for target links to populate
                         WebDriverWait(driver, 30).until(
                             lambda d: len(d.find_elements(By.CSS_SELECTOR, strategy['wait_css'])) > 0
                         )
 
-                        # Fetch only the relevant links using our robust selectors
                         elements = driver.find_elements(By.CSS_SELECTOR, strategy['wait_css'])
 
                         for a in elements:
                             href = a.get_attribute("href")
-
                             if strategy['name'] == "google_news":
                                 jslog = a.get_attribute("jslog")
                                 decoded_url = decode_google_news_url(jslog)
@@ -246,7 +268,6 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
                                     raw_links.append(decoded_url)
                                 elif href and href.startswith("http"):
                                     raw_links.append(href)
-
                             elif strategy['name'] == "bloomberg_latest":
                                 if href:
                                     if href.startswith("/"):
@@ -254,66 +275,49 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
                                         href = f"https://{domain}{href}"
                                     raw_links.append(href)
 
-                        # If we successfully got links, break out of the retry loop
                         if raw_links:
                             break
 
                     except Exception as e:
                         logger.warning(
-                            f"Error extracting links from {strategy['name']} (Attempt {attempt + 1}/{max_attempts}): {e}")
-
+                            f"[{strategy['name']}] Attempt {attempt + 1}/{max_attempts} failed: {e}"
+                        )
                         if attempt < max_attempts - 1:
-                            logger.info(
-                                f"Retrying {strategy['name']}... Quitting current driver to rotate proxy/fingerprint.")
                             try:
-                                driver.quit()  # Destroy the burned session
+                                driver.quit()
                             except Exception:
                                 pass
-                            driver = None  # Force a new driver creation on the next loop iteration
-                            _human_pause(3.0, 7.0)  # Cool down before retry
+                            driver = None
+                            _human_pause(3.0, 7.0)
                         else:
-                            logger.warning(
-                                f"Failed {strategy['name']} after {max_attempts} attempts. Moving to next strategy...")
-                            continue
+                            logger.warning(f"[{strategy['name']}] All attempts exhausted.")
 
-            # 2. Check for scraping success (Did we get valid URLs?)
             if raw_links:
-                logger.info(f"Scraping success! Extracted {len(raw_links)} raw URLs via {strategy['name']}.")
+                logger.info(f"Success via {strategy['name']}: {len(raw_links)} raw URLs.")
                 extracted_raw_links = raw_links
                 successful_strategy = strategy['name']
-                break  # Exit the cascade immediately
+                break
             else:
-                logger.info(f"{strategy['name']} yielded 0 valid URLs. Moving to next strategy...")
+                logger.info(f"{strategy['name']} yielded 0 URLs, trying next strategy...")
 
-        # --- POST-PROCESSING PHASE ---
         if not extracted_raw_links:
-            logger.warning(f"All scraping strategies (including sitemap_search) failed for query: {query}")
+            logger.warning(f"All strategies failed for query: {query}")
             return []
 
-        logger.info(f"Beginning post-processing on {len(extracted_raw_links)} links from {successful_strategy}...")
+        logger.info(f"Post-processing {len(extracted_raw_links)} links from {successful_strategy}...")
 
-        # 3. Stripping / Normalization
         links = [normalize_url(link) for link in extracted_raw_links]
-
-        # 4. Filter strictly by site domain
-        links = [
-            link for link in links
-            if link and (site_domain in link)  # More flexible than just startswith
-        ]
-
-        # 5. De-duplication
+        links = [link for link in links if link and (site_domain in link)]
         links = list(set(links))
 
-        # 6. Database Filtering
         db_manager = get_db_manager()
         repo = NewsArticleRepository(db_manager)
         recent_links_raw = repo.get_recent_urls(hours=6)
         recent_links = set(filter(None, [normalize_url(link) for link in recent_links_raw]))
-
         links = [link for link in links if link not in recent_links]
 
-        logger.info(f"Post-processing complete. Found {len(links)} new, unique {query} article links matching {site}.")
-        return links[:rate_limit]  # Return up to 4 links
+        logger.info(f"Post-processing done: {len(links)} new unique URLs for {site}.")
+        return links[:rate_limit]
 
     except Exception as e:
         logger.error(f"Critical error in fetch_urls_from_page: {e}")
@@ -323,34 +327,29 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
             try:
                 driver.quit()
             except Exception:
-                pass  # Or log the exception if desired
+                pass
 
 
 # ============================== Helper Functions ==============================================
 
 def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_content, timeout=15, min_paragraphs=4):
-    """Wait for content to load with human-like scrolling behavior, preserving most-complete non-empty result against anti-bot blocking."""
+    """Wait for content to load with human-like scrolling."""
     start = time.time()
     last_count = 0
     stable_count = 0
     content_fully_loaded = False
 
-    # Track most complete non-empty content so far to survive anti-bot blanking
     best_xml_content = ""
     best_result = {"title": "", "content": ""}
     best_publish_at = None
     best_count = 0
 
     while time.time() - start < timeout:
-        # Fetch page source ONCE per loop to optimize performance
         page_source = driver.page_source
 
-        # 1. Fast-fail Anti-Bot / CAPTCHA check
-        if any(sig in page_source for sig in captcha_signatures) and len(page_source) < 4000:
-            # Break immediately to save time and return empty markers
+        if _is_blocked(page_source):
             return False, "", {"title": "", "content": ""}, None
 
-        # 2. Parse and evaluate content
         soup = BeautifulSoup(page_source, "html.parser")
         paragraphs = soup.select(selector)
         count = len(paragraphs)
@@ -365,7 +364,6 @@ def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_conte
         result = _extract_article_content(soup, selector, unwanted_content)
         publish_at = extract_and_format_time(soup)
 
-        # Consider only if nonempty, and "better" (more paragraphs = more complete)
         this_content_ok = bool(result.get("content", "").strip()) and count > 0
         if this_content_ok and count >= best_count:
             best_count = count
@@ -375,14 +373,11 @@ def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_conte
 
         if count > min_paragraphs and stable_count > 1:
             content_fully_loaded = True
-            # Use the current best, which should be this one
             break
 
-        # 3. Human-like interactions: Smooth scrolling
         at_bottom = driver.execute_script(
             "return (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 500);"
         )
-
         if not at_bottom:
             scroll_amount = random.randint(300, 800)
             driver.execute_script(f"""
@@ -393,49 +388,35 @@ def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_conte
                 }});
             """)
 
-        # 4. Human-like interactions: Mouse movement
         try:
             paragraphs_elems = driver.find_elements(By.CSS_SELECTOR, "p")
             if paragraphs_elems:
-                # Pick a random paragraph from the top 5 available and hover over it
                 target = random.choice(paragraphs_elems[:5])
                 ActionChains(driver).move_to_element(target).perform()
         except Exception:
-            # Ignore stale element references or elements out of bounds
             pass
 
-        # 5. Human dwell time before next check
         _human_pause(1.5, 2.5)
 
-    # On exit, always use the best version found, even if content_fully_loaded is False or anti-bot blanked page
     return content_fully_loaded, best_xml_content, best_result, best_publish_at
 
 
 def extract_and_format_time(soup):
-    """
-    从Bloomberg页面提取时间并格式化为UTC时间字符串
-    返回格式: "2026-01-26 00:51:07"
-    """
-    # 尝试多种选择器
     selectors = [
         "time[datetime]",
         "[data-component='timestamp'] time[datetime]",
         ".ArticleTimestamp_articleTimestamp__zlcvt time[datetime]",
         "meta[property='article:published_time']"
     ]
-
     time_str = None
-
     for selector in selectors:
         element = soup.select_one(selector)
         if element:
             if selector.startswith("meta"):
-                # 处理meta标签
                 if element.has_attr('content'):
                     time_str = element['content']
                     break
             else:
-                # 处理time标签
                 if element.has_attr('datetime'):
                     time_str = element['datetime']
                     break
@@ -443,187 +424,203 @@ def extract_and_format_time(soup):
     if not time_str:
         return None
 
-    # 格式化时间
     try:
-        # 移除时区信息，只保留基本时间
-        clean_time = re.sub(r'\.\d+', '', time_str)  # 移除毫秒
-        clean_time = re.sub(r'Z$', '', clean_time)  # 移除Z
-
-        # 尝试解析为datetime
+        clean_time = re.sub(r'\.\d+', '', time_str)
+        clean_time = re.sub(r'Z$', '', clean_time)
         if 'T' in clean_time:
             dt = datetime.strptime(clean_time, "%Y-%m-%dT%H:%M:%S")
         else:
             dt = datetime.strptime(clean_time, "%Y-%m-%d %H:%M:%S")
-
-        # 格式化为需要的字符串
         return dt.strftime("%Y-%m-%d %H:%M:%S")
-
     except Exception as e:
-        print(f"时间解析错误: {e}, 原始时间: {time_str}")
+        logger.warning(f"Time parse error: {e}, raw: {time_str}")
         return None
 
 
 def _extract_article_content(soup, selector, unwanted_content=None):
-    paragraphs = []
-
     paragraphs_elements = soup.select(selector)
-
-    # 先提取文本並進行基本過濾
     paragraphs = [p.get_text(" ", strip=True) for p in paragraphs_elements if p.get_text(strip=True)]
 
-    # 過濾不想要的內容
     if unwanted_content:
         paragraphs = [p for p in paragraphs if not any(pattern in p for pattern in unwanted_content)]
 
-    # 新增：過濾以數字:數字格式開頭的段落
     paragraphs = [
-        re.sub(r'^\d+:\d+\s*', '', p)  # 去掉開頭的數字:數字格式
+        re.sub(r'^\d+:\d+\s*', '', p)
         for p in paragraphs
-        if not re.match(r'^\d+:\d+\s*$', p)  # 完全匹配數字:數字格式的整行去掉
+        if not re.match(r'^\d+:\d+\s*$', p)
     ]
-
-    # 再次過濾可能變空的段落
     paragraphs = [p for p in paragraphs if p.strip()]
-
-    # 合併段落
     content = "\n\n".join(paragraphs)
 
-    # 提取標題
     title_tag = soup.find("h1")
     title = title_tag.get_text(strip=True) if title_tag else ""
 
     return {"title": title, "content": content}
 
 
-def extract_xml_content(
-        soup: BeautifulSoup,
-        xml_selector: str | None,
-) -> str:
-    """
-    Extracts raw XML / HTML content using a selector.
-    Returns serialized HTML/XML string for database storage.
-    """
-
+def extract_xml_content(soup: BeautifulSoup, xml_selector: str | None) -> str:
     if not xml_selector:
         return ""
-
     try:
         elements = soup.select(xml_selector)
         if not elements:
             return ""
-
-        # Preserve full DOM structure
-        xml_parts = []
-        for el in elements:
-            # Decode keeps inner tags intact (better than str(el))
-            xml_parts.append(el.decode())
-
-        return "\n".join(xml_parts)
-
+        return "\n".join(el.decode() for el in elements)
     except Exception as e:
         logger.error(f"XML extraction failed: {e}")
         return ""
 
 
-# ============ Main Scraping Function =============
-def scrape_news(url: str, source: str):
-    """Scrape a single news article from a URL with comprehensive anti-CAPTCHA measures."""
-    content = ""
-    driver = None
-    try:
-        # Load site-specific configuration
-        with open("json/selectors.json", "r", encoding="utf-8") as f:
-            news_configs = json.load(f)["news"]
-        # Get config for this specific site
-        site_config = news_configs.get(source)
-        selector = site_config.get("selector")
-        xml_selector = site_config.get("xml_selector")
-        min_paragraphs = site_config.get("min_paragraphs")
-        unwanted_content = site_config.get("unwanted_content", [])
+# ============ Stateful driver wrapper ============
 
-        logger.info(f"Scraping URL: {url}")
+class ArticleScrapeSession:
+    """
+    Holds a single warm Chrome driver across multiple article scrapes.
+    Rotates the driver automatically when blocked or after max_articles_per_driver.
+    
+    Why: A browser that visits exactly one page and dies is a textbook bot pattern.
+    Real users browse multiple pages in one session. Reusing the driver also
+    preserves session cookies and trust score built during warm-up.
+    """
 
-        # Create driver with fresh fingerprint
-        driver = get_chrome_driver()
+    def __init__(self, max_articles_per_driver: int = 4):
+        self.driver = None
+        self.articles_scraped = 0
+        self.max_articles_per_driver = max_articles_per_driver
+        self._warmed_up = False
 
-        # Now navigate to URL
-        driver.get(url)
+    def _ensure_driver(self):
+        """Create + warm up a fresh driver if we don't have one."""
+        if self.driver is None:
+            self.driver = get_chrome_driver()
+            self._warmed_up = False
 
-        logger.info("Page loaded, waiting for content...")
+        if not self._warmed_up:
+            _warm_up_session(self.driver)
+            self._warmed_up = True
 
-        # Wait for progressive content with human-like scrolling
-        content_fully_loaded, xml_content, result, publish_at = _wait_for_progressive_content(
-            driver,
-            selector=selector,
-            xml_selector=xml_selector,
-            unwanted_content=unwanted_content,
-            timeout=15,
-            min_paragraphs=min_paragraphs,
-        )
-
-        # if not content_fully_loaded:
-        #     logger.info("Content not fully loaded, refreshing page and retrying ...")
-        #     driver.refresh()
-        #     _human_pause(2.0,4.0)
-        #     content_fully_loaded = _wait_for_progressive_content(
-        #     driver,
-        #     timeout=15,
-        #     min_paragraphs=min_paragraphs,
-        #     selector=selector
-        # )
-
-        result["content_fully_loaded"] = content_fully_loaded
-
-        title = result.get("title")
-        content = result.get("content")
-
-        if content and title:
-            logger.info("Starting Chinese translation...")
+    def _rotate_driver(self, reason: str = ""):
+        """Destroy current driver and reset state — forces a fresh fingerprint next call."""
+        logger.info(f"[Session] Rotating driver. Reason: {reason}")
+        if self.driver:
             try:
-                translation_result = translate_article_to_chinese(title, content)
-                title_zh = translation_result.get('title_zh', '')
-                content_zh = translation_result.get('content_zh', '')
-                logger.info("Chinese translation completed")
-            except Exception as e:
-                logger.error(f"Translation failed for {url}: {e}")
-                title_zh = ""
-                content_zh = ""
-
-            try:
-                # Save to database using repository
-                db_manager = get_db_manager()
-                repo = NewsArticleRepository(db_manager)
-                repo.insert_or_update_article(
-                    url=url,
-                    publish_at=publish_at,
-                    source=source,
-                    title=title,
-                    content=content,
-                    xml_content=xml_content,
-                    content_fully_loaded=content_fully_loaded,
-                    title_zh=title_zh,
-                    content_zh=content_zh,
-                )
-                logger.info(f"Saved article to database: {url}")
-            except Exception as db_e:
-                logger.error(f"DB save failed for {url}: {db_e}")
-    except Exception as e:
-        logger.error(f"error when scraping {url}: {e}")
-        raise
-    finally:
-        if driver:
-            try:
-                driver.quit()
+                self.driver.quit()
             except Exception:
                 pass
-        logger.info(f"content length: {len(content)}")
+        self.driver = None
+        self.articles_scraped = 0
+        self._warmed_up = False
+        # Cool down before launching new browser
+        _human_pause(4.0, 9.0)
+
+    def scrape(self, url: str, source: str) -> str:
+        """
+        Scrape a single article URL, reusing the warm driver.
+        Rotates driver if blocked or article limit reached.
+        """
+        # Rotate proactively if we've hit the per-driver article limit
+        if self.articles_scraped >= self.max_articles_per_driver:
+            self._rotate_driver(reason=f"Reached {self.max_articles_per_driver} articles per driver")
+
+        self._ensure_driver()
+
+        content = ""
+        try:
+            with open("json/selectors.json", "r", encoding="utf-8") as f:
+                news_configs = json.load(f)["news"]
+
+            site_config = news_configs.get(source)
+            selector = site_config.get("selector")
+            xml_selector = site_config.get("xml_selector")
+            min_paragraphs = site_config.get("min_paragraphs")
+            unwanted_content = site_config.get("unwanted_content", [])
+
+            logger.info(f"[Session] Scraping ({self.articles_scraped + 1}/{self.max_articles_per_driver}): {url}")
+
+            # Navigate with a realistic referrer instead of cold direct access
+            _set_referrer_and_navigate(self.driver, url, referrer="https://www.google.com/")
+            _human_pause(2.0, 4.0)
+
+            # Fast-fail bot check
+            if _is_blocked(self.driver.page_source):
+                logger.warning(f"[Session] Blocked on {url}, rotating driver...")
+                self._rotate_driver(reason="Blocked on article page")
+                return ""
+
+            content_fully_loaded, xml_content, result, publish_at = _wait_for_progressive_content(
+                self.driver,
+                selector=selector,
+                xml_selector=xml_selector,
+                unwanted_content=unwanted_content,
+                timeout=15,
+                min_paragraphs=min_paragraphs,
+            )
+
+            result["content_fully_loaded"] = content_fully_loaded
+            title = result.get("title")
+            content = result.get("content")
+
+            self.articles_scraped += 1
+
+            if content and title:
+                logger.info("[Session] Translating to Chinese...")
+                try:
+                    translation_result = translate_article_to_chinese(title, content)
+                    title_zh = translation_result.get('title_zh', '')
+                    content_zh = translation_result.get('content_zh', '')
+                except Exception as e:
+                    logger.error(f"Translation failed: {e}")
+                    title_zh = ""
+                    content_zh = ""
+
+                try:
+                    db_manager = get_db_manager()
+                    repo = NewsArticleRepository(db_manager)
+                    repo.insert_or_update_article(
+                        url=url,
+                        publish_at=publish_at,
+                        source=source,
+                        title=title,
+                        content=content,
+                        xml_content=xml_content,
+                        content_fully_loaded=content_fully_loaded,
+                        title_zh=title_zh,
+                        content_zh=content_zh,
+                    )
+                    logger.info(f"[Session] Saved to DB: {url}")
+                except Exception as db_e:
+                    logger.error(f"[Session] DB save failed: {db_e}")
+
+        except Exception as e:
+            logger.error(f"[Session] Error scraping {url}: {e}")
+            # Rotate on unexpected errors — the session may be poisoned
+            self._rotate_driver(reason=f"Unexpected error: {e}")
+
+        finally:
+            logger.info(f"[Session] Content length: {len(content)}")
+
         if content.strip():
             return content.replace('\n\n', '\n').replace('\n', ' ')
-        else:
-            raise
+        return ""
+
+    def close(self):
+        """Explicit cleanup."""
+        if self.driver:
+            try:
+                self.driver.quit()
+            except Exception:
+                pass
+            self.driver = None
 
 
-if __name__ == "__main__":
-    scrape_news(
-        "https://www.bloomberg.com/news/articles/2026-03-02/xi-eyes-consumers-to-lead-new-era-for-china-s-unbalanced-economy",
-        "bloomberg")
+# Keep the original scrape_news for backward compatibility
+def scrape_news(url: str, source: str):
+    """Single-shot scrape (used for backward compatibility / standalone calls)."""
+    session = ArticleScrapeSession(max_articles_per_driver=1)
+    try:
+        result = session.scrape(url, source)
+        if not result:
+            raise ValueError(f"Empty content from {url}")
+        return result
+    finally:
+        session.close()
