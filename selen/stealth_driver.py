@@ -1,6 +1,4 @@
-Here's the full cleaned-up `get_chrome_driver` function:
 
-```python
 import undetected_chromedriver as uc
 import random
 import os
@@ -145,6 +143,8 @@ def get_chrome_driver(
     chrome_options.add_argument("--password-store=basic")
     chrome_options.add_argument(f"--window-size={selected_screen['window']}")
     chrome_options.add_argument("--lang=en-US,en;q=0.9")
+    chrome_options.add_argument("--disable-features=IsolateOrigins,site-per-process")
+    chrome_options.add_argument("--disable-site-isolation-trials")
 
     # ── Extension ───────────────────────────────────────────────────────
     if base_bypass_ext_path and os.path.exists(base_bypass_ext_path):
