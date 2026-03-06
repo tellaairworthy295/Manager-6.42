@@ -49,7 +49,7 @@ app.mount("/mcp", mcp_app)
 # Allow your Next.js frontend (localhost:3000) to call FastAPI (localhost:5000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://10.25.116.175:3000", "http://10.29.92.50:3000"],  # or ["*"] for all origins
+    allow_origins=["*"],  # or ["*"] for all origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -151,7 +151,7 @@ app.include_router(agent_router)
 
 
 # ================== Health Check ====================
-@app.get("/ping")
+@app.post("/ping")
 async def ping():
     return {"status": "pong"}
 

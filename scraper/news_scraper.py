@@ -6,7 +6,7 @@ import random
 import re
 import time
 from bs4 import BeautifulSoup
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from utils.translation_service import translate_article_to_chinese
@@ -16,7 +16,6 @@ from utils.logging_config import get_news_task_logger
 import base64
 from xml.etree import ElementTree as ET
 from curl_cffi import requests
-from selenium.webdriver.common.action_chains import ActionChains
 from click_to_rotate import click_random_top_right_area
 
 logger = get_news_task_logger()
@@ -202,7 +201,6 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
 
     try:
         # --- SCRAPING PHASE with Sitemap Strategy Integration ---
-        # --- SCRAPING PHASE with Sitemap Strategy Integration ---
         for strategy in all_strategies:
             logger.info(f"Trying {strategy['name']} strategy.")
             raw_links = []
@@ -227,12 +225,10 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
 
                     try:
                         driver.get(strategy['url'])
-
                         # Check for CAPTCHA first to "Fast-Fail" instead of waiting 30 seconds
                         _human_pause(1.5, 3.0)  # Wait a moment for JS challenge to load
-                        page_source = driver.page_source
+                        _handle_cookies_notification(driver)
                         if _is_blocked(driver.page_source):
-                            click_random_top_right_area()
                             raise Exception("CAPTCHA or Anti-Bot challenge detected on search page!")
 
                         # Wait for target links to populate
@@ -274,6 +270,7 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
                                 f"Retrying {strategy['name']}... Quitting current driver to rotate proxy/fingerprint.")
                             try:
                                 driver.quit()  # Destroy the burned session
+                                click_random_top_right_area()
                             except Exception:
                                 pass
                             driver = None  # Force a new driver creation on the next loop iteration
@@ -334,6 +331,56 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
 
 
 # ============================== Helper Functions ==============================================
+import time
+from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.common.by import By
+
+
+def _handle_cookies_notification(driver):
+    # 1. Handle Cookie Consent Banner (Overlay & Iframe safe)
+    try:
+        def _try_click_cookie():
+            # Target the button by the unique Sourcepoint class, the exact title, or the new "Accept all" button
+            selectors = [
+                'button.sp_choice_type_11',
+                'button[title="Yes, I Accept"]',
+                'button[jsname="b3VHJd"][aria-label="Accept all"]'  # Selector for the new button
+            ]
+
+            for selector in selectors:
+                btns = driver.find_elements(By.CSS_SELECTOR, selector)
+                if btns:
+                    # Execute JS click unconditionally (bypassing potential overlays)
+                    driver.execute_script("arguments[0].click();", btns[0])
+                    return True
+            return False
+
+        # First attempt: Check the main HTML document
+        if _try_click_cookie():
+            time.sleep(3.0)  # Wait for overlay to fade out
+        else:
+            # Second attempt: Look inside ALL iframes (in case the element is in an iframe)
+            iframes = driver.find_elements(By.TAG_NAME, 'iframe')
+            for iframe in iframes:
+                try:
+                    driver.switch_to.frame(iframe)
+                    clicked = _try_click_cookie()
+                    driver.switch_to.default_content()  # Always switch back to main page
+
+                    if clicked:
+                        time.sleep(1.0)
+                        break
+                except WebDriverException:
+                    # If switching frames fails, ensure we reset back to the main document
+                    driver.switch_to.default_content()
+
+    except Exception:
+        # Failsafe: ensure context is at default if a random error occurs
+        try:
+            driver.switch_to.default_content()
+        except Exception:
+            pass
+
 
 def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_content, timeout=15, min_paragraphs=4):
     """Wait for content to load with human-like scrolling behavior, preserving most-complete non-empty result against anti-bot blocking."""
@@ -349,16 +396,19 @@ def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_conte
     best_count = 0
 
     while time.time() - start < timeout:
+
+        # 1. Handle Cookie Consent Banner
+        _handle_cookies_notification(driver)
+
         # Fetch page source ONCE per loop to optimize performance
         page_source = driver.page_source
 
-        # 1. Fast-fail Anti-Bot / CAPTCHA check
-        if _is_blocked(driver.page_source):
-            click_random_top_right_area()
+        # 2. Fast-fail Anti-Bot / CAPTCHA check
+        if _is_blocked(driver.page_source) and not best_result["content"]:
             # Break immediately to save time and return empty markers
             return False, "", {"title": "", "content": ""}, None
 
-        # 2. Parse and evaluate content
+        # 3. Parse and evaluate content
         soup = BeautifulSoup(page_source, "html.parser")
         paragraphs = soup.select(selector)
         count = len(paragraphs)
@@ -386,33 +436,15 @@ def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_conte
             # Use the current best, which should be this one
             break
 
-        # 3. Human-like interactions: Smooth scrolling
+        # 4. Human-like interactions: Smooth scrolling
         at_bottom = driver.execute_script(
             "return (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 500);"
         )
 
         if not at_bottom:
-            scroll_amount = random.randint(300, 800)
-            driver.execute_script(f"""
-                window.scrollBy({{
-                    top: {scroll_amount},
-                    left: 0,
-                    behavior: 'smooth'
-                }});
-            """)
+            driver.execute_script("window.scrollBy(600, 1000);")  # Scroll down
 
-        # 4. Human-like interactions: Mouse movement
-        try:
-            paragraphs_elems = driver.find_elements(By.CSS_SELECTOR, "p")
-            if paragraphs_elems:
-                # Pick a random paragraph from the top 5 available and hover over it
-                target = random.choice(paragraphs_elems[:5])
-                ActionChains(driver).move_to_element(target).perform()
-        except Exception:
-            # Ignore stale element references or elements out of bounds
-            pass
-
-        # 5. Human dwell time before next check
+        # 6. Human dwell time before next check
         _human_pause(1.5, 2.5)
 
     # On exit, always use the best version found, even if content_fully_loaded is False or anti-bot blanked page
@@ -622,5 +654,5 @@ def scrape_news(url: str, source: str):
 
 if __name__ == "__main__":
     scrape_news(
-        "https://www.bloomberg.com/news/articles/2026-03-02/xi-eyes-consumers-to-lead-new-era-for-china-s-unbalanced-economy",
+        "https://www.bloomberg.com/news/articles/2026-03-05/china-top-lawmakers-meeting-is-smallest-ever-under-xi-amid-purge",
         "bloomberg")
