@@ -28,7 +28,7 @@ agentStockAnalysis/
 # Ignore any file or directory starting with 'chrome'
 chrome*
 snapshoots/
-
+*.pem
 # Python
 __pycache__/
 *.py[cod]
