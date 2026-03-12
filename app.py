@@ -16,6 +16,7 @@ from exception.exception_handler import NetworkException, ValidationError, gener
 from py_api.news_api import router as news_router
 from py_api.stocks_api import router as stocks_router
 from py_api.agent_api import router as agent_router
+from py_api.records_api import router as records_router
 from utils.database import get_db_manager, StockRepository, NewsArticleRepository
 from utils.logging_config import get_others_logger
 from utils.redis_utils import create_aioredis, close_loop_redis, get_aioredis_client
@@ -148,6 +149,7 @@ app.include_router(sse_router)
 app.include_router(news_router)
 app.include_router(stocks_router)
 app.include_router(agent_router)
+app.include_router(records_router)
 
 
 # ================== Health Check ====================

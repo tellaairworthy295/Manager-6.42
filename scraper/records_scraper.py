@@ -3,10 +3,12 @@ from pwright.async_pf import new_stealth_page
 from pwright.async_pm import AsyncPlaywrightManager
 from playwright.async_api import Page
 from typing import List, Dict
+from utils.database import get_db_manager, RecordCommentRepository
 import asyncio
+from utils.logging_config import get_records_scraper_logger
+logger = get_records_scraper_logger()
 
-
-async def scrape_website(storage_state: str) -> List[Dict]:
+async def scrape_website(storage_state: str):
     """
     Scrape the website with the given storage_state (cookies)
 
@@ -16,6 +18,17 @@ async def scrape_website(storage_state: str) -> List[Dict]:
     Returns:
         List of scraped data
     """
+    db_manager = get_db_manager()
+    repo_record_comment = RecordCommentRepository(db_manager)
+    # get_all_titles_today returns a list of tuples: [(title,), ...] if using SQLAlchemy's distinct().all() 
+    # So unpack these to get just the strings
+    raw_titles = repo_record_comment.get_all_titles_today()
+    # handle both [(title,), ...] and [title, ...]
+    if raw_titles and isinstance(raw_titles[0], tuple):
+        titles = set(title_tuple[0] for title_tuple in raw_titles if title_tuple and title_tuple[0])
+    else:
+        titles = set(title for title in raw_titles if title)
+    
     results = []
 
     # Create an AsyncPlaywrightManager instance
@@ -43,32 +56,37 @@ async def scrape_website(storage_state: str) -> List[Dict]:
             await scroll_to_bottom(page)
 
             # Step 3: Find all list-item elements
-            list_items = await page.query_selector_all('.list-item')
+            list_items = await page.query_selector_all('div.comment-list-item .list-item')
 
             # Step 4: Iterate through each record
             for i, list_item in enumerate(list_items):
                 # Find the content element within the list-item
-                content_element = await list_item.query_selector('div.content')
-                if content_element:
+                title_element = await list_item.query_selector('div.comment-title .title')
+                if title_element:
                     # Directly click the element (no need for extra wrapper)
-                    await content_element.click()
+                    title = await title_element.text_content()
+                    # Check if title already in today's titles
+                    if title and title.strip() in titles:
+                        # skip this item
+                        logger.info(f"Skipping existing title in today's comments: '{title.strip()}'")
+                        continue
+
+                    await title_element.click()
 
                     # Wait for the popup to appear
                     await page.wait_for_selector('.el-dialog__body', timeout=5000)
 
                     # Step 5: Scrape content from the popup
                     scraped_data = await scrape_popup(page)
-                    results.append(scraped_data)
+                    repo_record_comment.insert_or_update_comment(scraped_data)
 
                     # Close the popup window
                     await close_popup(page)
 
                     # Add a small delay between clicks
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.7)
                 else:
-                    print(f"Warning: Could not find 'div.content' in list item {i}")
-
-            return results
+                    logger.warning(f"Warning: Could not find 'div.content' in list item {i}")
 
     finally:
         await manager.shutdown()
@@ -119,38 +137,86 @@ async def scroll_to_bottom(page: Page):
 
 
 async def scrape_popup(page: Page) -> Dict:
-    """Scrape content from the popup window"""
-    # Wait for the popup to be visible
-    await page.wait_for_selector('.el-dialog__body', state='visible')
+    """
+    Scrape all relevant data in the popup for insertion into record_comment table.
+    Schema fields (from RecordComment table): 
+        date, author, team, industry, category, comment, title, scraped_at
+    - category: ALL texts from .sector-item-container .name (joined with |)
+    """
+    from datetime import datetime, date
 
-    # Extract title
-    title_element = await page.query_selector('.el-dialog__body .title')
-    title = await title_element.text_content() if title_element else ""
+    # Wait for popup
+    await page.wait_for_selector('.el-dialog__body, .comment-list-detail-dialog-body', state='visible')
 
-    # Extract author and time
-    author_element = await page.query_selector('.el-dialog__body .name')
-    author = await author_element.text_content() if author_element else ""
+    dialog_selector = '.el-dialog__body'
+    found = await page.query_selector('.el-dialog__body')
+    if not found:
+        found = await page.query_selector('.comment-list-detail-dialog-body')
+        if found:
+            dialog_selector = '.comment-list-detail-dialog-body'
+    if not found:
+        raise Exception("Popup dialog not found.")
 
-    time_element = await page.query_selector('.el-dialog__body .time')
-    time = await time_element.text_content() if time_element else ""
+    # Title
+    title = ""
+    title_element = await page.query_selector(f'{dialog_selector} .title')
+    if title_element:
+        raw = await title_element.text_content()
+        title = raw.strip() if raw else ""
 
-    # Extract content
-    content_element = await page.query_selector('.el-dialog__body .content')
-    content = await content_element.text_content() if content_element else ""
+    # Author
+    author = ""
+    author_element = await page.query_selector(f'{dialog_selector} .name')
+    if author_element:
+        raw = await author_element.text_content()
+        author = raw.strip() if raw else ""
 
-    # Extract stock themes
-    stock_themes = []
-    theme_elements = await page.query_selector_all('.el-dialog__body .sector-item-container .name')
-    for theme_element in theme_elements:
-        theme = await theme_element.text_content()
-        stock_themes.append(theme.strip())
+    # Team
+    team = ""
+    team_element = await page.query_selector(f'{dialog_selector} .team')
+    if team_element:
+        raw = await team_element.text_content()
+        team = raw.strip() if raw else ""
+
+    # Industry
+    industry = ""
+    industry_element = await page.query_selector(f'{dialog_selector} .industry')
+    if industry_element:
+        raw = await industry_element.text_content()
+        industry = raw.strip() if raw else ""
+
+    # Comment
+    comment = ""
+    comment_element = await page.query_selector(f'{dialog_selector} .content')
+    if comment_element:
+        raw = await comment_element.inner_text()
+        comment = raw.strip() if raw else ""
+
+    # Category
+    category_elements = await page.query_selector_all(f'{dialog_selector} .sector-item-container .name')
+    category_list = []
+    for ce in category_elements:
+        txt = await ce.text_content()
+        txt = txt.strip() if txt else ""
+        if txt:
+            category_list.append(txt)
+    category = "|".join(category_list)
+
+    # Date: always use today
+    today = date.today()
+
+    # scraped_at: now
+    scraped_at = datetime.now()
 
     return {
-        "title": title,
+        "date": today,
         "author": author,
-        "time": time,
-        "content": content,
-        "stock_themes": stock_themes
+        "team": team,
+        "industry": industry,
+        "category": category,
+        "comment": comment,
+        "title": title,
+        "scraped_at": scraped_at,
     }
 
 
@@ -171,13 +237,13 @@ if __name__ == "__main__":
 
         # Print results
         for i, item in enumerate(results):
-            print(f"Record {i + 1}:")
-            print(f"Title: {item['title']}")
-            print(f"Author: {item['author']}")
-            print(f"Time: {item['time']}")
-            print(f"Content: {item['content'][:100]}...")  # Print first 100 characters
-            print(f"Stock Themes: {item['stock_themes']}")
-            print("-" * 50)
+            logger.info(f"Record {i + 1}:")
+            logger.info(f"Title: {item['title']}")
+            logger.info(f"Author: {item['author']}")
+            logger.info(f"Time: {item['time']}")
+            logger.info(f"Content: {item['content'][:100]}...")  # Print first 100 characters
+            logger.info(f"Stock Themes: {item['stock_themes']}")
+            logger.info("-" * 50)
 
 
     asyncio.run(main())

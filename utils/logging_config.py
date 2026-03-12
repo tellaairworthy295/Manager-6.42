@@ -77,6 +77,11 @@ def get_news_task_logger() -> logging.Logger:
         log_file=LOG_ROOT / "news_task" / "news_task.log",
     )
 
+def get_records_scraper_logger() -> logging.Logger:
+    return create_logger(
+        name="records_scraper",
+        log_file=LOG_ROOT / "records_scraper" / "records_scraper.log",
+    )
 
 def get_others_logger() -> logging.Logger:
     return create_logger(

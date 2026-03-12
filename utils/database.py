@@ -218,6 +218,24 @@ class ActionLimitData(Base):
     analysis = Column(TEXT, nullable=False)
     scraped_at = Column(DateTime, default=datetime.now())
 
+class RecordComment(Base):
+    __tablename__ = "record_comment"
+    __table_args__ = (
+        UniqueConstraint('date', 'title', name='uq_date_title'),
+        {
+            'mysql_charset': 'utf8mb4',
+            'mysql_collate': 'utf8mb4_unicode_ci'
+        }
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    author = Column(VARCHAR(255), nullable=False)
+    team = Column(VARCHAR(255), nullable=False)
+    industry = Column(VARCHAR(255), nullable=False)
+    category = Column(VARCHAR(255), nullable=False)
+    comment = Column(TEXT, nullable=False)
+    title = Column(VARCHAR(255), nullable=False)
+    scraped_at = Column(DateTime, default=datetime.now())
 
 class User(Base):
     """Model for users table."""
@@ -1042,7 +1060,68 @@ class NewsAnalysisRepository:
             session.commit()  # or session.flush()
             return analysis
 
+class RecordCommentRepository:
+    def __init__(self, db_manager: DatabaseManager):
+        self.db_manager = db_manager
 
+    def insert_or_update_comment(self, data: dict) -> RecordComment:
+        with self.db_manager.get_session() as session:
+            comment = RecordComment(
+                date=data['date'],
+                author=data['author'],
+                team=data['team'],
+                industry=data['industry'],
+                category=data['category'],
+                comment=data['comment'],
+                title=data['title'],
+                scraped_at=datetime.now(),
+            )
+            session.add(comment)
+            session.commit()
+            return comment
+    
+    def insert_or_update_comments_batch(self, data_list: list[dict]) -> list[RecordComment]:
+        with self.db_manager.get_session() as session:
+            comments = [
+                RecordComment(
+                    date=data['date'],
+                    author=data['author'],
+                    team=data['team'],
+                    industry=data['industry'],
+                    category=data['category'],
+                    comment=data['comment'],
+                    title=data['title'],
+                    scraped_at=datetime.now(),
+                )
+                for data in data_list
+            ]
+            session.add_all(comments)
+            session.commit()
+            return comments
+
+    
+    def get_comment_by_date(self, date_: date) -> List[RecordComment]:
+        with self.db_manager.get_session() as session:
+            return session.query(RecordComment) \
+                .filter_by(date=date_) \
+                .order_by(RecordComment.title) \
+                .all()
+
+    def get_all_titles_today(self) -> List[str]:
+        with self.db_manager.get_session() as session:
+            return session.query(RecordComment.title) \
+                .filter_by(date=date.today()) \
+                .distinct() \
+                .all()
+
+    def delete_comment_by_date(self, date_: date) -> int:
+        with self.db_manager.get_session() as session:
+            result = session.query(RecordComment) \
+                .filter_by(date=date_) \
+                .delete(synchronize_session=False)
+            session.commit()
+            return result
+    
 class UsersRepository:
     """Repository for users table operations."""
 

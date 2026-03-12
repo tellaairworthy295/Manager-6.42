@@ -3,6 +3,9 @@
 !!!concurrency!!!
 !!!For previous data, sleep and wait for manual operations!!!"
 
+*** I need to save title or content in database to compare and 
+*** decide if it's already been scraped, unique_key(date, title)
+
 CREATE USER 'scraper'@'localhost' IDENTIFIED BY 'strong_password_here';
 GRANT ALL PRIVILEGES ON scraped_data.* TO 'muheng'@'localhost';
 FLUSH PRIVILEGES;

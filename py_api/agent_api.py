@@ -183,29 +183,3 @@ async def scrape_agent_api(request: Request):
         },
         status_code=202,
     )
-
-@router.post("/get_comment")
-async def scrape_comment(request: Request):
-    # data = await request.json()
-    user_id = "1eeeb1dc-34c8-446c-879e-456f69762bf7"
-    # Replace with your actual storage state path
-    all_cookies = await validate_and_prepare_cookies(user_id.split("_")[-1], ["alphapai"], True)
-    with open("json/selectors.json", "r", encoding="utf-8") as f:
-        s_locators_map = json.load(f)["agent"]
-    for source, storage_state in all_cookies.items():
-        # site_locators = s_locators_map.get(source)
-        # if not site_locators:
-        #     logger.warning(f"No site locators for source={source}")
-        #     continue
-        result = await scrape_website(
-            storage_state=storage_state,
-        )
-
-    # Process the scraped data
-    for item in result:
-        print(f"Title: {item['title']}")
-        print(f"Author: {item['author']}")
-        print(f"Time: {item['time']}")
-        print(f"Content: {item['content'][:100]}...")  # Print first 100 characters
-        print(f"Stock Themes: {item['stock_themes']}")
-        print("-" * 50)
