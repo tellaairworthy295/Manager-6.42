@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import request, Flask
 import json
@@ -141,7 +141,9 @@ def webCom_msg_sender(token):
         title = alert_labels['alertname']
         if title not in alerts_by_type:
             timestamp = alert['values'].get('Time')
-            dt_object = datetime.fromtimestamp(timestamp)
+            # Explicitly specify UTC timezone for the conversion
+            dt_object = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            # Format the datetime object
             formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
 
             # Collect unique panel_url and formatted_time for each alert type

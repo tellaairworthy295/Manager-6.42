@@ -77,7 +77,7 @@ class AsyncCookiesHandler:
             manual_pairs = [
                 {"name": "search-to-paipai-guide", "value": "true"},
                 {"name": "paipai-agent-fastsheet-us-guide", "value": "true"},
-                {"name": "search-to-paipai-guide-date", "value": "1768962236148"},
+                {"name": "search-to-paipai-guide-date", "value": "1773307748695"},
                 {"name": "version-market-tip", "value": "1"},
                 {"name": "MODE", "value": "undefined"},
                 {"name": "hasShowpaipaiAnswerRangeGuide", "value": "true"},
@@ -86,7 +86,8 @@ class AsyncCookiesHandler:
                 {"name": "paipai-agent-fastsheet-us-guide", "value": "true"},
                 {"name": "extension-download-guide", "value": "true"},
                 {"name": "paipai_mode-select_task-guide", "value": "1"},
-                {"name": "hasShowPaipaiRecoderGuide", "value": "1"}
+                {"name": "hasShowPaipaiRecoderGuide", "value": "1"},
+                {"name": "version-ticnote-guide-tip", "value": "1"}
             ]
             if "localStorage" not in origins[0] or not isinstance(origins[0]["localStorage"], list):
                 origins[0]["localStorage"] = []
