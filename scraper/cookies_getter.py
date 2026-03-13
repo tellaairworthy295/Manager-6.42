@@ -87,7 +87,11 @@ class AsyncCookiesHandler:
                 {"name": "extension-download-guide", "value": "true"},
                 {"name": "paipai_mode-select_task-guide", "value": "1"},
                 {"name": "hasShowPaipaiRecoderGuide", "value": "1"},
-                {"name": "version-ticnote-guide-tip", "value": "1"}
+                {"name": "version-ticnote-guide-tip", "value": "1"},
+                {"name": "summary-mine-ins-guide", "value": "true"},
+                {"name": "points_modal_show-flag-20260212", "value": "1"},
+                {"name": "alpha-saas-admin-plate-manage-guide-flag_13651677354", "value": "1"},
+                {"name": "summaryDetailMarginalTabsGuide", "value": "true"}
             ]
             if "localStorage" not in origins[0] or not isinstance(origins[0]["localStorage"], list):
                 origins[0]["localStorage"] = []

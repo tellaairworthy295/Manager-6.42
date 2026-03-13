@@ -218,6 +218,7 @@ class ActionLimitData(Base):
     analysis = Column(TEXT, nullable=False)
     scraped_at = Column(DateTime, default=datetime.now())
 
+
 class RecordComment(Base):
     __tablename__ = "record_comment"
     __table_args__ = (
@@ -229,13 +230,36 @@ class RecordComment(Base):
     )
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(Date, nullable=False, index=True)
-    author = Column(VARCHAR(255), nullable=False)
-    team = Column(VARCHAR(255), nullable=False)
-    industry = Column(VARCHAR(255), nullable=False)
-    category = Column(VARCHAR(255), nullable=False)
-    comment = Column(TEXT, nullable=False)
     title = Column(VARCHAR(255), nullable=False)
+    author = Column(VARCHAR(128), nullable=False)
+    team = Column(VARCHAR(128), nullable=True)
+    industry = Column(VARCHAR(128), nullable=True)
+    category = Column(VARCHAR(255), nullable=True)
+    comment = Column(TEXT, nullable=False)
     scraped_at = Column(DateTime, default=datetime.now())
+
+
+class RecordMeeting(Base):
+    __tablename__ = "record_meeting"
+    __table_args__ = (
+        UniqueConstraint('date', 'title', name='uq_date_title'),
+        {
+            'mysql_charset': 'utf8mb4',
+            'mysql_collate': 'utf8mb4_unicode_ci'
+        }
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    title = Column(VARCHAR(255), nullable=False)
+    institution = Column(VARCHAR(128), nullable=True)
+    sector = Column(VARCHAR(255), nullable=True)
+    stock_name = Column(VARCHAR(255), nullable=True)
+    host_personnel = Column(VARCHAR(128), nullable=True)
+    guest_speaker = Column(VARCHAR(128), nullable=True)
+    summary = Column(TEXT, nullable=False)
+    QA = Column(TEXT, nullable=True)
+    scraped_at = Column(DateTime, default=datetime.now())
+
 
 class User(Base):
     """Model for users table."""
@@ -1060,30 +1084,16 @@ class NewsAnalysisRepository:
             session.commit()  # or session.flush()
             return analysis
 
+
 class RecordCommentRepository:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    def insert_or_update_comment(self, data: dict) -> RecordComment:
+    def insert_or_update_comment(self, data: dict) -> RecordComment|None:
         with self.db_manager.get_session() as session:
-            comment = RecordComment(
-                date=data['date'],
-                author=data['author'],
-                team=data['team'],
-                industry=data['industry'],
-                category=data['category'],
-                comment=data['comment'],
-                title=data['title'],
-                scraped_at=datetime.now(),
-            )
-            session.add(comment)
-            session.commit()
-            return comment
-    
-    def insert_or_update_comments_batch(self, data_list: list[dict]) -> list[RecordComment]:
-        with self.db_manager.get_session() as session:
-            comments = [
-                RecordComment(
+            try:
+                # Create a new instance with the provided data
+                comment = RecordComment(
                     date=data['date'],
                     author=data['author'],
                     team=data['team'],
@@ -1091,14 +1101,56 @@ class RecordCommentRepository:
                     category=data['category'],
                     comment=data['comment'],
                     title=data['title'],
-                    scraped_at=datetime.now(),
+                    scraped_at=data['scraped_at'],  # Use the scraped_at from the data dict
                 )
-                for data in data_list
-            ]
-            session.add_all(comments)
-            session.commit()
-            return comments
 
+                # Add the new instance to the session
+                session.add(comment)
+                # Attempt to commit the transaction.
+                # If a record with the same (date, title) exists, this will raise an IntegrityError.
+                session.commit()
+
+                # If commit succeeds, it means the record was newly inserted.
+                return comment
+
+            except IntegrityError:
+                # An IntegrityError was raised due to the unique constraint violation.
+                # Rollback the failed transaction.
+                session.rollback()
+
+                # Log that the record was skipped due to a conflict.
+                print(f"Conflict found for comment with title '{data['title']}' on date '{data['date']}'. Skipping.")
+
+                # Return None to indicate that no new record was added.
+                return None
+
+    def insert_or_update_comments_batch(self, data_list: list[dict]):
+        """
+        Performs a batch upsert for RecordComment objects using MySQL's ON DUPLICATE KEY UPDATE clause.
+        This is highly efficient for large datasets.
+        """
+        if not data_list:
+            return
+
+        with self.db_manager.get_session() as session:
+            # Create the INSERT statement with all the data
+            stmt = mysql_insert(RecordComment).values(data_list)
+
+            # Define the update action for duplicate keys
+            # `stmt.inserted` refers to the values that were going to be inserted.
+            upsert_stmt = stmt.on_duplicate_key_update(
+                author=stmt.inserted.author,
+                team=stmt.inserted.team,
+                industry=stmt.inserted.industry,
+                category=stmt.inserted.category,
+                comment=stmt.inserted.comment,
+                scraped_at=stmt.inserted.scraped_at,
+            )
+
+            # Execute the upsert statement
+            session.execute(upsert_stmt)
+            session.commit()
+            print(f"Batch upsert completed for {len(data_list)} records.")
     
     def get_comment_by_date(self, date_: date) -> List[RecordComment]:
         with self.db_manager.get_session() as session:
@@ -1121,7 +1173,156 @@ class RecordCommentRepository:
                 .delete(synchronize_session=False)
             session.commit()
             return result
-    
+
+
+class RecordMeetingRepository:
+    def __init__(self, db_manager: DatabaseManager):
+        self.db_manager = db_manager
+
+    def insert_or_update_meeting(self, data: dict) -> RecordMeeting | None:
+        """
+        Inserts a new meeting record or skips if a conflict occurs based on the unique constraint.
+
+        Args:
+            data (dict): A dictionary containing the meeting data.
+
+        Returns:
+            RecordMeeting | None: The newly inserted object if successful, otherwise None.
+        """
+        with self.db_manager.get_session() as session:
+            try:
+                # Create a new instance with the provided data
+                meeting = RecordMeeting(
+                    date=data['date'],
+                    title=data['title'],
+                    institution=data.get('institution'),  # Use .get() for optional fields
+                    sector=data.get('sector'),
+                    stock_name=data.get('stock_name'),
+                    host_personnel=data.get('host_personnel'),
+                    guest_speaker=data.get('guest_speaker'),
+                    summary=data['summary'],
+                    QA=data.get('QA'),
+                    scraped_at=data.get('scraped_at')  # Use the scraped_at from the data dict
+                )
+
+                # Add the new instance to the session
+                session.add(meeting)
+                # Attempt to commit the transaction.
+                # If a record with the same (date, title) exists, this will raise an IntegrityError.
+                session.commit()
+
+                # If commit succeeds, it means the record was newly inserted.
+                return meeting
+
+            except IntegrityError:
+                # An IntegrityError was raised due to the unique constraint violation.
+                # Rollback the failed transaction.
+                session.rollback()
+
+                # Log that the record was skipped due to a conflict.
+                print(f"Conflict found for meeting with title '{data['title']}' on date '{data['date']}'. Skipping.")
+
+                # Return None to indicate that no new record was added.
+                return None
+
+    def insert_or_update_meetings_batch(self, data_list: list[dict]):
+        """
+        Performs a batch upsert for RecordMeeting objects using MySQL's ON DUPLICATE KEY UPDATE clause.
+        This is highly efficient for large datasets.
+        Note: This updates ALL fields on duplicate key. Modify the upsert_stmt if you want partial updates.
+        """
+        if not data_list:
+            return
+
+        with self.db_manager.get_session() as session:
+            # Prepare the data for insertion
+            prepared_data_list = []
+            for data in data_list:
+                prepared_data = {
+                    'date': data['date'],
+                    'title': data['title'],
+                    'institution': data.get('institution'),
+                    'sector': data.get('sector'),
+                    'stock_name': data.get('stock_name'),
+                    'host_personnel': data.get('host_personnel'),
+                    'guest_speaker': data.get('guest_speaker'),
+                    'summary': data['summary'],
+                    'QA': data.get('QA'),
+                    'scraped_at': data.get('scraped_at')
+                }
+                prepared_data_list.append(prepared_data)
+
+            # Create the INSERT statement with all the data
+            stmt = mysql_insert(RecordMeeting).values(prepared_data_list)
+
+            # Define the update action for duplicate keys
+            # `stmt.inserted` refers to the values that were going to be inserted.
+            upsert_stmt = stmt.on_duplicate_key_update(
+                institution=stmt.inserted.institution,
+                sector=stmt.inserted.sector,
+                stock_name=stmt.inserted.stock_name,
+                host_personnel=stmt.inserted.host_personnel,
+                guest_speaker=stmt.inserted.guest_speaker,
+                summary=stmt.inserted.summary,
+                QA=stmt.inserted.QA,
+                scraped_at=stmt.inserted.scraped_at,
+            )
+
+            # Execute the upsert statement
+            session.execute(upsert_stmt)
+            session.commit()
+            print(f"Batch upsert completed for {len(data_list)} records.")
+
+    def get_meeting_by_date(self, date_: date) -> List[RecordMeeting]:
+        """
+        Retrieves all meeting records for a specific date.
+
+        Args:
+            date_ (date): The date to filter meetings.
+
+        Returns:
+            List[RecordMeeting]: A list of RecordMeeting objects.
+        """
+        with self.db_manager.get_session() as session:
+            return session.query(RecordMeeting) \
+                .filter_by(date=date_) \
+                .order_by(RecordMeeting.title) \
+                .all()
+
+    def get_all_titles_today(self) -> List[str]:
+        """
+        Retrieves all distinct meeting titles for today's date.
+
+        Returns:
+            List[str]: A list of unique meeting titles.
+        """
+        with self.db_manager.get_session() as session:
+            # Query returns tuples like [(title1,), (title2,), ...], so we extract the string
+            results = session.query(RecordMeeting.title) \
+                .filter_by(date=date.today()) \
+                .distinct() \
+                .all()
+            # Extract titles from tuples
+            return [row[0] for row in results]
+
+    def delete_meeting_by_date(self, date_: date) -> int:
+        """
+        Deletes all meeting records for a specific date.
+
+        Args:
+            date_ (date): The date of the records to delete.
+
+        Returns:
+            int: The number of deleted records.
+        """
+        with self.db_manager.get_session() as session:
+            result = session.query(RecordMeeting) \
+                .filter_by(date=date_) \
+                .delete(synchronize_session=False)
+            session.commit()
+            return result
+
+
 class UsersRepository:
     """Repository for users table operations."""
 
