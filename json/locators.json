@@ -1,0 +1,180 @@
+{
+    "jiuyan": {
+        "url": "https://www.jiuyangongshe.com",
+        "wait_for_dynamical": null,
+        "locators": {
+          "login_dialog": {
+            "by": "css",
+            "value": "div.el-dialog__body"
+          },
+          "open_login_btn": {
+            "by": "css",
+            "value": "div.name.lf"
+          },
+          "tab_switch": {
+            "by": "css",
+            "value": "div#tab-accounts"
+          },
+          "check_box": null,
+          "phone_input": {
+            "by": "css",
+            "value": "div#pane-accounts input[name='phone']"
+          },
+          "pwd_input": {
+            "by": "css",
+            "value": "div#pane-accounts input[name='password']"
+          },
+          "login_btn": {
+            "by": "css",
+            "value": "div#pane-accounts button.el-button--primary"
+          },
+          "wrong_phone_passwd": null
+        }
+      },
+    "xuangutong":  {
+        "url": "https://xuangutong.com.cn",
+        "wait_for_dynamical": null,
+        "locators": {
+          "login_dialog": {
+            "by": "css",
+            "value": "form.form-login"
+          },
+          "open_login_btn": {
+            "by": "css",
+            "value": "span.go-login"
+          },
+          "tab_switch": {
+            "by": "css",
+            "value": "span.switch-item"
+          },
+          "check_box": null,
+          "phone_input": {
+            "by": "css",
+            "value": "input[placeholder='请输入手机号']"
+          },
+          "pwd_input": {
+            "by": "css",
+            "value": "input[placeholder='请输入密码']"
+          },
+          "login_btn": {
+            "by": "css",
+            "value": "button.submit[type='submit']"
+          },
+          "wrong_phone_passwd": null
+        }
+      },
+    "gangtise":  {
+        "url": " https://open.gangtise.com/",
+        "wait_for_dynamical": {"by": "css", "value": "div.hotspot-top"},
+        "locators": {
+          "login_dialog": {
+            "by": "css",
+            "value": "div.login-box"
+          },
+          "open_login_btn": null,
+          "tab_switch": null,
+          "check_box": [
+            {
+              "by": "css",
+              "value": "div.privacyPolicy .el-checkbox__input"
+            },
+            {
+              "by": "xpath",
+              "value": "//span[contains(@class,'el-checkbox__label')]//*[text()='记住密码']/ancestor::label//span[contains(@class,'el-checkbox__input')]"
+            },
+            {
+              "by": "xpath",
+              "value": "//span[contains(@class,'el-checkbox__label')]//*[text()='自动登录']/ancestor::label//span[contains(@class,'el-checkbox__input')]"
+            }
+          ],
+          "phone_input": {
+            "by": "css",
+            "value": "input.login-phone[placeholder='请输入您的手机号/账号']"
+          },
+          "pwd_input": {
+            "by": "css",
+            "value": "input.login-password_[placeholder='请输入密码']"
+          },
+          "login_btn": {
+            "by": "xpath",
+            "value": "//div[contains(@class,'login-button') and normalize-space(text())='登录']"
+          },
+          "wrong_phone_passwd": null
+        }
+      },
+
+    "alphapai":  {
+        "url": "https://alphapai-web.rabyte.cn/reading/paipai/index",
+        "wait_for_dynamical": null,
+        "locators": {
+          "login_dialog": {
+            "by": "css",
+            "value": "div.login-box"
+          },
+          "open_login_btn": null,
+          "tab_switch": {
+            "by": "xpath",
+            "value": "//a[contains(text(),'账号密码登录')]"
+          },
+          "check_box": null,
+          "phone_input": {
+            "by": "xpath",
+            "value": "//input[@placeholder='请输入手机号']"
+          },
+          "pwd_input": {
+            "by": "xpath",
+            "value": "//input[@placeholder='请输入密码']"
+          },
+          "login_btn": {
+            "by": "xpath",
+            "value": "//div[contains(text(),'登录') or contains(text(),'登 录')]"
+          },
+          "wrong_phone_passwd": {
+            "by": "xpath",
+            "value": "//div[contains(@class,'toast') and contains(text(),'登录失败')]"
+          }
+        }
+      },
+    "alphapai_record": {
+        "https://alphapai-web.rabyte.cn/reading/home/meeting": {
+          "record_type": "meeting",
+          "filter_click": "div.library-date-filter-tabs span.tab:has-text('今天')",
+          "scroll_container": "div.table-list .scroll-box",
+          "bottom_flag": "div.table-list .scroll-box .table-body .no-more",
+          "record_list_item": "div.table-list .scroll-box .table-body .table-row",
+          "title_click": "span.normal.title span.el-tooltip",
+          "close_click": null,
+          "record_property_wrapper": null,
+          "properties": {
+            "title": "div.article-title .title",
+            "summary": "#summaryDetailAIContent > div.topic-bullets-render",
+            "q_a_section": "#summaryDetailAIContent > div.qa-list-render",
+            "institution": ".normal-info-box .desc .institution",
+            "sector": ".normal-info-box .desc .normal-tag",
+            "stock_name": ".normal-info-box .desc .stock-name",
+            "meeting_time": ".normal-info-box .msg .time",
+            "host_personnel": ".normal-info-box .msg .msg-limit:nth-child(2)",
+            "guest_speaker": ".normal-info-box .msg .msg-limit:nth-child(3)"
+          }
+        },
+        "https://alphapai-web.rabyte.cn/reading/home/comment": {
+          "record_type": "comment",
+          "filter_click": "span.tab:has-text(\"今天\")",
+          "scroll_container": "#app > div > div.app-layout-container > div.app-layout-body > div.app-right-content > div > div.comment-body > div.comment-left",
+          "bottom_flag": "div.all-comment-container > div.no-more",
+          "record_list_item": "div.comment-list-item .list-item",
+          "title_click": "div.comment-title .title",
+          "close_click": "div.right > i.iconfont.icon-guanbi",
+          "record_property_wrapper": "div.comment-list-detail-dialog-body:visible",
+          "properties": {
+            "title": ".header .title",
+            "author": ".line-two .left .name",
+            "team": ".line-two .left .team",
+            "industry": ".comment-stock-theme .industry",
+            "comment": ".comment-context .content",
+            "category": ".comment-stock-theme .sector-item-container .name"
+          }
+        }
+    }
+
+}

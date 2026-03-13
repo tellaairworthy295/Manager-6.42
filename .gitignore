@@ -51,4 +51,4 @@ wheels/
 .installed.cfg
 *.egg
 
-*.json
+.idea
