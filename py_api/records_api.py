@@ -11,8 +11,8 @@ logger = get_records_scraper_logger()
 router = APIRouter(prefix="/records", tags=["Records"])
 
 
-@router.post("/get_comment")
-async def scrape_comment():
+@router.post("/get_records")
+async def scrape_records():
     # data = await request.json()
     user_id = "1eeeb1dc-34c8-446c-879e-456f69762bf7"
     # Replace with your actual storage state path
@@ -21,7 +21,7 @@ async def scrape_comment():
         record_maps = json.load(f)["alphapai_record"]
 
     def run_scrape_in_thread(storage_state, r_url, r_locators):
-        for _ in range(3):
+        for _ in range(1):
             try:
                 asyncio.run(scrape_website(storage_state=storage_state, url=r_url, locators=r_locators))
                 break

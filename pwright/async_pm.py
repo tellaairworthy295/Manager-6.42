@@ -5,11 +5,13 @@ import sys
 sys.stdout = sys.__stdout__
 sys.stderr = sys.__stderr__
 
+
 class AsyncPlaywrightManager:
     """
     Per-task lifecycle to avoid thread leaks and greenlet conflicts.
     You can later cache per-process if you run --threads 1 or ensure single-thread per process.
     """
+
     def __init__(self):
         self._pw = None
         self._browser = None
@@ -20,6 +22,7 @@ class AsyncPlaywrightManager:
             headless=False,
             args=[
                 "--disable-blink-features=AutomationControlled",
+                "--disable-popup-blocking",
                 "--disable-infobars",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",

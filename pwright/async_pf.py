@@ -1,10 +1,11 @@
 import asyncio
 
+
 async def new_stealth_page(context):
     page = await context.new_page()
 
     # Kill popups
-    page.on("popup", lambda popup: asyncio.create_task(popup.close()))
+    # page.on("popup", lambda popup: asyncio.create_task(popup.close()))
 
     await page.set_extra_http_headers({
         "User-Agent": (

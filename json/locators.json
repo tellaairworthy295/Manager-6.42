@@ -152,9 +152,8 @@
             "institution": ".normal-info-box .desc .institution",
             "sector": ".normal-info-box .desc .normal-tag",
             "stock_name": ".normal-info-box .desc .stock-name",
-            "meeting_time": ".normal-info-box .msg .time",
-            "host_personnel": ".normal-info-box .msg .msg-limit:nth-child(2)",
-            "guest_speaker": ".normal-info-box .msg .msg-limit:nth-child(3)"
+            "meeting_time_raw": ".normal-info-box .msg .time",
+            "personnel_list": ".normal-info-box .msg .msg-limit"
           }
         },
         "https://alphapai-web.rabyte.cn/reading/home/comment": {
@@ -169,6 +168,7 @@
           "properties": {
             "title": ".header .title",
             "author": ".line-two .left .name",
+            "time": ".line-two .left .time",
             "team": ".line-two .left .team",
             "industry": ".comment-stock-theme .industry",
             "comment": ".comment-context .content",

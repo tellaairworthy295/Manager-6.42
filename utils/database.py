@@ -233,6 +233,7 @@ class RecordComment(Base):
     title = Column(VARCHAR(255), nullable=False)
     author = Column(VARCHAR(128), nullable=False)
     team = Column(VARCHAR(128), nullable=True)
+    comment_time = Column(DateTime, nullable=False)
     industry = Column(VARCHAR(128), nullable=True)
     category = Column(VARCHAR(255), nullable=True)
     comment = Column(TEXT, nullable=False)
@@ -254,8 +255,9 @@ class RecordMeeting(Base):
     institution = Column(VARCHAR(128), nullable=True)
     sector = Column(VARCHAR(255), nullable=True)
     stock_name = Column(VARCHAR(255), nullable=True)
+    meeting_time = Column(DateTime, nullable=True)
     host_personnel = Column(VARCHAR(128), nullable=True)
-    guest_speaker = Column(VARCHAR(128), nullable=True)
+    guest_speaker = Column(VARCHAR(255), nullable=True)
     summary = Column(TEXT, nullable=False)
     QA = Column(TEXT, nullable=True)
     scraped_at = Column(DateTime, default=datetime.now())
@@ -1097,6 +1099,7 @@ class RecordCommentRepository:
                     date=data['date'],
                     author=data['author'],
                     team=data['team'],
+                    comment_time=data['comment_time'],
                     industry=data['industry'],
                     category=data['category'],
                     comment=data['comment'],
@@ -1141,6 +1144,7 @@ class RecordCommentRepository:
             upsert_stmt = stmt.on_duplicate_key_update(
                 author=stmt.inserted.author,
                 team=stmt.inserted.team,
+                comment_time=stmt.inserted.comment_time,
                 industry=stmt.inserted.industry,
                 category=stmt.inserted.category,
                 comment=stmt.inserted.comment,
@@ -1161,10 +1165,11 @@ class RecordCommentRepository:
 
     def get_all_titles_today(self) -> List[str]:
         with self.db_manager.get_session() as session:
-            return session.query(RecordComment.title) \
+            results = session.query(RecordComment.title) \
                 .filter_by(date=date.today()) \
                 .distinct() \
                 .all()
+            return [row[0] for row in results]
 
     def delete_comment_by_date(self, date_: date) -> int:
         with self.db_manager.get_session() as session:
@@ -1198,6 +1203,7 @@ class RecordMeetingRepository:
                     institution=data.get('institution'),  # Use .get() for optional fields
                     sector=data.get('sector'),
                     stock_name=data.get('stock_name'),
+                    meeting_time = data.get("meeting_time"),
                     host_personnel=data.get('host_personnel'),
                     guest_speaker=data.get('guest_speaker'),
                     summary=data['summary'],
@@ -1244,6 +1250,7 @@ class RecordMeetingRepository:
                     'institution': data.get('institution'),
                     'sector': data.get('sector'),
                     'stock_name': data.get('stock_name'),
+                    'meeting_time': data.get("meeting_time"),
                     'host_personnel': data.get('host_personnel'),
                     'guest_speaker': data.get('guest_speaker'),
                     'summary': data['summary'],
@@ -1261,6 +1268,7 @@ class RecordMeetingRepository:
                 institution=stmt.inserted.institution,
                 sector=stmt.inserted.sector,
                 stock_name=stmt.inserted.stock_name,
+                meeting_time=stmt.inserted.meeting_time,
                 host_personnel=stmt.inserted.host_personnel,
                 guest_speaker=stmt.inserted.guest_speaker,
                 summary=stmt.inserted.summary,

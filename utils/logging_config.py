@@ -14,7 +14,7 @@ def create_logger(name: str, log_file: Path) -> logging.Logger:
     global _listener
 
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     logger.propagate = False
 
     if logger.handlers:

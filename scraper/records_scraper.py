@@ -1,10 +1,10 @@
-
-from datetime import date, datetime
+import re
+from datetime import date, datetime, timedelta
 from pwright.async_cm import PlaywrightContext
 from pwright.async_pf import new_stealth_page
 from pwright.async_pm import AsyncPlaywrightManager
 from playwright.async_api import Page
-from typing import Dict
+from typing import Dict, Optional
 from utils.database import get_db_manager, RecordCommentRepository, RecordMeetingRepository
 import asyncio
 from utils.logging_config import get_records_scraper_logger
@@ -40,29 +40,18 @@ async def insert_scraped_data(data_list: list, record_type: str):
     insert_method(data_list)
 
 
-def _extract_title_set(raw_titles):
-    """Helper to extract a set of titles from the DB query result."""
-    if raw_titles and isinstance(raw_titles[0], tuple):
-        return set(title_tuple[0] for title_tuple in raw_titles if title_tuple and title_tuple[0])
-    else:
-        return set(title for title in raw_titles if title)
-
-
 async def scrape_website(storage_state: str, url: str, locators: dict):
     record_type = locators.get("record_type", "unknown")
     db_manager = get_db_manager()
 
     if record_type.lower() == "comment":
         repo_record = RecordCommentRepository(db_manager)
-        raw_titles = repo_record.get_all_titles_today()
-        titles = _extract_title_set(raw_titles)
     elif record_type.lower() == "meeting":
         repo_record = RecordMeetingRepository(db_manager)
-        raw_titles = repo_record.get_all_titles_today()
-        titles = _extract_title_set(raw_titles)
     else:
         raise ValueError(f"Unsupported record_type: {record_type}. Expected 'comment' or 'meeting'.")
 
+    titles = repo_record.get_all_titles_today()
     manager = AsyncPlaywrightManager()
     await manager.start()
 
@@ -78,110 +67,80 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
             await page.goto(url, wait_until="networkidle")
             await page.click(locators["filter_click"])
             await scroll_to_bottom(page, locators["scroll_container"], locators["bottom_flag"])
+            list_items = await page.query_selector_all(locators["record_list_item"])
+            logger.info(f"Total items found: {len(list_items)}")
 
-            # For meetings: iterate by index, re-query each time to avoid stale handles
-            if record_type.lower() == "meeting":
-                # Get total count first
-                total_items = len(await page.query_selector_all(locators["record_list_item"]))
-                logger.info(f"Total meeting items found: {total_items}")
+            for i, list_item in enumerate(list_items):
+                title_element = await list_item.query_selector(locators["title_click"])
+                if not title_element:
+                    logger.warning(f"No title element in item {i}")
+                    continue
 
-                for i in range(total_items):
-                    # Re-query every iteration because go_back() re-renders the DOM
-                    current_items = await page.query_selector_all(locators["record_list_item"])
-                    if i >= len(current_items):
-                        logger.warning(f"Item index {i} out of range after re-query (total={len(current_items)})")
-                        break
+                title = await title_element.text_content()
+                if title and title.strip() in titles:
+                    logger.info(f"Skipping existing title: '{title.strip()}'")
+                    continue
 
-                    list_item = current_items[i]
-                    title_element = await list_item.query_selector(locators["title_click"])
-                    if not title_element:
-                        logger.warning(f"No title element in item {i}")
-                        continue
-
-                    title = await title_element.text_content()
-                    if title and title.strip() in titles:
-                        logger.info(f"Skipping existing title: '{title.strip()}'")
-                        continue
-
-                    logger.info(f"Scraping meeting item {i}: '{title.strip() if title else 'N/A'}'")
-                    scraped = await scrape_meeting_new_tab(context, page, list_item, locators["properties"])
+                if record_type.lower() == "meeting":
+                    scraped = await scrape_meeting_new_tab(context, page, title_element, locators["properties"])
                     if scraped:
                         result.append(scraped)
 
-                    await asyncio.sleep(0.7)
-
-            elif record_type.lower() == "comment":
-                list_items = await page.query_selector_all(locators["record_list_item"])
-                for i, list_item in enumerate(list_items):
-                    title_element = await list_item.query_selector(locators["title_click"])
-                    if not title_element:
-                        logger.warning(f"Could not find title element in list item {i}")
-                        continue
-
-                    title = await title_element.text_content()
-                    if title and title.strip() in titles:
-                        logger.info(f"Skipping existing title: '{title.strip()}'")
-                        continue
-
+                elif record_type.lower() == "comment":
                     await title_element.click()
                     result.append(
                         await scrape_popup(page, locators["record_property_wrapper"], locators["properties"])
                     )
                     await close_popup(page, locators["close_click"])
 
-                    await asyncio.sleep(0.7)
+                await asyncio.sleep(0.7)
 
     finally:
         await insert_scraped_data(result, record_type)
         await manager.shutdown()
 
 
-async def scrape_meeting_new_tab(context, page, list_item, properties: dict) -> Dict | None:
+async def scrape_meeting_new_tab(context, page: Page, title_element, properties: dict) -> Dict | None:
     """
-    Click a meeting row, wait for Vue Router SPA navigation,
-    scrape the detail page, then navigate back.
+    Click a meeting row, catch the new tab it opens via window.open(),
+    scrape the detail page, then close the tab.
     """
+    new_page = None
     try:
-        # The real clickable element is the innermost span, not the outer wrapper
-        # el-tooltip span is what Vue's event delegation actually tracks
-        inner_span = await list_item.query_selector("span.el-tooltip")
-        if not inner_span:
-            # fallback to the row itself
-            inner_span = list_item
 
-        # Scroll the element into view within its custom scroll container
-        await inner_span.evaluate("""el => {
-            // Walk up to find the scrollable container and scroll el into view within it
-            el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
-        }""")
+        await title_element.scroll_into_view_if_needed()
         await page.wait_for_timeout(400)
 
-        # Verify it's now in a positive Y position before clicking
-        bbox = await inner_span.bounding_box()
-        logger.debug(f"Inner span bbox before click: {bbox}")
+        # bbox = await title_element.bounding_box()
+        # logger.debug(f"Target bbox before click: {bbox}")
 
-        if bbox and bbox["y"] < 0:
-            logger.warning(f"Element still has negative Y after scrollIntoView: {bbox}")
+        # The click opens a new tab via window.open() — catch it at context level
+        async with context.expect_page() as new_page_info:
+            await title_element.evaluate("el => el.click()")
 
-        # Wait for Vue Router navigation (URL will change)
-        async with page.expect_navigation(wait_until="networkidle", timeout=300000):
-            await inner_span.click()
+        new_page = await new_page_info.value
+        logger.debug(f"New tab opened, URL: {new_page.url}")
 
-        logger.debug(f"Navigated to: {page.url}")
+        # Wait for the new tab to finish loading
+        await new_page.wait_for_load_state("domcontentloaded")
+        await new_page.wait_for_load_state("networkidle", timeout=10000)
+        logger.debug(f"New tab fully loaded: {new_page.url}")
 
-        data = await scrape_meeting_page(page, properties)
+        data = await scrape_meeting_page(new_page, properties)
         return data
 
     except Exception as e:
-        logger.error(f"Failed to scrape meeting page: {e}")
+        logger.error(f"Failed to scrape meeting new tab: {e}")
         return None
 
     finally:
-        # Navigate back to the listing page
-        try:
-            await page.go_back(wait_until="networkidle", timeout=10000)
-        except Exception as e:
-            logger.warning(f"go_back failed: {e}")
+        # Always close the new tab — never touch the original page
+        if new_page:
+            try:
+                await new_page.close()
+                logger.debug("New tab closed.")
+            except Exception as e:
+                logger.warning(f"Failed to close new tab: {e}")
 
 
 async def scrape_meeting_page(page: Page, properties: dict) -> Dict:
@@ -194,37 +153,97 @@ async def scrape_meeting_page(page: Page, properties: dict) -> Dict:
     # Wait for a stable anchor element before scraping
     await page.wait_for_selector(properties["title"], state="visible", timeout=10000)
 
-    title           = await get_element_content(page, properties["title"])
-    summary         = await get_element_content(page, properties["summary"])
-    q_a_section     = await get_element_content(page, properties["q_a_section"], required=False)
-    institution     = await get_element_content(page, properties["institution"], required=False)
-    stock_name      = await get_element_content(page, properties["stock_name"], required=False)
-    meeting_time    = await get_element_content(page, properties["meeting_time"])
-    host_personnel  = await get_element_content(page, properties["host_personnel"])
-    guest_speaker   = await get_element_content(page, properties["guest_speaker"])
+    # --- Standard content scraping ---
+    title = await get_element_content(page, properties["title"])
+    summary = await get_element_content(page, properties["summary"])
+    q_a_section = await get_element_content(page, properties["q_a_section"], required=False)
+    institution = await get_element_content(page, properties["institution"], required=False)
+    sector = await get_element_content(page, properties["sector"], is_multiple=True, required=False)
+    stock_name = await get_element_content(page, properties["stock_name"], is_multiple=True, required=False)
+    # ---------------------------------
 
-    # sector can be multi-valued (same pattern as comment's category)
-    sector_elements = await page.query_selector_all(properties["sector"])
-    sector_list = []
-    for se in sector_elements:
-        txt = await se.text_content()
-        txt = txt.strip() if txt else ""
-        if txt:
-            sector_list.append(txt)
-    sector = "|".join(sector_list)
+    # --- Personnel scraping (specific logic) ---
+    host_personnel = ""
+    guest_speaker = ""
+
+    personnel_elements = await page.query_selector_all(properties["personnel_list"])
+    for elem in personnel_elements:
+        raw_text = await elem.text_content()
+        if raw_text:
+            clean_text = raw_text.strip()
+            if clean_text.startswith("主持人员："):
+                host_personnel = clean_text[len("主持人员："):].strip()
+            elif clean_text.startswith("路演嘉宾："):
+                guest_speaker = clean_text[len("路演嘉宾："):].strip()
+    # ------------------------------------------
+
+    # --- Meeting time scraping with parsing ---
+    meeting_time_raw_text = await get_element_content(page, properties["meeting_time_raw"], required=True)
+    time_match = re.search(r'会议时间：\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})', meeting_time_raw_text)
+    meeting_time_str = time_match.group(1) if time_match else ""
+
+    meeting_time = None
+    if meeting_time_str:
+        try:
+            if len(meeting_time_str) == 16:  # Format is "YYYY-MM-DD HH:MM"
+                meeting_time_str += ":00"
+            meeting_time = datetime.strptime(meeting_time_str, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            print(f"Warning: Could not parse meeting time: '{meeting_time_str}'")
+            meeting_time = None
+    # ------------------------------------------
 
     return {
-        "title":          title,
-        "summary":        summary,
-        "q_a_section":    q_a_section,
-        "institution":    institution,
-        "sector":         sector,
-        "stock_name":     stock_name,
-        "meeting_time":   meeting_time,
+        "title": title,
+        "summary": summary,
+        "q_a_section": q_a_section,
+        "institution": institution,
+        "sector": sector,
+        "stock_name": stock_name,
+        "meeting_time": meeting_time,
         "host_personnel": host_personnel,
-        "guest_speaker":  guest_speaker,
-        "scraped_at":     datetime.now(),
-        "date":           date.today(),
+        "guest_speaker": guest_speaker,
+        "scraped_at": datetime.now(),
+        "date": date.today(),
+    }
+
+
+async def scrape_popup(page: Page, dialog_selector: str, properties: dict) -> Dict:
+    """
+    Scrape all relevant data in the popup for insertion into record_comment table.
+    Schema fields (from RecordComment table):
+        date, author, team, industry, category, comment, title, comment_time, scraped_at
+    """
+
+    # Wait for the popup wrapper to be visible
+    await page.wait_for_selector(dialog_selector, state='visible', timeout=8000)
+
+    # The updated `get_element_content` will now automatically wait for these to render
+    title = await get_element_content(page, f"{dialog_selector} {properties['title']}")
+    author = await get_element_content(page, f"{dialog_selector} {properties['author']}")
+    team = await get_element_content(page, f"{dialog_selector} {properties['team']}", required=False)
+    industry = await get_element_content(page, f"{dialog_selector} {properties['industry']}", required=False)
+
+    # Fixed variable assignments to match schema
+    comment = await get_element_content(page, f"{dialog_selector} {properties['comment']}")
+    category = await get_element_content(page, f"{dialog_selector} {properties['category']}", required=False, is_multiple=True)
+
+    time_elapsed_raw = await get_element_content(page, f"{dialog_selector} {properties['time']}")
+
+    # --- Process the relative time string ---
+    comment_time = parse_relative_time(time_elapsed_raw)
+    # ----------------------------------------
+
+    return {
+        "date": date.today(),
+        "author": author,
+        "team": team,
+        "comment_time": comment_time,
+        "industry": industry,
+        "category": category,
+        "comment": comment,
+        "title": title,
+        "scraped_at": datetime.now(),
     }
 
 
@@ -269,15 +288,59 @@ async def scroll_to_bottom(page: Page, scroll_container_selector: str, bottom_fl
     await scroll_container.evaluate("el => el.scrollTop = el.scrollHeight")
 
 
-async def get_element_content(page: Page, selector: str, required: bool = True):
+async def get_element_content(
+        page: Page,
+        selector: str,
+        required: bool = True,
+        is_multiple: bool = False
+) -> Optional[str]:
+    """
+    Unified function to get content from a single element or multiple elements.
+    It waits for elements to appear and handles potential delays in text injection.
+
+    Args:
+        page (Page): The Playwright page object.
+        selector (str): The CSS selector to search for.
+        required (bool): If True, raises an exception if nothing is found.
+        is_multiple (bool): If True, queries for multiple elements and joins their content with '|'.
+    """
     try:
-        # wait_for_selector waits (up to 5s) for the element to actually exist in the DOM
-        element = await page.wait_for_selector(selector, state='attached', timeout=5000)
-        if element:
+        element = await page.wait_for_selector(selector, state='attached', timeout=10000)
+        if is_multiple:
+            elements = await page.query_selector_all(selector)
+
+            if not elements:
+                if required:
+                    raise Exception(f"No elements found for selector: {selector}")
+                return None
+
+            contents = []
+            for element in elements:
+                # Get initial content
+                raw = await element.text_content()
+
+                # If content is empty, wait and retry (SPA handling)
+                if not raw or not raw.strip():
+                    await page.wait_for_timeout(500)
+                    raw = await element.text_content()
+
+                if raw and raw.strip():
+                    contents.append(raw.strip())
+
+            if not contents:
+                if required:
+                    raise Exception(f"All elements found for selector '{selector}' had no content.")
+                return None
+
+            return "|".join(contents)
+
+        else:  # Single element logic
+            if not element:
+                raise Exception(f'Selector not found: {selector}')
+
             raw = await element.text_content()
 
-            # Single Page Applications sometimes render the element, then inject the text a split second later.
-            # If it's empty, we wait half a second and check one more time.
+            # Handle potential delay in text injection
             if not raw or not raw.strip():
                 await page.wait_for_timeout(500)
                 raw = await element.text_content()
@@ -285,122 +348,39 @@ async def get_element_content(page: Page, selector: str, required: bool = True):
             if not raw or not raw.strip():
                 raise Exception(f"{selector}: no content")
 
-            logger.info(f'{raw.strip()}')
+            # logger.info(f'{raw.strip()}') # Uncomment if logging is desired
             return raw.strip()
 
-        raise Exception(f'{selector} not found')
     except Exception as e:
         if required:
-            raise Exception(f'{selector} not found. Details: {str(e)}')
+            raise Exception(f'{selector} not found or error occurred. Details: {str(e)}')
         return None
 
 
-async def intercept_meeting_api(page: Page, list_item, properties: dict) -> Dict | None:
+def parse_relative_time(time_str: str) -> datetime:
     """
-    Capture the API call triggered by clicking a meeting row,
-    then call that API directly to get the data.
+    Parses relative time strings like '刚刚', 'xx分钟前', 'xx小时前' into a datetime object.
     """
-    captured_requests = []
-    captured_responses = []
+    now = datetime.now()
 
-    async def on_request(request):
-        # Capture XHR/fetch calls (not static assets)
-        if request.resource_type in ("xhr", "fetch"):
-            url = request.url
-            # Filter for likely detail API endpoints
-            if any(kw in url for kw in ["detail", "meeting", "report", "article", "paipai"]):
-                captured_requests.append({
-                    "url": url,
-                    "method": request.method,
-                    "headers": request.headers,
-                    "post_data": request.post_data,
-                })
-                logger.debug(f"Captured request: {request.method} {url}")
+    if "刚刚" in time_str:
+        return now
 
-    async def on_response(response):
-        if response.request.resource_type in ("xhr", "fetch"):
-            url = response.url
-            if any(kw in url for kw in ["detail", "meeting", "report", "article", "paipai"]):
-                try:
-                    body = await response.json()
-                    captured_responses.append({
-                        "url": url,
-                        "status": response.status,
-                        "body": body,
-                    })
-                    logger.debug(f"Captured response: {response.status} {url}")
-                except Exception:
-                    pass  # Not JSON
+    # Match patterns like "xx分钟前" or "xx小时前"
+    minutes_match = re.search(r'(\d+)\s*分钟前', time_str)
+    hours_match = re.search(r'(\d+)\s*小时前', time_str)
 
-    page.on("request", on_request)
-    page.on("response", on_response)
+    if minutes_match:
+        minutes_ago = int(minutes_match.group(1))
+        return now - timedelta(minutes=minutes_ago)
 
-    try:
-        # Use JS click to bypass Sensors Data click-coordinate tracking
-        title_span = await list_item.query_selector("span.el-tooltip")
-        if title_span:
-            await title_span.evaluate("el => el.click()")
-        else:
-            await list_item.evaluate("el => el.click()")
+    if hours_match:
+        hours_ago = int(hours_match.group(1))
+        return now - timedelta(hours=hours_ago)
 
-        # Wait for the API call to complete
-        await page.wait_for_timeout(3000)
-
-        logger.debug(f"Total captured responses: {len(captured_responses)}")
-        for r in captured_responses:
-            logger.debug(f"  {r['url']}: {str(r['body'])[:200]}")
-
-        return captured_responses  # Return raw for inspection first
-
-    finally:
-        page.remove_listener("request", on_request)
-        page.remove_listener("response", on_response)
-
-
-async def scrape_popup(page: Page, dialog_selector: str, properties: dict) -> Dict:
-    """
-    Scrape all relevant data in the popup for insertion into record_comment table.
-    Schema fields (from RecordComment table):
-        date, author, team, industry, category, comment, title, scraped_at
-    """
-
-    # Wait for the popup wrapper to be visible
-    await page.wait_for_selector(dialog_selector, state='visible')
-
-    # The updated `get_element_content` will now automatically wait for these to render
-    title = await get_element_content(page, f"{dialog_selector} {properties['title']}")
-    author = await get_element_content(page, f"{dialog_selector} {properties['author']}")
-    team = await get_element_content(page, f"{dialog_selector} {properties['team']}", False)
-    industry = await get_element_content(page, f"{dialog_selector} {properties['industry']}", False)
-    comment = await get_element_content(page, f"{dialog_selector} {properties['comment']}")
-
-    # Category logic
-    category_selector = f"{dialog_selector} {properties['category']}"
-    try:
-        # Wait for at least one category to render so query_selector_all doesn't return empty instantly
-        await page.wait_for_selector(category_selector, state='attached', timeout=3000)
-    except:
-        pass  # Proceed anyway in case a comment legitimately has no categories
-
-    category_elements = await page.query_selector_all(category_selector)
-    category_list = []
-    for ce in category_elements:
-        txt = await ce.text_content()
-        txt = txt.strip() if txt else ""
-        if txt:
-            category_list.append(txt)
-    category = "|".join(category_list)
-
-    return {
-        "date": date.today(),
-        "author": author,
-        "team": team,
-        "industry": industry,
-        "category": category,
-        "comment": comment,
-        "title": title,
-        "scraped_at": datetime.now(),
-    }
+    # If no pattern matches, return the current time as a fallback
+    print(f"Warning: Could not parse relative time string: '{time_str}'. Using current time.")
+    return now
 
 
 async def close_popup(page: Page, close_click_selector: str):
