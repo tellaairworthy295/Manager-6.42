@@ -1,130 +1,48 @@
 import ast
 import asyncio
-from datetime import datetime
 import json
+from datetime import datetime
 
-import pandas as pd
-import pandas_market_calendars as mcal
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from scraper.cookies_getter import update_common_cookies
-from scraper.stocks_scraper import main_scraper
-from image_process import main_flow
-from utils.database import StockStatsRepository, get_db_manager
+from scraper.utils.scrape_utils import run_stocks_scrape
 from utils.logging_config import get_others_logger
 
-
 logger = get_others_logger()
-
 router = APIRouter(prefix="/stocks", tags=["Stocks"])
 
-@router.post("/refresh_cookies")
-async def refresh_cookies(request: Request):
-    data = await request.json()
-    sources = data.get("sources")
-    # Make sure sources is a list
-    if isinstance(sources, str):
-        try:
-            sources = json.loads(sources)
-        except Exception:
-            try:
-                sources = ast.literal_eval(sources)
-            except Exception:
-                if "，" in sources:
-                    sources = sources.split("，")
-                else:
-                    sources = sources.split(",")
-    sources = [str(s).strip(" []'\"") for s in sources if s and str(s).strip()]
-    if not sources:
-        return JSONResponse({"error": "sources are required"}, status_code=400)
-    await update_common_cookies(sources, False)
-    return {"status": "done"}
 
-@router.get("/trendings")
-def fetch_market_stats(days: int = 30):
-    db_manager = get_db_manager()
-    repo = StockStatsRepository(db_manager)
-    df_records = repo.get_market_stats(days)
-    return df_records
+@router.post("/refresh_cookies")
+async def refresh_cookies():
+    await update_common_cookies(["jiuyan", "xuangutong"], False)
+    return {"status": "done"}
 
 
 @router.get("/scrape_stocks")
 async def scrape_stocks_api():
     """
-    API endpoint for scraping A股 stock data.
-    Only runs on trading days.
+    API endpoint for scraping A-share stock data.
+    Returns immediately after scheduling the scrape as a background task.
     """
+    date = datetime.now()
+    # Fire-and-forget: caller gets instant response,
+    # run_stocks_scrape handles its own threading internally
+    await asyncio.get_event_loop().create_task(
+        _scrape_stocks_task(date)
+    )
+    return JSONResponse({
+        "status": "accepted",
+        "msg": "Stock scrape task scheduled",
+        "date": date.strftime("%Y-%m-%d"),
+    })
+
+
+async def _scrape_stocks_task(date: datetime):
+    """Wrapper that adds error boundary for the fire-and-forget task."""
     try:
-        date = datetime.now()
-
-        def is_a_share_trading_day(date_obj=None):
-            """Check if a date is a trading day for Chinese A-shares"""
-            if date_obj is None:
-                date_obj = datetime.now()
-
-            # Get Shanghai Stock Exchange calendar (same as Shenzhen for A-shares)
-            exchange = mcal.get_calendar("XSHG")
-
-            # Convert to pandas Timestamp
-            if isinstance(date_obj, datetime):
-                timestamp = pd.Timestamp(date_obj.date())
-            else:
-                timestamp = pd.Timestamp(date_obj)
-
-            # Check if this date is in the trading schedule
-            # Get schedule for a small window to minimize API calls
-            start_date = timestamp - pd.Timedelta(days=1)
-            end_date = timestamp + pd.Timedelta(days=1)
-
-            schedule = exchange.schedule(start_date=start_date, end_date=end_date)
-
-            # Return True if the date is in the schedule
-            return timestamp in schedule.index
-
-        # Check if today is an A-share trading day
-        if not is_a_share_trading_day(date):
-            return JSONResponse(
-                {
-                    "status": "skipped",
-                    "msg": "Today is not an A-share trading day, skipping",
-                    "date": date.strftime("%Y-%m-%d"),
-                }
-            )
-
-        # Today is a trading day, proceed with normal scraping
-        date = date.strftime("%Y-%m-%d")
-        flag, market_number = await main_scraper(date)
-
-        if not flag:
-            return JSONResponse(
-                {
-                    "status": "success",
-                    "msg": "No data found",
-                    "date": date,
-                }
-            )
-
-        await asyncio.to_thread(main_flow, market_number, date, flag)
-
-        return JSONResponse(
-            {
-                "status": "success",
-                "date": date,
-                "market": "A-share",
-                "today_is_trading_day": True,
-            }
-        )
-
+        result = await run_stocks_scrape(date)
+        logger.info(f"[Stocks] Background task finished: {result}")
     except Exception as e:
-        logger.error(f"Error in scrape_stocks_api: {str(e)}")
-
-        return JSONResponse(
-            {
-                "status": "error",
-                "msg": f"Internal server error: {str(e)}",
-            },
-            status_code=500,
-        )
-
-
+        logger.error(f"[Stocks] Background task failed: {e}", exc_info=True)

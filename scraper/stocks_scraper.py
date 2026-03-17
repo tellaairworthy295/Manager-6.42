@@ -1,4 +1,3 @@
-
 import json
 import os
 import asyncio
@@ -104,12 +103,12 @@ def postprocess_value(value: str | None, rules: list[str] | None, site: str | No
 
         elif rule == "text_formatter":
             value = re.sub(r"[\s\n\t]+", "", value)
-        
+
         elif rule == "extract_percent_str":
             # Extract percent-format string, may start with + or -, e.g., "+8.00%", "-6.42%", "5.5%"
             m = re.search(r'[+-]?\d+\.?\d*%', value)
             value = m.group(0) if m else None
-            
+
         else:
             raise ValueError(f"Unknown postprocess rule: {rule}")
 
@@ -122,7 +121,7 @@ async def extract_page_data(
         site: str
 ) -> dict:
     result = {}
-    
+
     for block_name, fields in extractors.items():
         block_data = {}
 
@@ -306,10 +305,10 @@ async def scrape_page(
     section_datasets = {}
     page_data = {}
 
-    if selectors.get("click_selector"): 
+    if selectors.get("click_selector"):
         await async_safe_click(
-            page, 
-            f"xpath={selectors['click_selector']}", 
+            page,
+            f"xpath={selectors['click_selector']}",
             timeout=5_000, max_attempts=3
         )
 
@@ -332,16 +331,16 @@ async def scrape_page(
 
             if section_cfg.get("click"):
                 await async_safe_click(
-                    page=page, 
-                    locator=f"xpath={section_cfg['click']}", 
+                    page=page,
+                    locator=f"xpath={section_cfg['click']}",
                     multiple=True
                 )
                 try:
                     await page.wait_for_selector(
-                    section_cfg["wait_for"],
-                    timeout=3000,
-                    state="attached"
-                )
+                        section_cfg["wait_for"],
+                        timeout=3000,
+                        state="attached"
+                    )
                 except:
                     pass
             # Now get all matching elements
@@ -395,7 +394,7 @@ async def scrape_page(
                 record[field] = postprocess_value(
                     raw, cfg.get("postprocess"), site
                 )
-            
+
             if record.get("stock") and record.get("code"):
                 records.append(record)
 

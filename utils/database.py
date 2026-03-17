@@ -258,7 +258,7 @@ class RecordMeeting(Base):
     meeting_time = Column(DateTime, nullable=True)
     host_personnel = Column(VARCHAR(128), nullable=True)
     guest_speaker = Column(VARCHAR(255), nullable=True)
-    summary = Column(TEXT, nullable=False)
+    summary = Column(TEXT, nullable=True)
     QA = Column(TEXT, nullable=True)
     scraped_at = Column(DateTime, default=datetime.now())
 

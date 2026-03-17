@@ -1,4 +1,3 @@
-import collections
 import os
 import re
 from datetime import datetime, timedelta
@@ -16,10 +15,8 @@ from utils.logging_config import get_stock_logger
 # 2️⃣ Add file logger (safe, no buffering issues)
 logger = get_stock_logger()
 
-FONT_PATH = "fonts/NotoSansSC-VariableFont_wght.ttf"
 
-
-def _normalize_text(text: list[str], space: bool = False) -> str:
+def _normalize_text(text: list[str], space: bool = False):
     """Clean and normalize a label string (Chinese/English mixed)."""
     for idx, label in enumerate(text):
         if not label:
@@ -106,6 +103,7 @@ def _save_actionData_db(df: pd.DataFrame, date: str, flag: bool):
     Each record is a dict with date, section, board, code, market_capital, turnover_abs, analysis fields.
     Code field (six digits) should be extracted via extract_six_digit_code before upsert.
     """
+
     def extract_six_digit_code(code: str):
         if not isinstance(code, str):
             return None
@@ -211,13 +209,6 @@ def _get_trendings(rec_texts: list[str]):
 
 
 def _save_stockstats(rec_texts: list[str], market_number: dict, date):
-    """
-    1. 从数据库中读取最近90天的数据，画出曲线图：
-        - 破板率单独画在一张图上；
-        - 涨停数、跌停数、连板数、破板数共用一个y轴（左），上涨家数/下跌家数共用一个y轴（右）
-    2. 新数据写入数据库表 stock_stats
-    """
-
     # 数据抽取
     max_even, max_break = _get_maxEven_maxBreak(rec_texts)
     trendings = _get_trendings(rec_texts)
@@ -240,6 +231,7 @@ def _save_stockstats(rec_texts: list[str], market_number: dict, date):
         "max_break": int(max_break),
     }
     repo.add_market_stats(new_stats)
+
 
 def _save_chart_data(date: str):
     phoenixc.init("guhao_ind", "kQ4@ks0u", ("10.29.92.42", 9081))
@@ -368,7 +360,7 @@ def _save_chart_data(date: str):
                     "data_time": data_time,
                     "close": row["close"],
                     "pre_close": row["pre_close"],
-                    "change_rate": (row["close"] - row["pre_close"])/row["pre_close"],
+                    "change_rate": (row["close"] - row["pre_close"]) / row["pre_close"],
                     "volume": row["volume"] / 100,
                 }
 
@@ -398,6 +390,7 @@ def main_flow(market_number: dict, date, flag: bool = False):
         _save_chart_data(date)
     except Exception as e:
         raise RuntimeError(f"Error while Processing saving data: {e}")
+
 
 if __name__ == "__main__":
     main_flow({}, "2026-02-12", True)

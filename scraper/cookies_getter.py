@@ -262,6 +262,7 @@ class AsyncCookiesHandler:
 
 from utils.database import get_db_manager, UsersRepository
 
+
 async def update_common_cookies(sources: list = None, validate_before_update: bool = False):
     """
     Updates cookies for a given user and specified sources.

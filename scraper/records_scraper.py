@@ -49,7 +49,7 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
     elif record_type.lower() == "meeting":
         repo_record = RecordMeetingRepository(db_manager)
     else:
-        raise ValueError(f"Unsupported record_type: {record_type}. Expected 'comment' or 'meeting'.")
+        raise ValueError(f"Unsupported record_type: {record_type}")
 
     titles = repo_record.get_all_titles_today()
     manager = AsyncPlaywrightManager()
@@ -67,18 +67,19 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
             await page.goto(url, wait_until="networkidle")
             await page.click(locators["filter_click"])
             await scroll_to_bottom(page, locators["scroll_container"], locators["bottom_flag"])
+
             list_items = await page.query_selector_all(locators["record_list_item"])
-            logger.info(f"Total items found: {len(list_items)}")
+            logger.info(f"[{record_type}] Total items found: {len(list_items)}")
 
             for i, list_item in enumerate(list_items):
                 title_element = await list_item.query_selector(locators["title_click"])
                 if not title_element:
-                    logger.warning(f"No title element in item {i}")
+                    logger.warning(f"[{record_type}] No title element in item {i}")
                     continue
 
                 title = await title_element.text_content()
                 if title and title.strip() in titles:
-                    logger.info(f"Skipping existing title: '{title.strip()}'")
+                    logger.info(f"[{record_type}] Skipping: '{title.strip()}'")
                     continue
 
                 if record_type.lower() == "meeting":
@@ -129,10 +130,6 @@ async def scrape_meeting_new_tab(context, page: Page, title_element, properties:
         data = await scrape_meeting_page(new_page, properties)
         return data
 
-    except Exception as e:
-        logger.error(f"Failed to scrape meeting new tab: {e}")
-        return None
-
     finally:
         # Always close the new tab — never touch the original page
         if new_page:
@@ -151,11 +148,12 @@ async def scrape_meeting_page(page: Page, properties: dict) -> Dict:
         stock_name, meeting_time, host_personnel, guest_speaker, scraped_at
     """
     # Wait for a stable anchor element before scraping
-    await page.wait_for_selector(properties["title"], state="visible", timeout=10000)
+    await page.wait_for_selector(properties["title"], state="visible", timeout=5000)
 
     # --- Standard content scraping ---
     title = await get_element_content(page, properties["title"])
-    summary = await get_element_content(page, properties["summary"])
+    logger.info(f"scraping {title}")
+    summary = await get_element_content(page, properties["summary"], required=False)
     q_a_section = await get_element_content(page, properties["q_a_section"], required=False)
     institution = await get_element_content(page, properties["institution"], required=False)
     sector = await get_element_content(page, properties["sector"], is_multiple=True, required=False)
@@ -220,13 +218,15 @@ async def scrape_popup(page: Page, dialog_selector: str, properties: dict) -> Di
 
     # The updated `get_element_content` will now automatically wait for these to render
     title = await get_element_content(page, f"{dialog_selector} {properties['title']}")
+    logger.info(f"scraping {title}")
     author = await get_element_content(page, f"{dialog_selector} {properties['author']}")
     team = await get_element_content(page, f"{dialog_selector} {properties['team']}", required=False)
     industry = await get_element_content(page, f"{dialog_selector} {properties['industry']}", required=False)
 
     # Fixed variable assignments to match schema
     comment = await get_element_content(page, f"{dialog_selector} {properties['comment']}")
-    category = await get_element_content(page, f"{dialog_selector} {properties['category']}", required=False, is_multiple=True)
+    category = await get_element_content(page, f"{dialog_selector} {properties['category']}", required=False,
+                                         is_multiple=True)
 
     time_elapsed_raw = await get_element_content(page, f"{dialog_selector} {properties['time']}")
 
@@ -305,7 +305,7 @@ async def get_element_content(
         is_multiple (bool): If True, queries for multiple elements and joins their content with '|'.
     """
     try:
-        element = await page.wait_for_selector(selector, state='attached', timeout=10000)
+        element = await page.wait_for_selector(selector, state='attached', timeout=5000)
         if is_multiple:
             elements = await page.query_selector_all(selector)
 

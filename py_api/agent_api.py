@@ -6,7 +6,6 @@ from fastapi.responses import JSONResponse
 
 from exception.exception_handler import ValidationError
 from scraper.cookies_getter import update_agent_cookies
-from scraper.records_scraper import scrape_website
 from tasks.agent_tasks import display_agent_task_main, scrape_agent_task
 from utils.database import UsersRepository, get_db_manager
 from utils.logging_config import get_others_logger
@@ -15,8 +14,8 @@ from utils.validators import split_prompt_to_list, validate_and_prepare_cookies,
     save_user_prompt
 
 logger = get_others_logger()
-
 router = APIRouter(prefix="/agent", tags=["Agent"])
+
 
 @router.post("/refresh_cookies")
 async def refresh_agent_cookies(request: Request):

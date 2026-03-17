@@ -1,6 +1,7 @@
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 import re
 import shutil
@@ -18,28 +19,96 @@ from py_api.stocks_api import router as stocks_router
 from py_api.agent_api import router as agent_router
 from py_api.records_api import router as records_router
 from utils.database import get_db_manager, StockRepository, NewsArticleRepository
-from utils.logging_config import get_others_logger
 from utils.redis_utils import create_aioredis, close_loop_redis, get_aioredis_client
 from fastapi.middleware.cors import CORSMiddleware
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
-# ===== Setup =====
+# ===== existing imports below =====
+import json
+from utils.validators import validate_and_prepare_cookies
+from utils.logging_config import get_others_logger
+from scraper.utils.scrape_utils import scrape_all_records, run_stocks_scrape
 logger = get_others_logger()
+
+# =====================================================
+# Scheduled job logic
+# =====================================================
+
+
+async def scheduled_scrape_records_job():
+    """
+    Records job: fully async (Playwright under the hood).
+    No threading needed — scrape_website is already async.
+    APScheduler runs this as a coroutine on the existing event loop.
+    """
+    logger.info("[Scheduler] Triggering scheduled_scrape_records_job...")
+    await scrape_all_records()
+
+
+async def scheduled_scrape_stocks_job():
+    """
+    Stocks job: delegates to run_stocks_scrape which handles
+    its own to_thread() calls for blocking/CPU-bound sections.
+    """
+    logger.info("[Scheduler] Triggering scheduled_scrape_stocks_job...")
+    try:
+        await run_stocks_scrape(datetime.now())
+    except Exception as e:
+        logger.error(f"[Scheduler] scheduled_scrape_stocks_job failed: {e}", exc_info=True)
+
+
+async def scheduled_update_common_cookies():
+    from scraper.cookies_getter import update_common_cookies
+    await update_common_cookies(["jiuyan", "xuangutong"], False)
+
+
+# =====================================================
+# Lifespan: MCP + Redis + Scheduler
+# =====================================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler = AsyncIOScheduler()
+
+    scheduler.add_job(
+        scheduled_scrape_records_job,
+        trigger=CronTrigger(hour="8,12,15,20,23", minute=50),
+        id="scrape_records",
+        name="Scheduled Record Scraper",
+        replace_existing=True,
+        misfire_grace_time=60,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        scheduled_scrape_stocks_job,
+        trigger=CronTrigger(hour="12,15", minute=40),
+        id="scrape_stocks",
+        name="Scheduled Stocks Scraper",
+        replace_existing=True,
+        misfire_grace_time=60,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        scheduled_update_common_cookies,
+        trigger=CronTrigger(hour="23", minute=55),
+        id="update_common_cookies",
+        name="Scheduled cookies updater",
+        replace_existing=True,
+        misfire_grace_time=60,
+        coalesce=True,
+    )
+    async with mcp_app.lifespan(app):
+        await create_aioredis()
+        scheduler.start()
+        logger.info("[Scheduler] Started. Jobs: %s", scheduler.get_jobs())
+        yield
+        scheduler.shutdown(wait=False)
+        logger.info("[Scheduler] Shut down.")
+        await close_loop_redis()
 
 # === MCP integration ===
 mcp = FastMCP(name="News MCP")
 mcp_app = mcp.http_app(path="/tools")
-
-
-# --- Lifespan handler: combine MCP lifespan + Redis lifecycle ---
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Run MCP startup first
-    async with mcp_app.lifespan(app):
-        # Startup: create Redis client
-        create_aioredis()
-        yield
-        await close_loop_redis()
-
 
 # --- Create app with combined lifespan ---
 app = FastAPI(title="My Local Dify Server", lifespan=lifespan)
@@ -225,7 +294,7 @@ async def delete_html_dir(user: str, conversation_id: str):
 
 
 # =====================================================
-# 🧩 MCP SERVER SECTION (mounted via FastMCP)
+# MCP SERVER SECTION (mounted via FastMCP)
 # =====================================================
 @mcp.tool(name="fetch_stocks", description="Fetch stocks(name and code) from past N days.")
 async def fetch_stocks(days: int = Field(gt=0, le=30, description="Number of recent days(1-30) to fetch. (e.g., 7)")):
