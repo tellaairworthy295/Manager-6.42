@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
 
     scheduler.add_job(
         scheduled_scrape_records_job,
-        trigger=CronTrigger(hour="8,12,15,20,23", minute=50),
+        trigger=CronTrigger(hour="8,12,15,20,23", minute=45),
         id="scrape_records",
         name="Scheduled Record Scraper",
         replace_existing=True,

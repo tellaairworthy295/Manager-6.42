@@ -13,6 +13,11 @@ DROP USER 'scraper'@'localhost';
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 
+pip freeze > requirements.txt
+pip download -r requirements.txt -d ./wheelhouse
+py -3.8 -m venv venv
+pip install --no-index --find-links=./wheelhouse -r requirements.txt
+
 .\.venv\Scripts\Activate.ps1
 .venv\Scripts\activate
 uvicorn app:app --host 0.0.0.0 --port 5000

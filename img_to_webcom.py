@@ -2,7 +2,8 @@ import os
 import re
 from datetime import datetime, timezone
 
-from flask import request, Flask
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse
 import json
 import wechat_work_webhook
 import urllib.parse
@@ -20,8 +21,6 @@ def generate_grafana_jwt(org_id: str):
         with open('private.pem', 'r') as f:
             private_key = f.read()
 
-        # Dynamically build the username and email
-        # If org_id is "2", email becomes "org2@qq.com"
         username = f"wecom_viewer_org{org_id}"
         email = f"org{org_id}@qq.com"
         display_name = f"WeCom Viewer (Org {org_id})"
@@ -30,10 +29,9 @@ def generate_grafana_jwt(org_id: str):
             "sub": username,
             "email": email,
             "name": display_name,
-            "exp": int(time.time()) + 3600 * 24  # Token expires in 24 hours
+            "exp": int(time.time()) + 3600 * 24
         }
 
-        # Sign the token using RS256 and the private key
         token = jwt.encode(payload, private_key, algorithm='RS256', headers={'kid': 'grafana-wecom-key'})
         return token
     except Exception as e:
@@ -50,10 +48,9 @@ def download_pic(panel_url, vars_dict):
     render_url = convert_to_render_url(panel_url, vars_dict)
     header = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer glsa_T4bXszj3ooE1DIT7Bd5Iry4TAz0teHWq_a026340c"
+        "Authorization": "Bearer glsa_slZNz8ZkIekwGEuT3MB5MNP8XajwrjPR_71cbd3d2"
     }
 
-    # print(f"Attempting to download image from: {render_url}")
     res = requests.get(render_url, headers=header)
 
     if res.status_code != 200:
@@ -68,7 +65,6 @@ def download_pic(panel_url, vars_dict):
 
     with open(filename, "wb") as f:
         f.write(res.content)
-        # print(f"Image saved to: {filename}")
         return filename
 
 
@@ -85,7 +81,6 @@ def convert_to_render_url(panel_url, vars_dict):
         raise ValueError(f"Invalid panel URL format: {panel_url}")
 
     query_params = urllib.parse.parse_qs(parsed_url.query, keep_blank_values=True)
-
     query_params['timezone'] = ['Asia/Shanghai']
 
     view_panel_value = query_params.pop('viewPanel', [None])[0]
@@ -122,16 +117,43 @@ def convert_to_render_url(panel_url, vars_dict):
     return render_url
 
 
-app = Flask(__name__)
-app.config['JSON_AS_ASCII'] = False
+app = FastAPI()
 
 
-@app.post('/wechat/<token>')
-def webCom_msg_sender(token):
-    post_data = request.get_data()
+def parse_labels(labels_str: str) -> dict:
+    labels = {}
+    content = labels_str.strip('{}')
+    if not content:
+        return labels
+    pattern = r'(\w+)=(.*?)(?=,\s*\w+=|$)'
+    for match in re.finditer(pattern, content, re.DOTALL):
+        labels[match.group(1).strip()] = match.group(2).strip()
+    return labels
+
+
+def format_record_line(record: dict) -> str:
+    """
+    Format a single record line for WeCom markdown.
+
+    - If value == -1.0: display label key=<yellow value> pairs, separated by commas.
+    - Otherwise: display label values string with yellow numeric value.
+    """
+    if record['value'] == -1.0:
+        # Display each label as key=<yellow value>, joined by commas
+        pairs = [
+            f"{k}=<font color=\"warning\">{v}</font>"
+            for k, v in record['labels'].items()
+        ]
+        return f"> - {', '.join(pairs)}"
+    else:
+        labels_values_str = ", ".join(record['labels'].values())
+        return f"> - {labels_values_str}: <font color=\"warning\">{record['value']}</font>"
+
+
+@app.post('/wechat/{token}')
+async def webCom_msg_sender(token: str, request: Request):
+    post_data = await request.body()
     data = json.loads(post_data)
-    # print("Received alert data:", json.dumps(data, indent=2))
-
     alerts = data['alerts']
 
     # Group alerts by their alertname and collect necessary data
@@ -141,57 +163,41 @@ def webCom_msg_sender(token):
         title = alert_labels['alertname']
         if title not in alerts_by_type:
             timestamp = alert['values'].get('Time')
-            # Explicitly specify UTC timezone for the conversion
             dt_object = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-            # Format the datetime object
             formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
 
-            # Collect unique panel_url and formatted_time for each alert type
-            # In most cases, they should be the same for all alerts of one type
             alert_annotations = alert['annotations']
             panel_url = alert_annotations.get('panel_url')
             vars_str = alert_annotations.get('vars')
             vars_dict = json.loads(vars_str) if isinstance(vars_str, str) else {}
-            org_id = alert['orgId']
+            org_id = alert.get('orgId', 2)
 
             alerts_by_type[title] = {
                 'records': [],
                 'orgId': org_id,
-                'panel_url': panel_url,  # Store the first encountered URL for this type
-                'formatted_time': formatted_time,  # Store the first encountered time for this type
-                'vars_dict': vars_dict  # Store the first encountered vars for this type
+                'panel_url': panel_url,
+                'formatted_time': formatted_time,
+                'vars_dict': vars_dict
             }
 
         value_string = alert['valueString']
-        # Regular expression to match each item in the list
-        # It captures the 'var', 'labels', and 'value' parts.
-        pattern = r"\[\s*var='([^']+)'[^]]*labels=({[^}]*})[^]]*value=([^\s\]]+)\s*\]"
+        block_pattern = r"\[\s*var='([^']+)'[^]]*labels=({[^}]*})[^]]*value=([^\s\]]+)\s*\]"
 
-        matches = re.findall(pattern, value_string)
+        for match in re.finditer(block_pattern, value_string):
+            var_name, labels_str, value_str = match.groups()
 
-        for match in matches:
-            var_name, labels_str, value_str = match
+            labels = parse_labels(labels_str) if labels_str != '{}' else {}
 
-            # Parse the labels string into a dictionary for better structure
-            labels = {}
-            if labels_str.strip() != '{}':  # If not an empty label set
-                # Split by comma and then by '=' to get key-value pairs
-                for pair in labels_str.strip('{}').split(','):
-                    key, val = pair.split('=', 1)  # Split only on the first '=' in case the value itself has one
-                    labels[key.strip()] = val.strip()
-
-            # Attempt to convert the value string to a number (float handles scientific notation)
             try:
                 value = float(value_str)
             except ValueError:
                 value = value_str
 
-            # Only append if the labels dictionary is not empty
             if labels or var_name == '最新值':
                 alerts_by_type[title]['records'].append({
                     'var': var_name,
                     'labels': labels if labels else {"key": '最新值'},
-                    'value': value,
+                    'value': value
                 })
 
     # --- Build the enhanced markdown content ---
@@ -204,58 +210,36 @@ def webCom_msg_sender(token):
     panel_urls_and_vars = []
 
     for i, (title, alert_data) in enumerate(alerts_by_type.items()):
-        # Create a blockquote for each alert group
         section_lines = [
             f"> **类型: {title}**",
             f"> **时间: {alert_data['formatted_time']}**",
         ]
 
-        # Format records in a more compact list
         for record in alert_data['records']:
-            labels_values_str = ", ".join(record['labels'].values())
-            # Use a different separator or styling for values
-            section_lines.append(f"> - {labels_values_str}: <font color=\"warning\">{record['value']}</font>")
+            section_lines.append(format_record_line(record))
 
         original_url = alert_data['panel_url']
         auth_panel_url = original_url
-        # if original_url:
-        #     # 2. Parse the URL
-        #     parsed_url = urllib.parse.urlparse(original_url)
-        #     query_params = urllib.parse.parse_qs(parsed_url.query)
-        #
-        #     # Extract orgId from the URL (defaults to '1' if not found)
-        #     # org_id = query_params.get('orgId', ['1'])[0]
-        #
-        #     # 3. Generate the JWT dynamically for this specific orgId
-        #     grafana_jwt = generate_grafana_jwt(str(alert_data['orgId']))
-        #
-        #     # 4. Append the token to the URL securely
-        #     if grafana_jwt:
-        #         query_params['auth_token'] = [grafana_jwt]  # Add the JWT token to URL
-        #         new_query = urllib.parse.urlencode(query_params, doseq=True)
-        #         auth_panel_url = urllib.parse.urlunparse(parsed_url._replace(query=new_query))
 
-        # Add link and a separator if it's not the last group
-        section_lines.append(f"> 🔗 [查看图表]({auth_panel_url})")
+        if auth_panel_url:
+            section_lines.append(f"> 🔗 [查看图表]({auth_panel_url})")
 
-        if i < len(alerts_by_type) - 1:  # Add a separator between groups
+        if i < len(alerts_by_type) - 1:
             section_lines.append("> ---------------------------")
 
         details_sections.append("\n".join(section_lines))
         panel_urls_and_vars.append((alert_data['panel_url'], alert_data['vars_dict']))
 
-    # Combine everything
     markdown_content = summary_section + "\n".join(details_sections) + "\n"
 
-    # Send the message
     wechat = wechat_work_webhook.connect(f"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={token}")
     wechat.markdown(markdown_content)
 
-    # Generate and send ONE image per unique chart URL found
     processed_urls = set()
     for panel_url, vars_dict in panel_urls_and_vars:
         if panel_url and panel_url not in processed_urls:
-            panel_url_for_image = panel_url.replace("localhost", "10.25.116.172")
+            panel_url_for_image = panel_url.replace("localhost", "10.32.132.155").replace("10.29.92.50",
+                                                                                          "10.32.132.155")
             filename = download_pic(panel_url_for_image, vars_dict)
             if filename and os.path.exists(filename):
                 wechat.image(filename)
@@ -268,8 +252,9 @@ def webCom_msg_sender(token):
 
             processed_urls.add(panel_url)
 
-    return "OK"
+    return PlainTextResponse("OK")
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8888)
+    import uvicorn
+    uvicorn.run(app, host='0.0.0.0', port=38888)
