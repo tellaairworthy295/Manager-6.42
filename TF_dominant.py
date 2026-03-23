@@ -82,3 +82,5 @@ if __name__ == "__main__":
     # 保存到数据库
     # if rs is not None and len(rs) > 0:
     #     save_dominant_to_mysql(rs, trading_day=today.replace('-', ''))
+
+
