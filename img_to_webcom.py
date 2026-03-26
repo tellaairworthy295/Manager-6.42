@@ -9,7 +9,7 @@ import requests
 import wechat_work_webhook
 
 from datetime import datetime, timezone
-from typing import List, Union, Optional, Tuple
+from typing import List, Union, Optional, Tuple, Dict
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
@@ -252,7 +252,7 @@ def generate_grafana_jwt(org_id: str, private_key_path: str = "private.pem") -> 
         return None
 
 
-def convert_to_render_url(panel_url: str, vars_dict: dict) -> str:
+def convert_to_render_url(panel_url: str, vars_dict: dict, width: str, height: str) -> str:
     """Convert a Grafana dashboard share URL to an image render URL."""
     parsed = urllib.parse.urlparse(panel_url)
 
@@ -285,8 +285,8 @@ def convert_to_render_url(panel_url: str, vars_dict: dict) -> str:
         for var_name, var_value in vars_dict.items():
             query_params[f"var-{var_name}"] = [str(var_value)]
 
-    query_params["width"] = ["1000"]
-    query_params["height"] = ["500"]
+    query_params["width"] = [width]
+    query_params["height"] = [height]
 
     return urllib.parse.urlunparse((
         parsed.scheme,
@@ -298,30 +298,106 @@ def convert_to_render_url(panel_url: str, vars_dict: dict) -> str:
     ))
 
 
-def download_panel_image(panel_url: str, vars_dict: dict) -> Optional[str]:
+GRAFANA_ORG_TOKENS: Dict[int, str] = {
+    1: "glsa_F5RgzBEnTHGkCuh8ZQSVFGVh0YrfXbx5_fdd2e1d8",
+    2: "glsa_slZNz8ZkIekwGEuT3MB5MNP8XajwrjPR_71cbd3d2",
+    4: "glsa_nk0C6aMIBwXIjhPXvhPYK9LRff6HZ1G6_9a2a2254",
+    # add more orgs as needed
+}
+
+# Fallback token used when the orgId is not found in the map above.
+# Set this to a Grafana Server Admin token if you want a true catch-all,
+# or leave as None to surface the misconfiguration explicitly.
+GRAFANA_FALLBACK_TOKEN: Optional[str] = None
+
+
+token2 = "glsa_vJeTM7peYYLZUlxuYplYgPVlrXXBEmXR_a4de4480"
+token4 = "glsa_RiK3O2BB8sL6dqBADdHgU2wAYlLxUPYi_42018c99"
+
+
+def _get_render_token(org_id: int) -> str:
+    """
+    Return the service account token for the given Grafana org.
+
+    Raises
+    ------
+    ValueError
+        If no token is configured for the org and no fallback is set.
+    """
+    token = GRAFANA_ORG_TOKENS.get(org_id, GRAFANA_FALLBACK_TOKEN)
+    if not token:
+        raise ValueError(
+            f"No Grafana service account token configured for orgId={org_id}. "
+            f"Add an entry to GRAFANA_ORG_TOKENS or set GRAFANA_FALLBACK_TOKEN."
+        )
+    return token
+
+
+def _extract_org_id(url: str) -> int:
+    """
+    Parse the orgId query parameter from a Grafana URL.
+
+    Returns 1 (Grafana's default org) if the parameter is absent.
+    """
+    qs = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    try:
+        return int(qs.get("orgId", ["1"])[0])
+    except (ValueError, IndexError):
+        return 1
+
+
+def download_panel_image(panel_url: str, vars_dict: dict, width: str, height: str) -> Optional[str]:
     """
     Render and download a Grafana panel image.
+
+    Automatically selects the correct service account token based on the
+    orgId embedded in the panel URL, so cross-org rendering works correctly.
 
     Returns the local file path on success, or None on failure.
     """
     image_dir = "images"
     os.makedirs(image_dir, exist_ok=True)
 
-    render_url = convert_to_render_url(panel_url, vars_dict)
+    try:
+        render_url = convert_to_render_url(panel_url, vars_dict, width, height)
+    except ValueError as exc:
+        print(f"[Render] Could not build render URL from {panel_url}: {exc}")
+        return None
+
+    # Select the right token for this org
+    org_id = _extract_org_id(panel_url)
+    try:
+        bearer_token = _get_render_token(org_id)
+    except ValueError as exc:
+        print(f"[Render] Token error: {exc}")
+        return None
+
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer glsa_slZNz8ZkIekwGEuT3MB5MNP8XajwrjPR_71cbd3d2",
+        "Authorization": f"Bearer {bearer_token}",
+        "X-Grafana-Org-Id": f"{org_id}",
     }
 
+    print(f"[Render] orgId={org_id}  url={render_url}")
+
     resp = requests.get(render_url, headers=headers, timeout=60)
+
     if resp.status_code != 200:
-        print(f"[Render] Failed ({resp.status_code}): {resp.text}")
+        print(f"[Render] Failed (HTTP {resp.status_code}): {resp.text[:300]}")
+        # Emit a helpful hint for the most common mistake
+        if resp.status_code == 404:
+            print(
+                f"[Render] 404 hint: the service account token for orgId={org_id} may "
+                f"not belong to that org, or the panel/dashboard UID does not exist in "
+                f"that org. Verify the token was created while Org {org_id} was active."
+            )
         return None
 
     dt = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
-    filename = os.path.join(image_dir, f"img_{dt}.jpg")
+    filename = os.path.join(image_dir, f"img_org{org_id}_{dt}.jpg")
     with open(filename, "wb") as f:
         f.write(resp.content)
+
+    print(f"[Render] Saved image → {filename}")
     return filename
 
 
@@ -378,12 +454,18 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict]]]:
         title = alert_labels.get("alertname", "Unknown")
 
         if title not in alerts_by_type:
-            timestamp = (alert.get("values") or {}).get("Time") or time.time()
-            dt_object = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-            formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = (alert.get("values") or {}).get("Time")
+            formatted_time = None
+            if timestamp:
+                dt_object = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
 
             annotations = alert.get("annotations", {})
             panel_url = annotations.get("panel_url")
+
+            width = annotations.get("width")
+            height = annotations.get("height")
+
             vars_str = annotations.get("vars")
             vars_dict = json.loads(vars_str) if isinstance(vars_str, str) else {}
             org_id = alert.get("orgId", 2)
@@ -392,6 +474,8 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict]]]:
                 "records": [],
                 "orgId": org_id,
                 "panel_url": panel_url,
+                "width": width,
+                "height": height,
                 "formatted_time": formatted_time,
                 "vars_dict": vars_dict,
             }
@@ -428,8 +512,11 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict]]]:
     for i, (title, ad) in enumerate(alerts_by_type.items()):
         lines = [
             f"> **类型: {title}**",
-            f"> **时间: {ad['formatted_time']}**",
         ]
+
+        if ad["formatted_time"] is not None:
+            lines.append(f"> **时间: {ad['formatted_time']}**")
+
         for record in ad["records"]:
             lines.append(format_record_line(record))
 
@@ -443,7 +530,7 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict]]]:
 
         if ad["panel_url"] and ad["panel_url"] not in seen_urls:
             seen_urls.add(ad["panel_url"])
-            panel_urls_and_vars.append((ad["panel_url"], ad["vars_dict"]))
+            panel_urls_and_vars.append((ad["panel_url"], ad["vars_dict"], ad["width"], ad["height"]))
 
     markdown_content = summary + "\n".join(details) + "\n"
     return markdown_content, panel_urls_and_vars
@@ -467,6 +554,7 @@ app = FastAPI(
 # Route 1 — Group Bot  (original behaviour, zero breaking change)
 # --------------------------------------------------------------------------
 
+
 @app.post("/webhook/bot/{token}", summary="Deliver via Group Chat Bot")
 async def webhook_bot(token: str, request: Request) -> PlainTextResponse:
     """
@@ -486,19 +574,19 @@ async def webhook_bot(token: str, request: Request) -> PlainTextResponse:
     wechat = wechat_work_webhook.connect(
         f"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={token}"
     )
-    wechat.markdown(markdown_content)
+    # wechat.markdown(markdown_content)
 
     # Render and send panel images
-    for panel_url, vars_dict in panel_urls_and_vars:
+    for panel_url, vars_dict, width, height in panel_urls_and_vars:
         render_url = panel_url.replace("localhost", "10.32.132.155").replace(
             "10.29.92.50", "10.32.132.155"
         )
-        filename = download_panel_image(render_url, vars_dict)
+        filename = download_panel_image(render_url, vars_dict, str(width), str(height))
         if filename:
             wechat.image(filename)
             _cleanup_image(filename)
         else:
-            print(f"[Bot] Skipping image for {panel_url} — download failed.")
+            print(f"[Bot] Skipping image for {render_url} — download failed.")
 
     return PlainTextResponse("OK")
 
@@ -569,22 +657,22 @@ async def webhook_agent(
     markdown_content, panel_urls_and_vars = parse_grafana_payload(data)
 
     # Send markdown
-    try:
-        md_result = sender.send_markdown(
-            content=markdown_content,
-            user_ids=user_ids or "EMP-151583",
-            party_ids=dept_ids or None,
-        )
-        print(f"[Agent] Markdown send result: {md_result}")
-    except Exception as exc:
-        print(f"[Agent] Markdown send error: {exc}")
+    # try:
+    #     md_result = sender.send_markdown(
+    #         content=markdown_content,
+    #         user_ids=user_ids or "EMP-151583",
+    #         party_ids=dept_ids or None,
+    #     )
+    #     print(f"[Agent] Markdown send result: {md_result}")
+    # except Exception as exc:
+    #     print(f"[Agent] Markdown send error: {exc}")
 
     # Render and send panel images
-    for panel_url, vars_dict in panel_urls_and_vars:
+    for panel_url, vars_dict, width, height in panel_urls_and_vars:
         render_url = panel_url.replace("localhost", "10.32.132.155").replace(
             "10.29.92.50", "10.32.132.155"
         )
-        filename = download_panel_image(render_url, vars_dict)
+        filename = download_panel_image(render_url, vars_dict, str(width), str(height))
         if filename:
             try:
                 img_result = sender.send_image(
