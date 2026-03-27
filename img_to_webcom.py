@@ -283,7 +283,8 @@ def convert_to_render_url(panel_url: str, vars_dict: dict, width: str, height: s
 
     if isinstance(vars_dict, dict):
         for var_name, var_value in vars_dict.items():
-            query_params[f"var-{var_name}"] = [str(var_value)]
+            processed_value = _process_timestamp_if_needed(var_value)
+            query_params[f"var-{var_name}"] = [str(processed_value)]
 
     query_params["width"] = [width]
     query_params["height"] = [height]
@@ -296,6 +297,41 @@ def convert_to_render_url(panel_url: str, vars_dict: dict, width: str, height: s
         urllib.parse.urlencode(query_params, doseq=True),
         parsed.fragment,
     ))
+
+
+def _process_timestamp_if_needed(value):
+    """
+    Check if a value is a Unix timestamp and convert it to yyyy-MM-dd format in UTC+8 (Beijing Time).
+    If not a timestamp, return the original value.
+    """
+    try:
+        # Convert to string first to handle both string and numeric inputs
+        str_val = str(value).strip()
+
+        # Check if the string represents a number
+        if '.' in str_val:
+            timestamp = float(str_val)
+        else:
+            timestamp = int(str_val)
+
+        # Validate if it's a reasonable Unix timestamp
+        # Basic check: must be positive and less than year 2100 (approx 4.1e9)
+        if 0 < timestamp < 4102444800:  # 2100-01-01 as Unix timestamp
+            # Check if it looks like a millisecond timestamp (future dates will be too far ahead)
+            if timestamp > 2000000000:  # Approximate threshold for year 2033
+                # Could be milliseconds, but let's assume it's seconds for now
+                # If you know your data uses milliseconds, uncomment next line:
+                # timestamp = timestamp / 1000
+                pass
+
+            dt = datetime.fromtimestamp(timestamp, tz=None)
+
+            return dt.strftime('%Y-%m-%d')
+        else:
+            return value
+    except (ValueError, TypeError, OverflowError):
+        # If conversion fails, return original value
+        return value
 
 
 GRAFANA_ORG_TOKENS: Dict[int, str] = {
@@ -363,7 +399,7 @@ def download_panel_image(panel_url: str, vars_dict: dict, width: str, height: st
     except ValueError as exc:
         print(f"[Render] Could not build render URL from {panel_url}: {exc}")
         return None
-
+    print(render_url)
     # Select the right token for this org
     org_id = _extract_org_id(panel_url)
     try:
@@ -435,16 +471,16 @@ def format_record_line(record: dict) -> str:
     return f'> - {labels_str}: <font color="warning">{record["value"]}</font>'
 
 
-def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict]]]:
+def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict, str, str]]]:
     """
     Parse a raw Grafana alerting webhook payload.
 
     Returns
     -------
     markdown_content : str
-        Fully-formed markdown string ready to be sent.
-    panel_urls_and_vars : list of (url, vars_dict)
-        Unique (panel_url, vars_dict) pairs to render as images.
+        Fully-formed markdown string ready to be sent (empty string if md=0 for all).
+    panel_urls_and_vars : list of (url, vars_dict, width, height)
+        Unique tuples to render as images (only populated when img!=0).
     """
     alerts: list = data.get("alerts", [])
 
@@ -452,6 +488,8 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict]]]:
     for alert in alerts:
         alert_labels = alert.get("labels", {})
         title = alert_labels.get("alertname", "Unknown")
+        img = str(alert_labels.get("img", 0))
+        md = str(alert_labels.get("md", 0))
 
         if title not in alerts_by_type:
             timestamp = (alert.get("values") or {}).get("Time")
@@ -463,17 +501,17 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict]]]:
             annotations = alert.get("annotations", {})
             panel_url = annotations.get("panel_url")
 
-            width = annotations.get("width")
-            height = annotations.get("height")
+            width = annotations.get("width", '800')
+            height = annotations.get("height", '1000')
 
             vars_str = annotations.get("vars")
             vars_dict = json.loads(vars_str) if isinstance(vars_str, str) else {}
-            org_id = alert.get("orgId", 2)
 
             alerts_by_type[title] = {
                 "records": [],
-                "orgId": org_id,
                 "panel_url": panel_url,
+                "img": img,
+                "md": md,
                 "width": width,
                 "height": height,
                 "formatted_time": formatted_time,
@@ -499,7 +537,48 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict]]]:
                     "value": value,
                 })
 
-    # Build markdown
+    # ====================================================================
+    # NEW FEATURE PROCESSING:
+    # 1. Deduplicate records by '时间'
+    # 2. Track the last title to use each panel_url
+    # ====================================================================
+    last_title_for_url = {}
+
+    for title, ad in alerts_by_type.items():
+        # [Feature 1] Deduplicate records
+        deduped_records = {}
+        for record in ad["records"]:
+            labels = record["labels"]
+            record_time = labels.get("时间")
+
+            # Group by `var` name AND all other labels EXCEPT '时间'
+            other_labels = frozenset((k, v) for k, v in labels.items() if k != "时间")
+            group_key = (record["var"], other_labels)
+
+            if group_key not in deduped_records:
+                deduped_records[group_key] = record
+            else:
+                existing_record = deduped_records[group_key]
+                existing_time = existing_record["labels"].get("时间")
+
+                # If both have a '时间', standard string comparison keeps the newest datetime
+                if record_time and existing_time:
+                    if str(record_time) > str(existing_time):
+                        deduped_records[group_key] = record
+                else:
+                    # If no time to compare, just overwrite with the newest processed record
+                    deduped_records[group_key] = record
+
+        # Apply the deduplicated records back to the alert definition
+        ad["records"] = list(deduped_records.values())
+
+        # [Feature 2] Track the last title that uses each panel_url
+        if ad.get("md", "0") != "0" and ad.get("panel_url"):
+            last_title_for_url[ad["panel_url"]] = title
+
+    # ====================================================================
+    # BUILD MARKDOWN & QUEUE IMAGES
+    # ====================================================================
     summary = (
         f"> **告警总数**: `{len(alerts)}`  \n"
         f"> ---------------------------\n"
@@ -509,30 +588,35 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict]]]:
     panel_urls_and_vars: list = []
     seen_urls: set = set()
 
-    for i, (title, ad) in enumerate(alerts_by_type.items()):
-        lines = [
-            f"> **类型: {title}**",
-        ]
+    for title, ad in alerts_by_type.items():
+        # ONLY process Markdown text if md != 0
+        if ad.get("md", "0") != "0":
+            lines = [f"> **类型: {title}**"]
 
-        if ad["formatted_time"] is not None:
-            lines.append(f"> **时间: {ad['formatted_time']}**")
+            if ad["formatted_time"] is not None:
+                lines.append(f"> **时间: {ad['formatted_time']}**")
 
-        for record in ad["records"]:
-            lines.append(format_record_line(record))
+            for record in ad["records"]:
+                lines.append(format_record_line(record))
 
-        if ad["panel_url"]:
-            lines.append(f"> 🔗 [查看图表]({ad['panel_url']})")
+            if ad.get("panel_url"):
+                # [Feature 2] ONLY display the URL if this alert type is the LAST one referencing it
+                if last_title_for_url.get(ad["panel_url"]) == title:
+                    lines.append(f"> 🔗 [查看图表]({ad['panel_url']})")
 
-        if i < len(alerts_by_type) - 1:
-            lines.append("> ---------------------------")
+            details.append("\n".join(lines))
 
-        details.append("\n".join(lines))
-
-        if ad["panel_url"] and ad["panel_url"] not in seen_urls:
+        # ONLY queue Panel URL for Image Rendering if img != 0
+        if ad.get("img", "0") != "0" and ad.get("panel_url") and ad["panel_url"] not in seen_urls:
             seen_urls.add(ad["panel_url"])
             panel_urls_and_vars.append((ad["panel_url"], ad["vars_dict"], ad["width"], ad["height"]))
 
-    markdown_content = summary + "\n".join(details) + "\n"
+    # Join multiple alerts cleanly, or return empty string if no md blocks were built
+    if details:
+        markdown_content = summary + "\n> ---------------------------\n".join(details) + "\n"
+    else:
+        markdown_content = ""
+
     return markdown_content, panel_urls_and_vars
 
 
@@ -574,7 +658,8 @@ async def webhook_bot(token: str, request: Request) -> PlainTextResponse:
     wechat = wechat_work_webhook.connect(
         f"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={token}"
     )
-    # wechat.markdown(markdown_content)
+    if markdown_content:
+        wechat.markdown(markdown_content)
 
     # Render and send panel images
     for panel_url, vars_dict, width, height in panel_urls_and_vars:
@@ -656,16 +741,16 @@ async def webhook_agent(
     data = json.loads(raw)
     markdown_content, panel_urls_and_vars = parse_grafana_payload(data)
 
-    # Send markdown
-    # try:
-    #     md_result = sender.send_markdown(
-    #         content=markdown_content,
-    #         user_ids=user_ids or "EMP-151583",
-    #         party_ids=dept_ids or None,
-    #     )
-    #     print(f"[Agent] Markdown send result: {md_result}")
-    # except Exception as exc:
-    #     print(f"[Agent] Markdown send error: {exc}")
+    if markdown_content:
+        try:
+            md_result = sender.send_markdown(
+                content=markdown_content,
+                user_ids=user_ids or "EMP-151583",
+                party_ids=dept_ids or None,
+            )
+            print(f"[Agent] Markdown send result: {md_result}")
+        except Exception as exc:
+            print(f"[Agent] Markdown send error: {exc}")
 
     # Render and send panel images
     for panel_url, vars_dict, width, height in panel_urls_and_vars:

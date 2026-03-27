@@ -79,6 +79,17 @@ async def lifespan(app: FastAPI):
         misfire_grace_time=60,
         coalesce=True,
     )
+
+    # The new job for 22:30
+    scheduler.add_job(
+        scheduled_scrape_records_job,
+        trigger=CronTrigger(hour="3, 6, 18, 22", minute=30),
+        id="scrape_records_22_30",
+        name="Scheduled Record Scraper at 22:30",
+        replace_existing=True,
+        misfire_grace_time=60,
+        coalesce=True,
+    )
     scheduler.add_job(
         scheduled_scrape_stocks_job,
         trigger=CronTrigger(hour="12,15", minute=40),
