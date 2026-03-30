@@ -8,6 +8,7 @@ from typing import Dict, Optional
 from utils.database import get_db_manager, RecordCommentRepository, RecordMeetingRepository
 import asyncio
 from utils.logging_config import get_records_scraper_logger
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 logger = get_records_scraper_logger()
 
@@ -68,8 +69,23 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
             await page.click(locators["filter_click"])
             await scroll_to_bottom(page, locators["scroll_container"], locators["bottom_flag"])
 
+            # Wait for the list container to have children with a specific timeout
+            try:
+                await page.wait_for_function(
+                    f"document.querySelector('{locators['record_list_item']}').parentElement.children.length > 0",
+                    timeout=10000  # 10 second timeout
+                )
+            except PlaywrightTimeoutError:
+                logger.warning(f"[{record_type}] Timed out waiting for list items to appear.")
+                return result  # Exit early if no items appear after timeout
+
+            # Now query for the items
             list_items = await page.query_selector_all(locators["record_list_item"])
-            logger.info(f"[{record_type}] Total items found: {len(list_items)}")
+
+            # If still no items after the wait, return early
+            if not list_items:
+                logger.info(f"[{record_type}] No list items found after scrolling.")
+                return result
 
             for i, list_item in enumerate(list_items):
                 title_element = await list_item.query_selector(locators["title_click"])
@@ -384,9 +400,30 @@ def parse_relative_time(time_str: str) -> datetime:
 
 
 async def close_popup(page: Page, close_click_selector: str):
-    """Close the popup window by clicking the close button"""
-    close_button = await page.wait_for_selector(close_click_selector, timeout=5000)
-    if close_button:
-        await close_button.click()
-        # Wait for the popup to disappear
-        await page.wait_for_selector(f"{close_click_selector}", state='hidden', timeout=2000)
+    """Close the popup window by clicking the close button with 2 retries."""
+    max_attempts = 3  # original + 2 retries
+    last_exception = None
+
+    for attempt in range(max_attempts):
+        try:
+            # Wait for close button to appear
+            close_button = await page.wait_for_selector(
+                close_click_selector, timeout=5000
+            )
+            # Click the button
+            await close_button.click()
+            # Wait for the popup to disappear (button becomes hidden)
+            await page.wait_for_selector(
+                close_click_selector, state='hidden', timeout=2000
+            )
+            # Success: exit the function
+            return
+        except Exception as e:
+            # Catch any other unexpected exception
+            last_exception = e
+            if attempt < max_attempts - 1:
+                await asyncio.sleep(0.5)
+            continue
+
+    # If we exhausted all attempts, raise the last exception
+    raise last_exception
