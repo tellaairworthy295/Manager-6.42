@@ -81,7 +81,7 @@ class WeComAgentSender:
         and return a list of WeCom user IDs.
         """
         if isinstance(mobiles, str):
-            mobiles = [m.strip() for m in mobiles.split("|") if m.strip()]
+            mobiles = [m.strip() for m in mobiles.split(",") if m.strip()]
         return [self.get_userid_by_mobile(m) for m in mobiles]
 
     # ------------------------------------------------------------------
@@ -462,17 +462,27 @@ def parse_labels(labels_str: str) -> dict:
     return labels
 
 
+def parse_display_labels(content: str) -> dict:
+    """Parse custom 'key==value' formatted strings from the '标签' field into a dict."""
+    display_labels = {}
+    if not content or content == "None":
+        return display_labels
+
+    pattern = r"(\w+)==(.*?)(?=\n\w+==|$)"
+    for match in re.finditer(pattern, str(content), re.DOTALL):
+        display_labels[match.group(1).strip()] = match.group(2).strip()
+    return display_labels
+
+
 def format_record_line(record: dict) -> str:
     """Format a single alert record as a WeCom markdown bullet."""
-    display_labels = {}
-    content = record['labels'].get('标签')
-    pattern = r"(\w+)==(.*?)(?=\n\w+==|$)"
-    for match in re.finditer(pattern, content, re.DOTALL):
-        display_labels[match.group(1).strip()] = match.group(2).strip()
+    # Use the helper function here
+    display_labels = parse_display_labels(record['labels'].get('标签', ''))
 
     if record["value"] == -1.0:
-        pairs = [f"{k}={v}" for k, v in display_labels.items()]
+        pairs = [f"{k}: {v}" for k, v in display_labels.items()]
         return f"> - {', '.join(pairs)}\n"
+
     labels_str = ", ".join(display_labels.values())
     return f'> - {labels_str}: <font color="warning">{record["value"]}</font>'
 
@@ -525,7 +535,6 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict, str, s
             }
 
         value_string = alert.get("valueString", "")
-        print(value_string)
         block_pattern = (
             r"\[\s*var='([^']+)'[^]]*labels=({[^}]*})[^]]*value=([^\s\]]+)\s*\]"
         )
@@ -540,23 +549,34 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict, str, s
             if labels or var_name == "最新值":
                 alerts_by_type[title]["records"].append({
                     "var": var_name,
-                    "labels": labels if labels else {"key": "最新值"},
+                    "labels": labels,
                     "value": value,
                 })
 
+    # ====================================================================
+    # REORDERING: Move "Shibor_3M" and any title containing "IRR" to the end
+    # ====================================================================
+    keys_to_move = [t for t in alerts_by_type if "IRR" in t or t == "Shibor_3M"]
+    for t in keys_to_move:
+        alerts_by_type[t] = alerts_by_type.pop(t)
+
     last_title_for_url = {}
-    sort_key = None
+
     for title, ad in alerts_by_type.items():
         # [Feature 1] Deduplicate records
         deduped_records = {}
         for record in ad["records"]:
             labels = record["labels"]
             record_time = labels.get("时间")
-            sort_key = labels.get('排序')
 
-            # Group by `var` name AND all other labels EXCEPT '时间'
-            other_labels = frozenset((k, v) for k, v in labels.items() if k == "标签")
-            group_key = (record["var"], other_labels)
+            # Extract labels using the new helper function
+            display_labels = parse_display_labels(labels.get('标签', ''))
+
+            # Filter out '时间' and create the frozen set for grouping
+            other_labels = {k: v for k, v in display_labels.items() if k != '时间'}
+            filter_labels = frozenset(other_labels.items())
+
+            group_key = (record["var"], filter_labels)
 
             if group_key not in deduped_records:
                 deduped_records[group_key] = record
@@ -575,15 +595,10 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict, str, s
         # Apply the deduplicated records back to the alert definition
         ad["records"] = list(deduped_records.values())
 
-        # [Feature 2] Sort records based on '排序' value if it exists
-        if sort_key:
-            def sort_key(record):
-                contract = record.get('labels', {}).get('排序', '')
-                # For contracts like "TS2606", we can sort by the string itself.
-                # This works correctly for cases like TS2606, TS2609, TS2612.
-                return contract
-
-            ad["records"].sort(key=sort_key)
+        # [Feature 2] Sort records based on '排序' value
+        # Fixed variable shadowing bug by using a lambda function.
+        # Defaults to empty string to prevent errors if '排序' is missing.
+        ad["records"].sort(key=lambda r: str(r.get('labels', {}).get('排序', '')))
 
         # [Feature 3] Track the last title that uses each panel_url
         if ad.get("md", "0") != "0" and ad.get("panel_url"):
@@ -592,10 +607,6 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict, str, s
     # ====================================================================
     # BUILD MARKDOWN & QUEUE IMAGES
     # ====================================================================
-    summary = (
-        f"> **总数**: `{len(alerts)}`  \n"
-        f"> ---------------------------\n"
-    )
 
     details: list = []
     panel_urls_and_vars: list = []
@@ -604,7 +615,7 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict, str, s
     for title, ad in alerts_by_type.items():
         # ONLY process Markdown text if md != 0
         if ad.get("md", "0") != "0":
-            lines = [f"> **类型: {title}**"]
+            lines = [f'> <span style="font-size: 1.2em;">类型: {title}</span> ------']
 
             if ad["formatted_time"] is not None:
                 lines.append(f"> **时间: {ad['formatted_time']}**")
@@ -613,7 +624,7 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict, str, s
                 lines.append(format_record_line(record))
 
             if ad.get("panel_url"):
-                # [Feature 2] ONLY display the URL if this alert type is the LAST one referencing it
+                # ONLY display the URL if this alert type is the LAST one referencing it
                 if last_title_for_url.get(ad["panel_url"]) == title:
                     lines.append(f"> 🔗 [查看图表]({ad['panel_url']})")
 
@@ -626,9 +637,9 @@ def parse_grafana_payload(data: dict) -> Tuple[str, List[Tuple[str, dict, str, s
 
     # Join multiple alerts cleanly, or return empty string if no md blocks were built
     if details:
-        markdown_content = summary + "\n> ---------------------------\n".join(details) + "\n"
+        markdown_content = "\n> ---------------------------\n".join(details) + "\n"
     else:
-        markdown_content = "无"
+        markdown_content = ""
 
     return markdown_content, panel_urls_and_vars
 
@@ -712,7 +723,7 @@ async def webhook_agent(
     ----------------
     mobiles : str
         Comma-separated mobile numbers to resolve to user IDs.
-        Example: ``?mobiles=13800000001|13800000002``
+        Example: ``?mobiles=13800000001,13800000002``
     party_ids : str
         Comma-separated department IDs.
         Example: ``?party_ids=2,5``
@@ -746,7 +757,7 @@ async def webhook_agent(
             raise HTTPException(status_code=502, detail=f"Mobile lookup failed: {exc}")
 
     dept_ids: List[str] = (
-        [p.strip() for p in party_ids.split("|") if p.strip()] if party_ids else []
+        [p.strip() for p in party_ids.split(",") if p.strip()] if party_ids else []
     )
 
     # Parse the Grafana payload
@@ -758,7 +769,7 @@ async def webhook_agent(
         try:
             md_result = sender.send_markdown(
                 content=markdown_content,
-                user_ids=user_ids or "EMP-151583",
+                user_ids=user_ids or ["EMP-151583"],
                 party_ids=dept_ids or None,
             )
             print(f"[Agent] Markdown send result: {md_result}")
@@ -775,7 +786,7 @@ async def webhook_agent(
             try:
                 img_result = sender.send_image(
                     image_path=filename,
-                    user_ids=user_ids or "EMP-151583",
+                    user_ids=user_ids or ["EMP-151583"],
                     party_ids=dept_ids or None,
                 )
                 print(f"[Agent] Image send result: {img_result}")
