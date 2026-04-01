@@ -108,8 +108,8 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
                     result.append(
                         await scrape_popup(page, locators["record_property_wrapper"], locators["properties"])
                     )
-                    await close_popup(page, locators["close_click"])
-
+                    # await close_popup(page, locators["record_property_wrapper"], locators["close_click"])
+                    await close_popup(page)
                 await asyncio.sleep(0.7)
 
     finally:
@@ -399,31 +399,10 @@ def parse_relative_time(time_str: str) -> datetime:
     return now
 
 
-async def close_popup(page: Page, close_click_selector: str):
-    """Close the popup window by clicking the close button with 2 retries."""
-    max_attempts = 3  # original + 2 retries
-    last_exception = None
-
-    for attempt in range(max_attempts):
-        try:
-            # Wait for close button to appear
-            close_button = await page.wait_for_selector(
-                close_click_selector, timeout=5000
-            )
-            # Click the button
-            await close_button.click()
-            # Wait for the popup to disappear (button becomes hidden)
-            await page.wait_for_selector(
-                close_click_selector, state='hidden', timeout=2000
-            )
-            # Success: exit the function
-            return
-        except Exception as e:
-            # Catch any other unexpected exception
-            last_exception = e
-            if attempt < max_attempts - 1:
-                await asyncio.sleep(0.5)
-            continue
-
-    # If we exhausted all attempts, raise the last exception
-    raise last_exception
+async def close_popup(page: Page):
+    """Close the popup window by clicking the close button"""
+    close_button = await page.wait_for_selector('div.right > i.iconfont.icon-guanbi', timeout=5000)
+    if close_button:
+        await close_button.click()
+        # Wait for the popup to disappear
+        await page.wait_for_selector('.el-dialog__body', state='hidden', timeout=5000)

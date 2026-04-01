@@ -25,8 +25,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 # ===== existing imports below =====
-import json
-from utils.validators import validate_and_prepare_cookies
 from utils.logging_config import get_others_logger
 from scraper.utils.scrape_utils import scrape_all_records, run_stocks_scrape
 logger = get_others_logger()
@@ -83,7 +81,7 @@ async def lifespan(app: FastAPI):
     # The new job for 22:30
     scheduler.add_job(
         scheduled_scrape_records_job,
-        trigger=CronTrigger(hour="4, 18, 22", minute=30),
+        trigger=CronTrigger(hour="18, 22", minute=30),
         id="scrape_records_22_30",
         name="Scheduled Record Scraper at 22:30",
         replace_existing=True,

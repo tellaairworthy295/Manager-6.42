@@ -1,9 +1,8 @@
-import ast
+
 import asyncio
-import json
 from datetime import datetime
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from scraper.cookies_getter import update_common_cookies
