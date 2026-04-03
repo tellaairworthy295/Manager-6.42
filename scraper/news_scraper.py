@@ -16,7 +16,6 @@ from utils.logging_config import get_news_task_logger
 import base64
 from xml.etree import ElementTree as ET
 from curl_cffi import requests
-from click_to_rotate import click_random_top_right_area
 
 logger = get_news_task_logger()
 
@@ -270,7 +269,6 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
                                 f"Retrying {strategy['name']}... Quitting current driver to rotate proxy/fingerprint.")
                             try:
                                 driver.quit()  # Destroy the burned session
-                                click_random_top_right_area()
                             except Exception:
                                 pass
                             driver = None  # Force a new driver creation on the next loop iteration
