@@ -1,266 +1,190 @@
 import re
 import time
 import random
-import json
+import asyncio
 from typing import List, Optional
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from utils.logging_config import get_news_task_logger
+from googletrans import Translator
 
-logger = get_news_task_logger()
-# Load translation config from config.json
-def _load_translation_config():
-    with open("json/config.json", 'r', encoding='utf-8') as f:
-        config = json.load(f)
-    tcfg = config.get("TranslationConfig", {})
-    return {
-        "ENABLE_TRANSLATION": tcfg.get("ENABLE_TRANSLATION", True),
-        "USE_WEB_SCRAPING": tcfg.get("USE_WEB_SCRAPING", True),
-        "MAX_CHUNK_SIZE": tcfg.get("MAX_CHUNK_SIZE", 4000),
-        "REQUEST_DELAY": tcfg.get("REQUEST_DELAY", 1.0),
-        "DISABLE_PROXY": tcfg.get("DISABLE_PROXY", False),
-        "TIMEOUT_SECONDS": tcfg.get("TIMEOUT_SECONDS", 15),
-    }
-
-_translation_config = _load_translation_config()
-
-# Remove deep-translator entirely!
-# Fallback: googletrans
-try:
-    from googletrans import Translator
-    HAS_GOOGLETRANS = True
-except ImportError:
-    HAS_GOOGLETRANS = False
-
-# Simple in-memory cache
-_translation_cache = {}
-
-
-class TranslationService:
-    """
-    Translation service with chunking, retries, and multiple fallback translators.
-    Priority:
-        1️⃣ Google Web API (scraping)
-        2️⃣ googletrans
-        3️⃣ Original text (last resort)
-    """
-
+class TranslationPipeline:
     def __init__(
         self,
-        use_web_scraping=_translation_config["USE_WEB_SCRAPING"],
-        max_chunk_size=_translation_config["MAX_CHUNK_SIZE"],
-        enable_translation=_translation_config["ENABLE_TRANSLATION"],
-        request_delay=_translation_config["REQUEST_DELAY"],
-        disable_proxy=_translation_config["DISABLE_PROXY"],
-        timeout_seconds=_translation_config["TIMEOUT_SECONDS"]
+        max_chunk_size: int = 3000,
+        base_delay: float = 2.5,
+        max_retries: int = 2,  # ONLY for network errors
+        timeout: int = 10,
+        enable_cache: bool = True,
     ):
-        self.use_web_scraping = use_web_scraping
         self.max_chunk_size = max_chunk_size
-        self.enable_translation = enable_translation
-        self.request_delay = request_delay
-        self.disable_proxy = disable_proxy
-        self.timeout_seconds = timeout_seconds
+        self.base_delay = base_delay
+        self.max_retries = max_retries
+        self.timeout = timeout
+        self.enable_cache = enable_cache
 
-        # Initialize translators
-        self.translator = Translator() if HAS_GOOGLETRANS else None
-
-        # Session with retry strategy
+        self.cache = {}
+        self.translator = Translator()
         self.session = requests.Session()
-        retry_strategy = Retry(
-            total=2,
-            backoff_factor=2,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET", "POST"]
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                          'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.128 Safari/537.36'
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
         })
-        if self.disable_proxy:
-            self.session.proxies = {}
 
     # ------------------------
-    # Chunking logic
+    # Public API
     # ------------------------
-    def _chunk_text(self, text: str) -> List[str]:
-        """Split long text into manageable chunks with sentence awareness."""
-        if len(text) <= self.max_chunk_size:
-            return [text]
-
-        chunks, current_chunk = [], ""
-        paragraphs = text.split('\n\n')
-
-        for paragraph in paragraphs:
-            if len(current_chunk + paragraph) > self.max_chunk_size:
-                sentences = re.split(r'(?<=[.!?]) +', paragraph)
-                for s in sentences:
-                    if len(current_chunk + s) > self.max_chunk_size:
-                        if current_chunk:
-                            chunks.append(current_chunk.strip())
-                        current_chunk = s
-                    else:
-                        current_chunk += " " + s
-            else:
-                current_chunk += ("\n\n" + paragraph) if current_chunk else paragraph
-
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-        return chunks
-
-    # ------------------------
-    # Translation methods
-    # ------------------------
-    def _translate_with_googletrans(self, text: str) -> Optional[str]:
-        if not HAS_GOOGLETRANS or not self.translator:
-            return None
-        try:
-            result = self.translator.translate(text, dest='zh-CN')
-            return result.text
-        except Exception as e:
-            logger.warning(f"googletrans error: {e}")
-            return None
-
-    def _translate_with_web_scraping(self, text: str) -> Optional[str]:
-        """Translate using unofficial Google Translate web endpoint."""
-        endpoints = [
-            "https://translate.googleapis.com/translate_a/single",
-            "https://translate.google.com/translate_a/single",
-            "https://translate.google.com.hk/translate_a/single",
-        ]
-        random.shuffle(endpoints)
-        params = {'client': 'gtx', 'sl': 'auto', 'tl': 'zh-CN', 'dt': 't', 'q': text}
-
-        for endpoint in endpoints:
-            try:
-                resp = self.session.get(endpoint, params=params, timeout=(5, self.timeout_seconds))
-                resp.raise_for_status()
-                try:
-                    data = resp.json()
-                except ValueError:
-                    logger.warning("JSON parse failed, skipping endpoint")
-                    continue
-                if not data or not data[0]:
-                    continue
-                translated = ''.join(item[0] for item in data[0] if item and item[0])
-                if translated.strip():
-                    return translated
-            except Exception as e:
-                logger.warning(f"Endpoint {endpoint} failed: {e}")
-                continue
-        return None
-
-    # ------------------------
-    # High-level translation with retries
-    # ------------------------
-    def translate_text(self, text: str) -> str:
-        if not self.enable_translation:
-            return text
+    def translate(self, text: str) -> str:
         if not text or not text.strip():
             return text
 
         text = text.strip()
 
-        # Use cache
-        if text in _translation_cache:
-            return _translation_cache[text]
+        if self.enable_cache and text in self.cache:
+            return self.cache[text]
 
-        if len(text) <= self.max_chunk_size:
-            translated = self._translate_with_fallbacks(text)
-            _translation_cache[text] = translated
-            return translated
+        chunks = self._chunk(text)
+        results = []
 
-        chunks = self._chunk_text(text)
-        translated_chunks = []
+        for chunk in chunks:
+            translated = self._translate_with_pipeline(chunk)
+            results.append(translated)
 
-        logger.info(f"Translating {len(chunks)} chunks ({len(text)} chars total)")
-        for i, chunk in enumerate(chunks):
-            translated_chunk = self._translate_with_fallbacks(chunk, chunk_index=i + 1)
-            translated_chunks.append(translated_chunk)
-            time.sleep(self.request_delay)  # Configurable delay
+            time.sleep(self.base_delay + random.uniform(0.5, 1.5))
 
-        result = '\n\n'.join(translated_chunks)
-        _translation_cache[text] = result
-        return result
+        final = "\n\n".join(results)
 
-    def _translate_with_fallbacks(self, text: str, chunk_index=None) -> str:
-        """Try translators in priority order with retries."""
-        for attempt in range(3):
+        if self.enable_cache:
+            self.cache[text] = final
+
+        return final
+
+    # ------------------------
+    # Pipeline logic
+    # ------------------------
+    def _translate_with_pipeline(self, text: str) -> str:
+        """Priority:
+        1. Google Web API (NO retry on block)
+        2. googletrans (async supported)
+        3. original text
+        """
+
+        # 1️⃣ Google Web (quick fail)
+        result = self._google_web(text)
+        if self._valid(result):
+            return result
+
+        # 2️⃣ googletrans (retry ONLY on network issues)
+        for attempt in range(self.max_retries):
             try:
-                if self.use_web_scraping:
-                    result = self._translate_with_web_scraping(text)
-                    if result and self._is_valid_translation(text, result):
-                        return result
+                result = self._googletrans(text)
+                if self._valid(result):
+                    return result
+                else:
+                    break  # logical failure → don't retry
 
-                if HAS_GOOGLETRANS:
-                    result = self._translate_with_googletrans(text)
-                    if result and self._is_valid_translation(text, result):
-                        return result
+            except requests.exceptions.RequestException:
+                delay = (2 ** attempt) + random.uniform(0.5, 1.5)
+                time.sleep(delay)
+                continue
+            except Exception:
+                break
 
-            except Exception as e:
-                logger.warning(f"Attempt {attempt+1} failed for chunk {chunk_index}: {e}")
-
-            delay = 2 ** attempt
-            logger.info(f"Retrying in {delay}s (attempt {attempt+2}/3)...")
-            time.sleep(delay)
-
-        logger.error(f"Translation failed after 3 attempts for chunk {chunk_index}. Returning original text.")
         return text
 
-    def _is_valid_translation(self, original: str, translated: str) -> bool:
-        """Basic heuristic to ensure output isn't untranslated or empty."""
-        if not translated.strip():
+    # ------------------------
+    # Providers
+    # ------------------------
+    def _google_web(self, text: str) -> Optional[str]:
+        """NO retries. Fail fast if blocked."""
+        endpoint = "https://translate.googleapis.com/translate_a/single"
+        params = {
+            "client": "gtx",
+            "sl": "auto",
+            "tl": "zh-CN",
+            "dt": "t",
+            "q": text,
+        }
+
+        try:
+            resp = self.session.get(endpoint, params=params, timeout=self.timeout)
+
+            # 🚨 Detect block immediately
+            if "sorry" in resp.url or resp.status_code == 429:
+                return None
+
+            resp.raise_for_status()
+
+            data = resp.json()
+            if not data or not data[0]:
+                return None
+
+            return "".join(item[0] for item in data[0] if item and item[0])
+
+        except requests.exceptions.RequestException:
+            # network error → allow retry at higher level (but we don't retry here)
+            return None
+        except Exception:
+            return None
+
+    def _googletrans(self, text: str) -> Optional[str]:
+        if not self.translator:
+            return None
+
+        result = self.translator.translate(text, dest="zh-CN")
+
+        # ✅ Handle async version safely
+        if asyncio.iscoroutine(result):
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    result = asyncio.run(result)
+                else:
+                    result = loop.run_until_complete(result)
+            except RuntimeError:
+                result = asyncio.run(result)
+
+        return result.text if result else None
+
+    # ------------------------
+    # Utilities
+    # ------------------------
+    def _chunk(self, text: str) -> List[str]:
+        if len(text) <= self.max_chunk_size:
+            return [text]
+
+        chunks, current = [], ""
+        sentences = re.split(r"(?<=[.!?]) +", text)
+
+        for s in sentences:
+            if len(current) + len(s) > self.max_chunk_size:
+                chunks.append(current.strip())
+                current = s
+            else:
+                current += " " + s
+
+        if current:
+            chunks.append(current.strip())
+
+        return chunks
+
+    def _valid(self, text: Optional[str]) -> bool:
+        if not text or not text.strip():
             return False
-        # Detect if too much English remains
-        english_ratio = len(re.findall(r'[a-zA-Z]', translated)) / max(1, len(translated))
-        return english_ratio < 0.5  # more than 50% Chinese content
 
-    # ------------------------
-    # Article translation
-    # ------------------------
-    def translate_article(self, title: str, content: str) -> dict:
-        result = {'title_zh': '', 'content_zh': ''}
-        try:
-            if title:
-                logger.info("Translating article title...")
-                result['title_zh'] = self.translate_text(title)
-            if content:
-                logger.info("Translating article content...")
-                result['content_zh'] = self.translate_text(content)
-        except Exception as e:
-            logger.error(f"Error translating article: {e}")
-        return result
+        english_ratio = len(re.findall(r"[a-zA-Z]", text)) / max(1, len(text))
+        return english_ratio < 0.6
 
 
 # ------------------------
-# Global instance and helpers
+# Singleton helper
 # ------------------------
-_translation_service = None
+_pipeline = None
 
 
-def get_translation_service() -> TranslationService:
-    global _translation_service
-    if _translation_service is None:
-        try:
-            _translation_service = TranslationService(
-                use_web_scraping=_translation_config["USE_WEB_SCRAPING"],
-                max_chunk_size=_translation_config["MAX_CHUNK_SIZE"],
-                enable_translation=_translation_config["ENABLE_TRANSLATION"],
-                request_delay=_translation_config["REQUEST_DELAY"],
-                disable_proxy=_translation_config["DISABLE_PROXY"],
-                timeout_seconds=_translation_config["TIMEOUT_SECONDS"],
-            )
-        except ImportError:
-            _translation_service = TranslationService()
-    return _translation_service
+def get_pipeline() -> TranslationPipeline:
+    global _pipeline
+    if _pipeline is None:
+        _pipeline = TranslationPipeline()
+    return _pipeline
 
 
-def translate_to_chinese(text: str) -> str:
-    return get_translation_service().translate_text(text)
-
-
-def translate_article_to_chinese(title: str, content: str) -> dict:
-    return get_translation_service().translate_article(title, content)
+def translate_article_to_chinese(text: str) -> str:
+    return get_pipeline().translate(text)
