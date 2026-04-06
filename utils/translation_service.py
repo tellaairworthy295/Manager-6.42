@@ -1,8 +1,9 @@
 import re
+import threading
 import time
 import random
 import asyncio
-from typing import List, Optional
+from typing import List, Optional, Any
 import requests
 from googletrans import Translator
 
@@ -128,20 +129,51 @@ class TranslationPipeline:
         if not self.translator:
             return None
 
-        result = self.translator.translate(text, dest="zh-CN")
+        # 1. 原始返回值（可能是协程，可能是对象）
+        raw_result = self.translator.translate(text, dest="zh-CN")
 
-        # ✅ Handle async version safely
-        if asyncio.iscoroutine(result):
+        # 2. 解析后的结果，明确告诉 PyCharm 这是 Any 类型
+        final_result: Any = self._run_sync_safely(raw_result) if asyncio.iscoroutine(raw_result) else raw_result
+
+        # ✅ 现在 PyCharm 知道 final_result 是 Any，不会再警告缺少 text 属性了
+        return final_result.text if final_result else None
+
+    def _run_sync_safely(self, coro):
+        """
+        安全地将协程在同步环境中运行，完美避开 "Event loop is running" 错误
+        """
+        try:
+            # 检查当前线程是否有正在运行的 loop
+            asyncio.get_running_loop()
+            has_running_loop = True
+        except RuntimeError:
+            has_running_loop = False
+
+        if not has_running_loop:
+            # 情况 A: 当前没有正在运行的事件循环，直接安全运行
+            return asyncio.run(coro)
+
+        # 情况 B: 当前已有正在运行的事件循环
+        # 必须开启一个新线程，在新线程的全新事件循环中运行协程
+        thread_result = None
+        thread_exception = None
+
+        def thread_target():
+            nonlocal thread_result, thread_exception
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    result = asyncio.run(result)
-                else:
-                    result = loop.run_until_complete(result)
-            except RuntimeError:
-                result = asyncio.run(result)
+                # 在新线程中，asyncio.run 会自动创建并管理一个新的事件循环
+                thread_result = asyncio.run(coro)
+            except Exception as e:
+                thread_exception = e
 
-        return result.text if result else None
+        t = threading.Thread(target=thread_target)
+        t.start()
+        t.join()  # 阻塞当前同步代码，直到新线程执行完毕
+
+        if thread_exception:
+            raise thread_exception
+
+        return thread_result
 
     # ------------------------
     # Utilities
@@ -186,5 +218,5 @@ def get_pipeline() -> TranslationPipeline:
     return _pipeline
 
 
-def translate_article_to_chinese(text: str) -> str:
+def translate_to_chinese(text: str) -> str:
     return get_pipeline().translate(text)

@@ -1,38 +1,5 @@
 """
 WeChat Work Grafana Alert Forwarder — async-refactored edition
-==============================================================
-
-Key changes vs. the original synchronous version
--------------------------------------------------
-1.  **All route handlers are now `async def`** — the asyncio event loop can
-    interleave thousands of in-flight requests instead of being gated by the
-    40-thread AnyIO thread-pool cap.
-
-2.  **`requests` → `httpx.AsyncClient`** — every outbound HTTP call (WeCom
-    API, Grafana render) is now truly non-blocking.  A single shared client
-    with connection pooling is created at startup and torn down at shutdown,
-    so TCP connections are reused across requests.
-
-3.  **`aiofiles`** is used for async image file writes — the disk write no
-    longer blocks the event loop.
-
-4.  **`WeComAgentSender` is fully async** — `get_access_token`, all WeCom
-    API calls, and the image-upload method use `await` throughout.
-
-5.  **Token refresh is race-condition-free** — an `asyncio.Lock` serialises
-    concurrent refresh attempts so only one coroutine fetches a new token at
-    a time; the rest wait and then reuse it.
-
-6.  **Panel images are rendered concurrently** — `asyncio.gather` fires all
-    render/send tasks in parallel instead of sequentially, so three panels
-    take the same time as one.
-
-7.  **`wechat_work_webhook`** (sync) is called via
-    `asyncio.get_event_loop().run_in_executor` so it never blocks the event
-    loop.
-
-8.  **`FastAPI` lifespan** (the modern replacement for deprecated
-    `on_event`) manages the shared `httpx.AsyncClient`.
 """
 
 import asyncio

@@ -4,18 +4,15 @@ from datetime import datetime
 import json
 import random
 import re
-import time
 from bs4 import BeautifulSoup
-from selenium.common.exceptions import WebDriverException
-from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from utils.translation_service import translate_article_to_chinese
+from utils.translation_service import translate_to_chinese
 from selen.stealth_driver import get_chrome_driver
 from utils.database import get_db_manager, NewsArticleRepository
 from utils.logging_config import get_news_task_logger
 import base64
 from xml.etree import ElementTree as ET
-from curl_cffi import requests
 
 logger = get_news_task_logger()
 
@@ -90,37 +87,43 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
             pass
         return None
 
-    def fetch_and_parse_sitemap():
-        """Fetches the sitemap using curl_cffi and returns sorted URLs based on publication date."""
-        # Use the specific URL provided in the example
+    def fetch_and_parse_sitemap(driver):
+        """Fetches the sitemap using Selenium driver and returns sorted URLs based on publication date."""
         sitemap_url = "https://www.bloomberg.com/sitemaps/news/latest.xml"
         logger.info(f"Fetching sitemap from {sitemap_url}")
 
         try:
-            # Use curl_cffi with impersonate
-            response = requests.get(sitemap_url, impersonate="chrome")
+            driver.get(sitemap_url)
+            _human_pause(1.5, 3.0)
 
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch sitemap from {sitemap_url}, Status Code: {response.status_code}")
-                return []  # Return empty list if fetching fails
+            if _is_blocked(driver.page_source):
+                logger.warning("Bot challenge detected on sitemap page!")
+                return []
 
-            # Get the text content
-            sitemap_content = response.text
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.ID, "webkit-xml-viewer-source-xml"))
+            )
+
+            # Use innerHTML to get the actual XML markup, not stripped plain text
+            xml_content = driver.execute_script(
+                "return document.getElementById('webkit-xml-viewer-source-xml').innerHTML;"
+            )
+
+            if not xml_content:
+                logger.error("Empty content from webkit-xml-viewer-source-xml.")
+                return []
 
         except Exception as e:
-            logger.error(f"An error occurred while fetching the sitemap with curl_cffi: {e}")
-            return []  # Return empty list if fetching fails
+            logger.error(f"An error occurred while fetching the sitemap with Selenium: {e}")
+            return []
 
         try:
-            root = ET.fromstring(sitemap_content)
+            root = ET.fromstring(xml_content)
         except ET.ParseError as e:
-            logger.error(f"Failed to parse sitemap XML from {sitemap_url}: {e}")
-            return []  # Return empty list if parsing fails
+            logger.error(f"Failed to parse sitemap XML: {e}")
+            return []
 
         urls_with_dates = []
-        # Define the namespace map if the XML uses one (common for sitemaps)
-        # The default sitemap namespace is usually 'http://www.sitemaps.org/schemas/sitemap/0.9'
-        # The news namespace might be 'http://www.google.com/schemas/sitemap-news/0.9'
         namespaces = {
             'sitemap': 'http://www.sitemaps.org/schemas/sitemap/0.9',
             'news': 'http://www.google.com/schemas/sitemap-news/0.9'
@@ -135,24 +138,18 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
                 pub_date_str = pub_date_elem.text.strip()
 
                 try:
-                    # Parse the ISO format timestamp string into a datetime object
-                    # Handle 'Z' suffix for UTC
                     if pub_date_str.endswith('Z'):
                         pub_date_str = pub_date_str[:-1] + '+00:00'
                     pub_date_obj = datetime.fromisoformat(pub_date_str)
                 except ValueError as e:
                     logger.warning(f"Could not parse date '{pub_date_str}' for URL {url}: {e}")
-                    continue  # Skip this entry if date parsing fails
+                    continue
 
                 urls_with_dates.append((url, pub_date_obj))
             else:
-                # If an entry doesn't have both loc and publication_date, skip it
                 continue
 
-        # Sort the list of tuples (URL, pub_date_obj) by the pub_date_obj in descending order (newest first)
         urls_with_dates.sort(key=lambda x: x[1], reverse=True)
-
-        # Extract just the URLs from the sorted list, taking the first 20
         sorted_urls = [item[0] for item in urls_with_dates[:20]]
 
         logger.info(f"Parsed and sorted {len(sorted_urls)} URLs from the sitemap.")
@@ -205,14 +202,15 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
             raw_links = []
 
             if strategy['name'] == "sitemap_search":
-                # Execute the sitemap fetching and parsing logic
-                sitemap_urls = fetch_and_parse_sitemap()
+                if driver is None:
+                    driver = get_chrome_driver()
+                sitemap_urls = fetch_and_parse_sitemap(driver)
                 if sitemap_urls:
                     raw_links = sitemap_urls
                     logger.info(f"Sitemap search yielded {len(raw_links)} URLs.")
                 else:
                     logger.info("Sitemap search yielded no URLs.")
-                    continue  # Move to the next strategy if sitemap fails/returns empty
+                    continue
 
             else:  # It's a Selenium-based strategy (google_news, bloomberg_latest)
                 # Apply 3 retries specifically for bloomberg_latest, 1 for others
@@ -607,9 +605,8 @@ def scrape_news(url: str, source: str):
         if content and title:
             logger.info("Starting Chinese translation...")
             try:
-                translation_result = translate_article_to_chinese(title, content)
-                title_zh = translation_result.get('title_zh', '')
-                content_zh = translation_result.get('content_zh', '')
+                title_zh = translate_to_chinese(title)
+                content_zh = translate_to_chinese(content)
                 logger.info("Chinese translation completed")
             except Exception as e:
                 logger.error(f"Translation failed for {url}: {e}")
