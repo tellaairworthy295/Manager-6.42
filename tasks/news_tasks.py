@@ -5,9 +5,8 @@ import time
 import dramatiq
 from utils.redis_utils import get_redis_client
 from scraper.news_scraper import scrape_news, fetch_urls_from_page
-from utils.upload_knowledge import upload_dify_knowledge, clean_dify_knowledge
 from utils.logging_config import get_news_task_logger
-from click_to_rotate import click_random_top_right_area
+from rotate_proxies import force_rotate
 
 logger = get_news_task_logger()
 
@@ -41,7 +40,6 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, rate_l
             "message": f"Error fetching URLs: {str(e)}"
         }
         _record_site_result(group_key, source, result, now_str)
-        click_random_top_right_area()
         logger.info(f"Task completed for {source} with error: {result}")
         return
 
@@ -77,7 +75,6 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, rate_l
             except Exception as e:
                 # Treat exceptions during scraping as an empty content failure
                 content = ""
-                click_random_top_right_area()
 
             if content:
                 success_count += 1
@@ -87,6 +84,8 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, rate_l
                     failed_count += 1
                     failed_urls.append(url)
                     logger.warning(f"Giving up on {url} after 2 retries")
+                    force_rotate()
+                    time.sleep(30)
                 else:
                     logger.warning(f"Content empty for {url}, will retry")
                     time.sleep(random.uniform(2.0, 10.0))

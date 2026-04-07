@@ -13,13 +13,15 @@ from utils.database import get_db_manager, NewsArticleRepository
 from utils.logging_config import get_news_task_logger
 import base64
 from xml.etree import ElementTree as ET
+from rotate_proxies import force_rotate
 
 logger = get_news_task_logger()
 
 captcha_signatures = [
     "We've detected unusual activity from your computer network",
     "px-captcha",
-    "cf-browser-verification"
+    "cf-browser-verification",
+    "Are you a robot?"
 ]
 
 
@@ -98,6 +100,8 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
 
             if _is_blocked(driver.page_source):
                 logger.warning("Bot challenge detected on sitemap page!")
+                force_rotate()
+                time.sleep(30)
                 return []
 
             WebDriverWait(driver, 15).until(
@@ -150,7 +154,7 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
                 continue
 
         urls_with_dates.sort(key=lambda x: x[1], reverse=True)
-        sorted_urls = [item[0] for item in urls_with_dates[:20]]
+        sorted_urls = [item[0] for item in urls_with_dates[:30]]
 
         logger.info(f"Parsed and sorted {len(sorted_urls)} URLs from the sitemap.")
         return sorted_urls
@@ -226,6 +230,8 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
                         _human_pause(1.5, 3.0)  # Wait a moment for JS challenge to load
                         _handle_cookies_notification(driver)
                         if _is_blocked(driver.page_source):
+                            force_rotate()
+                            time.sleep(30)
                             raise Exception("CAPTCHA or Anti-Bot challenge detected on search page!")
 
                         # Wait for target links to populate
