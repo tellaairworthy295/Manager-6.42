@@ -2,10 +2,19 @@
   "TranslationConfig": {
     "ENABLE_TRANSLATION": true,
     "USE_WEB_SCRAPING": true,
-    "MAX_CHUNK_SIZE": 4000,
+    "NMT_ENABLED": true,
+    "MAX_CHUNK_SIZE": 2000,
     "REQUEST_DELAY": 1.0,
-    "DISABLE_PROXY": true,
-    "TIMEOUT_SECONDS": 15
+    "TIMEOUT_SECONDS": 20
+  },
+  "LLMTranslationConfig": {
+    "ENABLED": true,
+    "API_BASE_URL": "https://openrouter.ai/api/v1",
+    "API_KEY_ENV": "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",
+    "MODEL_NAME": "openai/gpt-oss-120b:free",
+    "TEMPERATURE": 0.1,
+    "MAX_TOKENS": 20480,
+    "TIMEOUT": 40
   },
   "EmailConfig": {
         "SMTP_SERVER": "smtp.qq.com",

@@ -7,7 +7,7 @@ import re
 from bs4 import BeautifulSoup
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from utils.translation_service import translate_to_chinese
+from utils.translation_service import translate_to_chinese, translate_article_to_chinese
 from selen.stealth_driver import get_chrome_driver
 from utils.database import get_db_manager, NewsArticleRepository
 from utils.logging_config import get_news_task_logger
@@ -100,8 +100,8 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
 
             if _is_blocked(driver.page_source):
                 logger.warning("Bot challenge detected on sitemap page!")
-                force_rotate()
-                time.sleep(30)
+                # force_rotate()
+                # time.sleep(30)
                 return []
 
             WebDriverWait(driver, 15).until(
@@ -230,8 +230,8 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
                         _human_pause(1.5, 3.0)  # Wait a moment for JS challenge to load
                         _handle_cookies_notification(driver)
                         if _is_blocked(driver.page_source):
-                            force_rotate()
-                            time.sleep(30)
+                            # force_rotate()
+                            # time.sleep(30)
                             raise Exception("CAPTCHA or Anti-Bot challenge detected on search page!")
 
                         # Wait for target links to populate
@@ -386,71 +386,75 @@ def _handle_cookies_notification(driver):
 
 def _wait_for_progressive_content(driver, selector, xml_selector, unwanted_content, timeout=15, min_paragraphs=4):
     """Wait for content to load with human-like scrolling behavior, preserving most-complete non-empty result against anti-bot blocking."""
-    start = time.time()
-    last_count = 0
-    stable_count = 0
-    content_fully_loaded = False
+    try:
+        start = time.time()
+        last_count = 0
+        stable_count = 0
+        content_fully_loaded = False
 
-    # Track most complete non-empty content so far to survive anti-bot blanking
-    best_xml_content = ""
-    best_result = {"title": "", "content": ""}
-    best_publish_at = None
-    best_count = 0
+        # Track most complete non-empty content so far to survive anti-bot blanking
+        best_xml_content = ""
+        best_result = {"title": "", "content": ""}
+        best_publish_at = None
+        best_count = 0
 
-    while time.time() - start < timeout:
+        while time.time() - start < timeout:
 
-        # 1. Handle Cookie Consent Banner
-        _handle_cookies_notification(driver)
+            # 1. Handle Cookie Consent Banner
+            _handle_cookies_notification(driver)
 
-        # Fetch page source ONCE per loop to optimize performance
-        page_source = driver.page_source
+            # Fetch page source ONCE per loop to optimize performance
+            page_source = driver.page_source
 
-        # 2. Fast-fail Anti-Bot / CAPTCHA check
-        if _is_blocked(driver.page_source) and not best_result["content"]:
-            # Break immediately to save time and return empty markers
-            return False, "", {"title": "", "content": ""}, None
+            # 2. Fast-fail Anti-Bot / CAPTCHA check
+            if _is_blocked(driver.page_source) and not best_result["content"]:
+                # Break immediately to save time and return empty markers
+                return False, "", {"title": "", "content": ""}, None
 
-        # 3. Parse and evaluate content
-        soup = BeautifulSoup(page_source, "html.parser")
-        paragraphs = soup.select(selector)
-        count = len(paragraphs)
+            # 3. Parse and evaluate content
+            soup = BeautifulSoup(page_source, "html.parser")
+            paragraphs = soup.select(selector)
+            count = len(paragraphs)
 
-        if count > last_count:
-            last_count = count
-            stable_count = 0
-        else:
-            stable_count += 1
+            if count > last_count:
+                last_count = count
+                stable_count = 0
+            else:
+                stable_count += 1
 
-        xml_content = extract_xml_content(soup, xml_selector)
-        result = _extract_article_content(soup, selector, unwanted_content)
-        publish_at = extract_and_format_time(soup)
+            xml_content = extract_xml_content(soup, xml_selector)
+            result = _extract_article_content(soup, selector, unwanted_content)
+            publish_at = extract_and_format_time(soup)
 
-        # Consider only if nonempty, and "better" (more paragraphs = more complete)
-        this_content_ok = bool(result.get("content", "").strip()) and count > 0
-        if this_content_ok and count >= best_count:
-            best_count = count
-            best_xml_content = xml_content
-            best_result = result
-            best_publish_at = publish_at
+            # Consider only if nonempty, and "better" (more paragraphs = more complete)
+            this_content_ok = bool(result.get("content", "").strip()) and count > 0
+            if this_content_ok and count >= best_count:
+                best_count = count
+                best_xml_content = xml_content
+                best_result = result
+                best_publish_at = publish_at
 
-        if count > min_paragraphs and stable_count > 1:
-            content_fully_loaded = True
-            # Use the current best, which should be this one
-            break
+            if count > min_paragraphs and stable_count > 1:
+                content_fully_loaded = True
+                # Use the current best, which should be this one
+                break
 
-        # 4. Human-like interactions: Smooth scrolling
-        at_bottom = driver.execute_script(
-            "return (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 500);"
-        )
+            # 4. Human-like interactions: Smooth scrolling
+            at_bottom = driver.execute_script(
+                "return (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 500);"
+            )
 
-        if not at_bottom:
-            driver.execute_script("window.scrollBy(600, 1000);")  # Scroll down
+            if not at_bottom:
+                driver.execute_script("window.scrollBy(600, 1000);")  # Scroll down
 
-        # 6. Human dwell time before next check
-        _human_pause(1.5, 2.5)
+            # 6. Human dwell time before next check
+            _human_pause(1.5, 2.5)
 
-    # On exit, always use the best version found, even if content_fully_loaded is False or anti-bot blanked page
-    return content_fully_loaded, best_xml_content, best_result, best_publish_at
+        # On exit, always use the best version found, even if content_fully_loaded is False or anti-bot blanked page
+        return content_fully_loaded, best_xml_content, best_result, best_publish_at
+    finally:
+        if driver:
+            driver.quit()
 
 
 def extract_and_format_time(soup):
@@ -611,8 +615,9 @@ def scrape_news(url: str, source: str):
         if content and title:
             logger.info("Starting Chinese translation...")
             try:
-                title_zh = translate_to_chinese(title)
-                content_zh = translate_to_chinese(content)
+                trans = translate_article_to_chinese(title, content)
+                title_zh=trans.get('title_zh')
+                content_zh=trans.get('content_zh')
                 logger.info("Chinese translation completed")
             except Exception as e:
                 logger.error(f"Translation failed for {url}: {e}")

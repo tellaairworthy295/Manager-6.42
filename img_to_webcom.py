@@ -12,8 +12,6 @@ import urllib.parse
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple, Union
-import pandas_market_calendars as mcal
-import pandas as pd
 import aiofiles
 import httpx
 import jwt
@@ -21,7 +19,7 @@ import uvicorn
 import wechat_work_webhook
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
-
+import uuid
 # ==============================================================================
 # Section 0: Application lifespan — shared async HTTP client & Semaphores
 # ==============================================================================
@@ -36,17 +34,9 @@ _render_semaphore: Optional[asyncio.Semaphore] = None
 _wecom_semaphore: Optional[asyncio.Semaphore] = None
 
 
-def _is_a_share_trading_day(date_obj: datetime) -> bool:
-    """
-    Pure sync check — pandas_market_calendars is blocking.
-    Called via asyncio.to_thread() by the caller.
-    """
-    exchange = mcal.get_calendar("XSHG")
-    timestamp = pd.Timestamp(date_obj.date())
-    start_date = timestamp - pd.Timedelta(days=1)
-    end_date = timestamp + pd.Timedelta(days=1)
-    schedule = exchange.schedule(start_date=start_date, end_date=end_date)
-    return timestamp in schedule.index
+def _is_a_share_trading_day(date_str: str) -> bool:
+    return date_str not in ['2026-04-06', '2026-05-01', '2026-04-07', '2026-05-04', '2026-05-05', '2026-06-19',
+                            '2026-09-25']
 
 
 def get_http_client() -> httpx.AsyncClient:
@@ -286,6 +276,30 @@ class WeComAgentSender:
 
 
 # ==============================================================================
+# Add this right after the WeComAgentSender class definition in Section 1
+# ==============================================================================
+
+_agent_senders: Dict[str, WeComAgentSender] = {}
+_agent_senders_lock = asyncio.Lock()
+
+
+async def get_or_create_agent_sender(agent_token: str) -> WeComAgentSender:
+    """
+    Retrieve an existing sender or create one.
+    This ensures the access token caching works correctly across multiple requests.
+    """
+    if agent_token in _agent_senders:
+        return _agent_senders[agent_token]
+
+    async with _agent_senders_lock:
+        # Double check inside the lock
+        if agent_token not in _agent_senders:
+            corp_id, corp_secret, agent_id = decode_agent_token(agent_token)
+            _agent_senders[agent_token] = WeComAgentSender(corp_id, corp_secret, agent_id)
+        return _agent_senders[agent_token]
+
+
+# ==============================================================================
 # Section 2: Token helpers for the agent URL  (unchanged logic)
 # ==============================================================================
 
@@ -477,7 +491,8 @@ async def download_panel_image(
         return None
 
     dt = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
-    filename = os.path.join(image_dir, f"img_org{org_id}_{dt}.jpg")
+    unique_id = uuid.uuid4().hex[:10]
+    filename = os.path.join(image_dir, f"img_org{org_id}_{dt}_{unique_id}.jpg")
 
     # Async file write — does not block the event loop
     async with aiofiles.open(filename, "wb") as f:
@@ -719,7 +734,7 @@ async def webhook_bot(token: str, data: dict) -> PlainTextResponse:
     date = datetime.now()
     date_str = date.strftime("%Y-%m-%d")
 
-    if not _is_a_share_trading_day(date):
+    if not _is_a_share_trading_day(date_str):
         print(f"[Stocks] {date_str} is not a trading day, skipping.")
         return PlainTextResponse(f"skipping {date_str}")
     markdown_content, panel_urls_and_vars = parse_grafana_payload(data, False)
@@ -775,27 +790,10 @@ async def webhook_agent(
         mobiles: str = "",
         party_ids: str = "",
 ) -> PlainTextResponse:
-    """
-    Receive a Grafana alert webhook and forward it via a **WeCom Corp Application Agent**.
-
-    Path parameter
-    --------------
-    agent_token : str
-        Base64-encoded credentials — generate with ``encode_agent_token()``.
-
-    Query parameters
-    ----------------
-    mobiles : str
-        Comma-separated mobile numbers to resolve to user IDs.
-    party_ids : str
-        Comma-separated department IDs.
-
-    At least one of *mobiles* or *party_ids* must be provided.
-    """
     date = datetime.now()
     date_str = date.strftime("%Y-%m-%d")
 
-    if not _is_a_share_trading_day(date):
+    if not _is_a_share_trading_day(date_str):
         print(f"[Stocks] {date_str} is not a trading day, skipping.")
         return PlainTextResponse(f"skipping {date_str}")
 
@@ -805,8 +803,8 @@ async def webhook_agent(
             detail="Provide at least one of ?mobiles=... or ?party_ids=... in the URL.",
         )
 
-    corp_id, corp_secret, agent_id = decode_agent_token(agent_token)
-    sender = WeComAgentSender(corp_id, corp_secret, agent_id)
+    # FIXED: Use the cache manager so access tokens aren't fetched on every request
+    sender = await get_or_create_agent_sender(agent_token)
 
     # Resolve recipients (concurrent mobile lookups inside resolve_user_ids)
     user_ids: List[str] = []
@@ -879,15 +877,24 @@ if __name__ == "__main__":
         corp_secret="baHccr2vt3CrL7YWy_ZrWa0z6SupKpIFZzZAA2pMwbg",
         agent_id=1000057,
     )
-    print(f"Your agent_token : {sample_token}")
+    sample_token_2 = encode_agent_token(
+        corp_id="wx4fe684f1fb7538e5",
+        corp_secret="pSSFHODQlB54on6zYM_FHqvHowe4DgeovSfkug2uGrU",
+        agent_id=1000066,
+    )
+    print(f"Agent 1 Token: {sample_token}")
+    print(f"Agent 2 Token: {sample_token_2}")
     print()
     print("Grafana contact point URLs:")
     print("  Group bot  : http://YOUR_SERVER:38888/webhook/bot/<webhook_key>")
     print(
-        f"  Corp agent : http://YOUR_SERVER:38888/webhook/agent/{sample_token}"
+        f"  Corp Agent 1: http://YOUR_SERVER:38888/webhook/agent/{sample_token}"
         "?mobiles=13800000001&party_ids=3"
+    )
+    print(
+        f"  Corp Agent 2: http://YOUR_SERVER:38888/webhook/agent/{sample_token_2}"
+        "?mobiles=13800000002&party_ids=4"
     )
     print("=" * 60)
 
-    # For production, prefer: gunicorn main:app -k uvicorn.workers.UvicornWorker --workers 4
-    uvicorn.run(app, host="0.0.0.0", port=38888)
+    uvicorn.run(app, host="0.0.0.0", port=38889)

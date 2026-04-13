@@ -84,8 +84,8 @@ def scrape_news_task(*, query: str, site: str = None, source: str = None, rate_l
                     failed_count += 1
                     failed_urls.append(url)
                     logger.warning(f"Giving up on {url} after 2 retries")
-                    force_rotate()
-                    time.sleep(30)
+                    # force_rotate()
+                    # time.sleep(30)
                 else:
                     logger.warning(f"Content empty for {url}, will retry")
                     time.sleep(random.uniform(2.0, 10.0))
