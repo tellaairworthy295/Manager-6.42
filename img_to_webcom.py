@@ -10,7 +10,7 @@ import re
 import time
 import urllib.parse
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, time as dt_time
 from typing import Dict, List, Optional, Tuple, Union
 import aiofiles
 import httpx
@@ -20,6 +20,7 @@ import wechat_work_webhook
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
 import uuid
+
 # ==============================================================================
 # Section 0: Application lifespan — shared async HTTP client & Semaphores
 # ==============================================================================
@@ -299,6 +300,29 @@ async def get_or_create_agent_sender(agent_token: str) -> WeComAgentSender:
         return _agent_senders[agent_token]
 
 
+_LOCAL_DEBT_STATE = {
+    "date": None,               # Tracks the current day (e.g., 2026-04-01)
+    "triggered_windows": set()  # Stores indices of windows that have already fired today
+}
+
+def _get_local_debt_window(current_time: datetime) -> Optional[int]:
+    """
+    Returns the index of the time window the current time falls into.
+    Returns None if the time is outside all defined windows.
+    """
+    t = current_time.time()
+    windows = [
+        (dt_time(10, 10), dt_time(11, 00)),  # 0
+        (dt_time(11, 10), dt_time(12, 00)),  # 1
+        (dt_time(12, 10), dt_time(13, 45)),  # 2
+        (dt_time(14, 40), dt_time(15, 30)),  # 3
+        (dt_time(15, 40), dt_time(16, 30)),  # 4
+        (dt_time(16, 40), dt_time(17, 30)),  # 5
+    ]
+    for idx, (start, end) in enumerate(windows):
+        if start <= t <= end:
+            return idx
+    return None
 # ==============================================================================
 # Section 2: Token helpers for the agent URL  (unchanged logic)
 # ==============================================================================
@@ -447,7 +471,7 @@ def _extract_org_id(url: str) -> int:
 
 
 async def download_panel_image(
-        panel_url: str, vars_dict: dict, width: str, height: str
+    panel_url: str, vars_dict: dict, width: str, height: str
 ) -> Optional[str]:
     """
     Render and download a Grafana panel image asynchronously.
@@ -489,10 +513,9 @@ async def download_panel_image(
                 "not belong to that org, or the panel/dashboard UID does not exist."
             )
         return None
-
-    dt = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
     unique_id = uuid.uuid4().hex[:10]
-    filename = os.path.join(image_dir, f"img_org{org_id}_{dt}_{unique_id}.jpg")
+    dt = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
+    filename = os.path.join(image_dir, f"{org_id}_{dt}_{unique_id}.jpg")
 
     # Async file write — does not block the event loop
     async with aiofiles.open(filename, "wb") as f:
@@ -550,7 +573,7 @@ def format_record_line(record: dict) -> str:
 
 def parse_grafana_payload(
         data: dict, is_agent: bool
-) -> Tuple[str, List[Tuple[str, dict, str, str]]]:
+):
     """Parse a raw Grafana alerting webhook payload (pure CPU, no I/O)."""
     alerts: list = data.get("alerts", [])
     alerts_by_type: dict = {}
@@ -636,6 +659,7 @@ def parse_grafana_payload(
         if ad.get("md", "0") != "0" and ad.get("panel_url"):
             last_title_for_url[ad["panel_url"]] = title
 
+    blocks: list = []
     details: list = []
     panel_urls_and_vars: list = []
     seen_urls: set = set()
@@ -653,7 +677,14 @@ def parse_grafana_payload(
             if ad.get("panel_url"):
                 if last_title_for_url.get(ad["panel_url"]) == title:
                     lines.append(f"> 🔗 [查看图表]({ad['panel_url']})")
-            details.append("\n".join(lines))
+
+            details.append('\n'.join(lines))
+            blocks.append({
+                "title": lines[0],
+                "time": next((l for l in lines if "时间" in l), None),
+                "lines": [l for l in lines if l.startswith("> -")],
+                "link": next((l for l in lines if "查看图表" in l), None),
+            })
 
         if (
                 ad.get("img", "0") != "0"
@@ -668,9 +699,112 @@ def parse_grafana_payload(
     markdown_content = (
         "\n> ---------------------------\n".join(details) + "\n" if details else ""
     )
-    return markdown_content, panel_urls_and_vars
+    return blocks, panel_urls_and_vars, markdown_content
 
 
+MAX_BYTES = 1792
+
+
+def _byte_len(s: str) -> int:
+    return len(s.encode("utf-8"))
+
+
+def split_markdown_blocks_by_bytes(blocks: List[dict]) -> List[str]:
+    """
+    Split markdown into multiple messages under 4096 bytes.
+
+    Rules:
+    - Never split title/time/link
+    - Only split inside data lines
+    - Header (title + time) always stays together
+    - Link always stays at end of a chunk
+    - If block too large → split its data lines
+    """
+
+    def build_header(block):
+        lines = [block["title"]]
+        if block.get("time"):
+            lines.append(block["time"])
+        return lines
+
+    def build_footer(block):
+        return [block["link"]] if block.get("link") else []
+
+    results = []
+    current_lines = []
+    current_bytes = 0
+
+    def flush():
+        nonlocal current_lines, current_bytes
+        if current_lines:
+            results.append("\n".join(current_lines))
+            current_lines = []
+            current_bytes = 0
+
+    for block in blocks:
+        header = build_header(block)
+        footer = build_footer(block)
+        data_lines = block["lines"]
+
+        header_bytes = _byte_len("\n".join(header) + "\n")
+        footer_bytes = _byte_len("\n".join(footer) + "\n") if footer else 0
+
+        # Build full block string (fast path)
+        full_block_lines = header + data_lines + footer
+        full_block_bytes = _byte_len("\n".join(full_block_lines))
+
+        # --------------------------------------------------
+        # Case 1: whole block fits into current message
+        # --------------------------------------------------
+        if current_bytes + full_block_bytes <= MAX_BYTES:
+            current_lines.extend(full_block_lines)
+            current_bytes += full_block_bytes
+            continue
+
+        # --------------------------------------------------
+        # Case 2: block itself too large → split internally
+        # --------------------------------------------------
+        if full_block_bytes > MAX_BYTES:
+            flush()
+
+            chunk_lines = header.copy()
+            chunk_bytes = _byte_len("\n".join(chunk_lines) + "\n")
+
+            for line in data_lines:
+                line_bytes = _byte_len(line + "\n")
+
+                # If adding this line + footer exceeds limit → split
+                if chunk_bytes + line_bytes + footer_bytes > MAX_BYTES:
+                    # finalize current chunk
+                    if footer:
+                        chunk_lines.extend(footer)
+
+                    results.append("\n".join(chunk_lines))
+
+                    # start new chunk with header
+                    chunk_lines = header.copy()
+                    chunk_bytes = _byte_len("\n".join(chunk_lines) + "\n")
+
+                chunk_lines.append(line)
+                chunk_bytes += line_bytes
+
+            # last chunk
+            if chunk_lines:
+                if footer:
+                    chunk_lines.extend(footer)
+                results.append("\n".join(chunk_lines))
+
+            continue
+
+        # --------------------------------------------------
+        # Case 3: block doesn't fit current → move to new msg
+        # --------------------------------------------------
+        flush()
+        current_lines = full_block_lines.copy()
+        current_bytes = full_block_bytes
+
+    flush()
+    return results
 # ==============================================================================
 # Section 5: FastAPI application
 # ==============================================================================
@@ -737,8 +871,7 @@ async def webhook_bot(token: str, data: dict) -> PlainTextResponse:
     if not _is_a_share_trading_day(date_str):
         print(f"[Stocks] {date_str} is not a trading day, skipping.")
         return PlainTextResponse(f"skipping {date_str}")
-    markdown_content, panel_urls_and_vars = parse_grafana_payload(data, False)
-
+    blocks, panel_urls_and_vars, markdown_content = parse_grafana_payload(data, False)
     loop = asyncio.get_running_loop()
     webhook_url = f"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={token}"
 
@@ -747,7 +880,6 @@ async def webhook_bot(token: str, data: dict) -> PlainTextResponse:
         def _send_md():
             wechat = wechat_work_webhook.connect(webhook_url)
             wechat.markdown(markdown_content)
-
         await loop.run_in_executor(None, _send_md)
 
     # Render all panel images concurrently
@@ -818,13 +950,14 @@ async def webhook_agent(
         [p.strip() for p in party_ids.split(",") if p.strip()] if party_ids else []
     )
 
-    markdown_content, panel_urls_and_vars = parse_grafana_payload(data, True)
+    blocks, panel_urls_and_vars, markdown_content = parse_grafana_payload(data, True)
+    markdown_list = split_markdown_blocks_by_bytes(blocks)
 
     # Send markdown
-    if markdown_content:
+    for md in markdown_list:
         try:
             md_result = await sender.send_markdown(
-                content=markdown_content,
+                content=md,
                 user_ids=user_ids or ["EMP-151583"],
                 party_ids=dept_ids or None,
             )
@@ -897,4 +1030,4 @@ if __name__ == "__main__":
     )
     print("=" * 60)
 
-    uvicorn.run(app, host="0.0.0.0", port=38889)
+    uvicorn.run(app, host="0.0.0.0", port=38888)

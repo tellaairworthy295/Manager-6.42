@@ -207,7 +207,6 @@ class AsyncCookiesHandler:
                 page = await new_stealth_page(context)
                 self.page = page
 
-                cookies_valid = False
                 # 1️⃣ Navigate explicitly
                 await page.goto(self.validation_url, wait_until="domcontentloaded", timeout=30000)
 

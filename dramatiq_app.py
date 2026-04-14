@@ -20,3 +20,4 @@ except:
 # ------------------------------------------------------------
 import tasks.agent_tasks
 import tasks.news_tasks
+import tasks.records_tasks

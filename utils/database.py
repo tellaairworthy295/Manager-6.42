@@ -1171,6 +1171,19 @@ class RecordCommentRepository:
                 .all()
             return [row[0] for row in results]
 
+    def get_titles_in_range(self, start_date: date, end_date: date) -> List[str]:
+        """
+        Fetches all distinct titles recorded between start_date and end_date (inclusive).
+        """
+        with self.db_manager.get_session() as session:
+            results = session.query(RecordComment.title) \
+                .filter(RecordComment.date >= start_date) \
+                .filter(RecordComment.date <= end_date) \
+                .distinct() \
+                .all()
+
+            return [row[0] for row in results]
+
     def delete_comment_by_date(self, date_: date) -> int:
         with self.db_manager.get_session() as session:
             result = session.query(RecordComment) \
@@ -1311,6 +1324,19 @@ class RecordMeetingRepository:
                 .distinct() \
                 .all()
             # Extract titles from tuples
+            return [row[0] for row in results]
+
+    def get_titles_in_range(self, start_date: date, end_date: date) -> List[str]:
+        """
+        Fetches all distinct titles recorded between start_date and end_date (inclusive).
+        """
+        with self.db_manager.get_session() as session:
+            results = session.query(RecordComment.title) \
+                .filter(RecordComment.date >= start_date) \
+                .filter(RecordComment.date <= end_date) \
+                .distinct() \
+                .all()
+
             return [row[0] for row in results]
 
     def delete_meeting_by_date(self, date_: date) -> int:

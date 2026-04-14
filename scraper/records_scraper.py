@@ -1,4 +1,5 @@
 import re
+import time
 from datetime import date, datetime, timedelta
 from pwright.async_cm import PlaywrightContext
 from pwright.async_pf import new_stealth_page
@@ -41,6 +42,81 @@ async def insert_scraped_data(data_list: list, record_type: str):
     insert_method(data_list)
 
 
+async def scrape_history(storage_state: str, url: str, locators: dict, start: date, end: date):
+    record_type = locators.get("record_type", "unknown")
+    db_manager = get_db_manager()
+
+    if record_type.lower() == "comment":
+        repo_record = RecordCommentRepository(db_manager)
+    elif record_type.lower() == "meeting":
+        repo_record = RecordMeetingRepository(db_manager)
+    else:
+        raise ValueError(f"Unsupported record_type: {record_type}")
+
+    titles = repo_record.get_titles_in_range(start, end)
+    manager = AsyncPlaywrightManager()
+    await manager.start()
+
+    result = []
+    async with PlaywrightContext(
+            manager,
+            storage_state=storage_state,
+            accept_downloads=True,
+            ignore_https_errors=True,
+    ) as context:
+        page = await new_stealth_page(context)
+        await page.goto(url, wait_until="networkidle")
+        time.sleep(15)
+        await scroll_to_bottom(page, locators["scroll_container"], locators["bottom_flag"])
+        # Wait for the list container to have children with a specific timeout
+        try:
+            await page.wait_for_function(
+                f"document.querySelector('{locators['record_list_item']}').parentElement.children.length > 0",
+                timeout=10000  # 10 second timeout
+            )
+        except PlaywrightTimeoutError:
+            logger.warning(f"[{record_type}] Timed out waiting for list items to appear.")
+            return result  # Exit early if no items appear after timeout
+
+        # Now query for the items
+        list_items = await page.query_selector_all(locators["record_list_item"])
+
+        # If still no items after the wait, return early
+        if not list_items:
+            logger.info(f"[{record_type}] No list items found after scrolling.")
+            return result
+
+        while True:
+            try:
+                for i, list_item in enumerate(list_items):
+                    title_element = await list_item.query_selector(locators["title_click"])
+                    if not title_element:
+                        logger.warning(f"[{record_type}] No title element in item {i}")
+                        continue
+
+                    title = await title_element.text_content()
+                    if title and title.strip() in titles:
+                        logger.info(f"[{record_type}] Skipping: '{title.strip()}'")
+                        continue
+
+                    if record_type.lower() == "meeting":
+                        scraped = await scrape_meeting_new_tab(context, page, title_element, locators["properties"])
+                        if scraped:
+                            result.append(scraped)
+
+                    elif record_type.lower() == "comment":
+                        await title_element.click()
+                        result.append(
+                            await scrape_popup(page, locators["record_property_wrapper"], locators["properties"])
+                        )
+                        # await close_popup(page, locators["record_property_wrapper"], locators["close_click"])
+                        await close_popup(page)
+                    await asyncio.sleep(0.7)
+            finally:
+                await insert_scraped_data(result, record_type)
+                time.sleep(60*60*2)
+
+
 async def scrape_website(storage_state: str, url: str, locators: dict):
     record_type = locators.get("record_type", "unknown")
     db_manager = get_db_manager()
@@ -67,6 +143,7 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
             page = await new_stealth_page(context)
             await page.goto(url, wait_until="networkidle")
             await page.click(locators["filter_click"])
+            time.sleep(7)
             await scroll_to_bottom(page, locators["scroll_container"], locators["bottom_flag"])
 
             # Wait for the list container to have children with a specific timeout
@@ -385,7 +462,8 @@ def parse_relative_time(time_str: str) -> datetime:
     # Match patterns like "xx分钟前" or "xx小时前"
     minutes_match = re.search(r'(\d+)\s*分钟前', time_str)
     hours_match = re.search(r'(\d+)\s*小时前', time_str)
-
+    md_time_match = re.search(r'(\d{1,2})[月\-](\d{1,2})\s+(\d{1,2}):(\d{2})', time_str)
+    full_date_match = re.search(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?', time_str)
     if minutes_match:
         minutes_ago = int(minutes_match.group(1))
         return now - timedelta(minutes=minutes_ago)
@@ -394,6 +472,21 @@ def parse_relative_time(time_str: str) -> datetime:
         hours_ago = int(hours_match.group(1))
         return now - timedelta(hours=hours_ago)
 
+    if md_time_match:
+        month = int(md_time_match.group(1))
+        day = int(md_time_match.group(2))
+        hour = int(md_time_match.group(3))
+        minute = int(md_time_match.group(4))
+        return now.replace(month=month, day=day, hour=hour, minute=minute, second=0, microsecond=0)
+
+    if full_date_match:
+        year = int(full_date_match.group(1))
+        month = int(full_date_match.group(2))
+        day = int(full_date_match.group(3))
+        hour = int(full_date_match.group(4)) if full_date_match.group(4) else 0
+        minute = int(full_date_match.group(5)) if full_date_match.group(5) else 0
+
+        return datetime(year, month, day, hour, minute)
     # If no pattern matches, return the current time as a fallback
     print(f"Warning: Could not parse relative time string: '{time_str}'. Using current time.")
     return now

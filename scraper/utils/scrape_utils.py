@@ -1,13 +1,13 @@
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, date
 
 import pandas as pd
 import pandas_market_calendars as mcal
 
 from scraper.stocks_scraper import main_scraper
 from image_process import main_flow
-from scraper.records_scraper import scrape_website
+from scraper.records_scraper import scrape_website, scrape_history
 from utils.logging_config import get_others_logger
 from utils.validators import validate_and_prepare_cookies
 
@@ -28,11 +28,31 @@ async def scrape_all_records():
     for url, locators in record_maps.items():
         for user_id in ["1eeeb1dc-34c8-446c-879e-456f69762bf7", "564b3391-510f-4b50-a038-7df413bec15d"]:
             all_cookies = await validate_and_prepare_cookies(
-                user_id.split("_")[-1], ["alphapai"], True
+                user_id, ["alphapai"], True
             )
             try:
                 await scrape_website(
                     storage_state=all_cookies["alphapai"], url=url, locators=locators
+                )
+                break
+            except Exception as e:
+                logger.error(
+                    f"[Records] Scraper failed for {url} "
+                    f"retry with another account: {e}"
+                )
+
+
+async def scrape_history_records(start: date, end: date):
+    with open("json/locators.json", "r", encoding="utf-8") as f:
+        record_maps = json.load(f)["alphapai_record"]
+    for url, locators in record_maps.items():
+        for user_id in ["weixue123"]:
+            all_cookies = await validate_and_prepare_cookies(
+                user_id, ["alphapai"], True
+            )
+            try:
+                await scrape_history(
+                    storage_state=all_cookies["alphapai"], url=url, locators=locators,start=start, end=end
                 )
                 break
             except Exception as e:

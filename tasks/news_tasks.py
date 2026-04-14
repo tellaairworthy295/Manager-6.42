@@ -2,6 +2,8 @@
 import json
 import random
 import time
+import uuid
+
 import dramatiq
 from utils.redis_utils import get_redis_client
 from scraper.news_scraper import scrape_news, fetch_urls_from_page
@@ -15,7 +17,7 @@ logger = get_news_task_logger()
 @dramatiq.actor(
     queue_name="news",
     time_limit=25 * 60 * 1000,
-    max_retries=0,  # Fail fast: a failed site is considered failed
+    max_retries=0,
 )
 def scrape_news_task(*, query: str, site: str = None, source: str = None, rate_limit: int = 4, group_key: str = None,
                      now_str: str = None):
@@ -193,7 +195,7 @@ def scrape_all_news(requests: list[dict], now_str):
     then update Dify KB once all are finished (non-blocking streaming aggregator).
     """
     # Unique key for this run
-    group_key = f"{now_str}-{random.randint(10000, 99999)}"
+    group_key = f"{now_str}-{uuid.uuid4().hex[:10]}"
     messages = []
     for req in requests:
         q, s, src, rl = req.get("query"), req.get("site"), req.get("source"), req.get("rate_limit")

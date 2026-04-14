@@ -7,7 +7,7 @@ import re
 from bs4 import BeautifulSoup
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from utils.translation_service import translate_to_chinese, translate_article_to_chinese
+from utils.translation_service import translate_article_to_chinese
 from selen.stealth_driver import get_chrome_driver
 from utils.database import get_db_manager, NewsArticleRepository
 from utils.logging_config import get_news_task_logger
