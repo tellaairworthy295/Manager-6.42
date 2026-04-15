@@ -7,11 +7,15 @@ import requests
 from PIL import Image
 from utils.logging_config import get_stock_logger
 
-from .preprocess import smart_slice_tall_image, _is_tall_image
+from .preprocess import smart_slice_tall_image
 
 logger = get_stock_logger()
 API_URL = "https://r499p5s59cg8zev7.aistudio-app.com/ocr"
 API_TOKEN = "3a258219dc655d3bafc108d13cb9ec6230a7ff9a"
+
+def _is_tall_image(img, ratio=2.0):
+    w, h = img.size
+    return h / w >= ratio
 
 def _ocr_via_api(
     file_path: str,

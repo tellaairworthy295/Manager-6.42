@@ -1,35 +1,30 @@
-"""Compatibility facade for the database layer.
-
-This module keeps the original import surface intact while the implementation
-is organized under ``utils.db``.
-"""
-
-from utils.db import (
+from .base import Base
+from .manager import DatabaseManager, get_db_manager
+from .models import (
     ActionLimitData,
-    ActionLimitDataRepository,
-    Base,
-    DatabaseManager,
     HistoryKChart,
-    HistoryKChartRepository,
     NewsAnalysis,
-    NewsAnalysisRepository,
     NewsArticle,
-    NewsArticleRepository,
     RealTimeChart,
-    RealTimeChartRepository,
     RecordComment,
-    RecordCommentRepository,
     RecordMeeting,
-    RecordMeetingRepository,
     SectionReason,
-    SectionReasonRepository,
     Stock,
-    StockRepository,
     StockStats,
-    StockStatsRepository,
     User,
+)
+from .repositories import (
+    ActionLimitDataRepository,
+    HistoryKChartRepository,
+    NewsAnalysisRepository,
+    NewsArticleRepository,
+    RealTimeChartRepository,
+    RecordCommentRepository,
+    RecordMeetingRepository,
+    SectionReasonRepository,
+    StockRepository,
+    StockStatsRepository,
     UsersRepository,
-    get_db_manager,
 )
 
 __all__ = [

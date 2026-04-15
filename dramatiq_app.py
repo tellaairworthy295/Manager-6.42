@@ -1,23 +1,28 @@
-# dramatiq_app.py
 import dramatiq
 from dramatiq.brokers.redis import RedisBroker
-from utils.redis_utils import clean_redis_db
-# ------------------------------------------------------------
-# Dramatiq broker
-# ------------------------------------------------------------
-broker = RedisBroker(
-    url="redis://localhost:6379/0"
-)
-dramatiq.set_broker(broker)
 
-try:
-   clean_redis_db("redis://localhost:6379/0")
-   print("FLUSH DONE")
-except:
-   print("FLUSH FAilED")
-# ------------------------------------------------------------
-# Task imports (register actors)
-# ------------------------------------------------------------
-import tasks.agent_tasks
-import tasks.news_tasks
-import tasks.records_tasks
+from server.config import REDIS_URL
+from utils.redis_utils import clean_redis_db
+
+
+def configure_broker() -> RedisBroker:
+    broker = RedisBroker(url=REDIS_URL)
+    dramatiq.set_broker(broker)
+    return broker
+
+
+def reset_queue_state() -> None:
+    try:
+        clean_redis_db(REDIS_URL)
+        print("FLUSH DONE")
+    except Exception:
+        print("FLUSH FAILED")
+
+
+broker = configure_broker()
+reset_queue_state()
+
+# Register actors after the broker has been configured.
+import tasks.agent_tasks  # noqa: E402,F401
+import tasks.news_tasks  # noqa: E402,F401
+import tasks.records_tasks  # noqa: E402,F401

@@ -77,11 +77,6 @@ def smart_slice_tall_image(
     return slices
 
 
-def _is_tall_image(img, ratio=2.0):
-    w, h = img.size
-    return h / w >= ratio
-
-
 def preprocess_image(img_path):
     img = Image.open(img_path)
     img_array = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
