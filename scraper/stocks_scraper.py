@@ -331,8 +331,8 @@ async def scrape_page(
 
             if section_cfg.get("click"):
                 await async_safe_click(
-                    page=page,
-                    locator=f"xpath={section_cfg['click']}",
+                    target=page,
+                    selector=f"xpath={section_cfg['click']}",
                     multiple=True
                 )
                 try:

@@ -10,6 +10,7 @@ from image_process import main_flow
 from scraper.records_scraper import scrape_website, scrape_history
 from utils.logging_config import get_others_logger
 from utils.validators import validate_and_prepare_cookies
+import random
 
 logger = get_others_logger()
 
@@ -25,8 +26,10 @@ async def scrape_all_records():
     """
     with open("json/locators.json", "r", encoding="utf-8") as f:
         record_maps = json.load(f)["alphapai_record"]
+    user_id_list = ["1eeeb1dc-34c8-446c-879e-456f69762bf7", "564b3391-510f-4b50-a038-7df413bec15d"]
+    random.shuffle(user_id_list)
     for url, locators in record_maps.items():
-        for user_id in ["1eeeb1dc-34c8-446c-879e-456f69762bf7", "564b3391-510f-4b50-a038-7df413bec15d"]:
+        for user_id in user_id_list:
             all_cookies = await validate_and_prepare_cookies(
                 user_id, ["alphapai"], True
             )
@@ -37,7 +40,7 @@ async def scrape_all_records():
                 break
             except Exception as e:
                 logger.error(
-                    f"[Records] Scraper failed for {url} "
+                    f"[Records] {user_id} Scraper failed for {url} "
                     f"retry with another account: {e}"
                 )
 
@@ -46,20 +49,19 @@ async def scrape_history_records(start: date, end: date):
     with open("json/locators.json", "r", encoding="utf-8") as f:
         record_maps = json.load(f)["alphapai_record"]
     for url, locators in record_maps.items():
-        for user_id in ["weixue123"]:
-            all_cookies = await validate_and_prepare_cookies(
-                user_id, ["alphapai"], True
+        if "meeting" in url:
+            continue
+        all_cookies = await validate_and_prepare_cookies(
+            "weixue123", ["alphapai"], True
+        )
+        try:
+            await scrape_history(
+                storage_state=all_cookies["alphapai"], url=url, locators=locators, start=start, end=end
             )
-            try:
-                await scrape_history(
-                    storage_state=all_cookies["alphapai"], url=url, locators=locators,start=start, end=end
-                )
-                break
-            except Exception as e:
-                logger.error(
-                    f"[Records] Scraper failed for {url} "
-                    f"retry with another account: {e}"
-                )
+            break
+        except Exception as e:
+            logger.error(
+                f"[Records] weixue123 Scraper failed for {url}: {e} ")
 
 
 # =====================================================

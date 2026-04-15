@@ -3,9 +3,7 @@ import os
 import shutil
 import time
 from playwright.sync_api import Page as SyncPage
-from playwright.async_api import Page as AsyncPage
-
-
+from playwright.async_api import Page as AsyncPage, Locator
 # -----------------------------
 # Shared helpers
 # -----------------------------
@@ -18,7 +16,6 @@ def _js_click_script():
         });
         el.dispatchEvent(evt);
     }"""
-
 
 def _js_fill_script(clear=True):
     if clear:
@@ -110,7 +107,7 @@ def safe_fill(page: SyncPage, locator: str, text: str,
                 handle = loc.element_handle()
 
                 if handle:
-                    page.evaluate(_js_fill_script(clear_first), handle, text)
+                    page.evaluate(_js_fill_script(clear_first), [handle, text])
                     return
 
             except Exception as js_e:
@@ -125,24 +122,39 @@ def safe_fill(page: SyncPage, locator: str, text: str,
 # Async versions
 # -----------------------------
 async def async_safe_click(
-    page: AsyncPage,
-    locator: str,
-    max_attempts=3,
-    timeout=5000,
-    multiple=False
+        target,  # Can be a Page, ElementHandle, or Locator
+        selector: str = None,
+        max_attempts: int = 3,
+        timeout: int = 5000,
+        multiple: bool = False
 ):
     last_err = None
 
     for attempt in range(1, max_attempts + 1):
         try:
+            # --- 1. Resolve targets into a list of ElementHandles ---
+            elements_to_click = []
+
+            if isinstance(target, Locator):
+                elements_to_click = await target.element_handles() if multiple else [await target.element_handle()]
+            elif selector:
+                if multiple:
+                    elements_to_click = await target.query_selector_all(selector)
+                else:
+                    handle = await target.query_selector(selector)
+                    elements_to_click = [handle] if handle else []
+            else:
+                elements_to_click = [target]
+
+            elements_to_click = [el for el in elements_to_click if el]
+
+            if not elements_to_click:
+                raise RuntimeError(f"No elements found to click (Target: {target}, Selector: {selector})")
+
+            # --- 2. Multiple Click Logic ---
             if multiple:
-                elements = await page.query_selector_all(locator)
-                if not elements:
-                    raise RuntimeError(f"No elements found: {locator}")
-
                 success = 0
-
-                for el in elements:
+                for el in elements_to_click:
                     try:
                         await el.scroll_into_view_if_needed()
                     except:
@@ -153,47 +165,50 @@ async def async_safe_click(
                         success += 1
                     except:
                         try:
-                            await page.evaluate(_js_click_script(), el)
+                            # Using your robust JS click script
+                            await el.evaluate(_js_click_script())
                             success += 1
                         except:
                             pass
 
                     await asyncio.sleep(0.5)
+
                 if success == 0:
                     raise RuntimeError("All elements failed to click")
-
                 return
 
+            # --- 3. Single Click Logic ---
             else:
-                loc = page.locator(locator).first
-                await loc.wait_for(state="visible", timeout=timeout)
-                await loc.scroll_into_view_if_needed()
-                await loc.click(timeout=timeout)
+                el = elements_to_click[0]
+
+                await el.wait_for_element_state("visible", timeout=timeout)
+                await el.scroll_into_view_if_needed()
+                await asyncio.sleep(0.4)
+
+                await el.click(timeout=timeout)
                 return
 
         except Exception as e:
             last_err = e
 
-        if attempt == max_attempts:
+        # --- 4. Fallback for Single Click (on last attempt) ---
+        if attempt == max_attempts and not multiple and 'elements_to_click' in locals() and elements_to_click:
+            el = elements_to_click[0]
             try:
-                loc = page.locator(locator).first
-
+                await el.click(timeout=timeout, force=True)
+                return
+            except:
                 try:
-                    await loc.click(timeout=timeout, force=True)
+                    # Using your robust JS click script as the final fallback
+                    await el.evaluate(_js_click_script())
                     return
-                except:
-                    handle = await loc.element_handle()
-                    if handle:
-                        await page.evaluate(_js_click_script(), handle)
-                        return
-
-            except Exception as js_e:
-                last_err = f"{last_err}; fallback failed: {js_e}"
+                except Exception as js_e:
+                    last_err = f"{last_err}; fallback failed: {js_e}"
 
         await asyncio.sleep(attempt)
 
     raise RuntimeError(
-        f"[async_safe_click] Failed: {locator} "
+        f"[async_safe_click] Failed. Target: {target}, Selector: {selector} "
         f"{'(multiple)' if multiple else ''} -> {last_err}"
     )
 
@@ -231,7 +246,7 @@ async def async_safe_fill(
                 handle = await loc.element_handle()
 
                 if handle:
-                    await page.evaluate(_js_fill_script(clear_first), handle, text)
+                    await page.evaluate(_js_fill_script(clear_first), [handle, text])
                     return
 
             except Exception as js_e:

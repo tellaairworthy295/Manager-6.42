@@ -8,6 +8,8 @@ from playwright.async_api import Page
 from typing import Dict, Optional
 from utils.database import get_db_manager, RecordCommentRepository, RecordMeetingRepository
 import asyncio
+
+from utils.interactive import async_safe_click
 from utils.logging_config import get_records_scraper_logger
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
@@ -41,6 +43,8 @@ async def insert_scraped_data(data_list: list, record_type: str):
     logger.info(f"Inserting {len(data_list)} {record_type} records into the database.")
     insert_method(data_list)
 
+RATE_LIMIT = 150
+
 
 async def scrape_history(storage_state: str, url: str, locators: dict, start: date, end: date):
     record_type = locators.get("record_type", "unknown")
@@ -53,7 +57,6 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
     else:
         raise ValueError(f"Unsupported record_type: {record_type}")
 
-    titles = repo_record.get_titles_in_range(start, end)
     manager = AsyncPlaywrightManager()
     await manager.start()
 
@@ -88,8 +91,14 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
 
         while True:
             try:
+                timeout_err = False
+                hit_limit = False
+                titles = repo_record.get_titles_in_range(start, end)
                 for i, list_item in enumerate(list_items):
+                    if i >= RATE_LIMIT:
+                        hit_limit = True
                     title_element = await list_item.query_selector(locators["title_click"])
+                    title_locator = f"{locators['record_list_item']}:nth-child({i + 1}) {locators['title_click']}"
                     if not title_element:
                         logger.warning(f"[{record_type}] No title element in item {i}")
                         continue
@@ -100,21 +109,32 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
                         continue
 
                     if record_type.lower() == "meeting":
-                        scraped = await scrape_meeting_new_tab(context, page, title_element, locators["properties"])
+                        scraped = await scrape_meeting_new_tab(context, title_element, locators["properties"])
                         if scraped:
                             result.append(scraped)
 
                     elif record_type.lower() == "comment":
-                        await title_element.click()
-                        result.append(
-                            await scrape_popup(page, locators["record_property_wrapper"], locators["properties"])
-                        )
-                        # await close_popup(page, locators["record_property_wrapper"], locators["close_click"])
-                        await close_popup(page)
-                    await asyncio.sleep(0.7)
+
+                        try:
+                            await async_safe_click(page, title_locator, timeout=10000, max_attempts=3)
+                        except Exception as e:
+                            logger.warning(f"failed to click {title_locator}: {e}")
+                            continue
+                        data = await scrape_popup(page, locators["record_property_wrapper"], locators["properties"])
+                        if data:
+                            result.append(data)
+
+                    await asyncio.sleep(0.6)
+            except PlaywrightTimeoutError:
+                timeout_err = True
             finally:
                 await insert_scraped_data(result, record_type)
-                time.sleep(60*60*2)
+                if timeout_err:
+                    await manager.shutdown()
+                elif hit_limit:
+                    time.sleep(60*60*2)
+                else:
+                    time.sleep(5)
 
 
 async def scrape_website(storage_state: str, url: str, locators: dict):
@@ -143,7 +163,6 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
             page = await new_stealth_page(context)
             await page.goto(url, wait_until="networkidle")
             await page.click(locators["filter_click"])
-            time.sleep(7)
             await scroll_to_bottom(page, locators["scroll_container"], locators["bottom_flag"])
 
             # Wait for the list container to have children with a specific timeout
@@ -166,6 +185,7 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
 
             for i, list_item in enumerate(list_items):
                 title_element = await list_item.query_selector(locators["title_click"])
+                title_locator = f"{locators['record_list_item']}:nth-child({i + 1}) {locators['title_click']}"
                 if not title_element:
                     logger.warning(f"[{record_type}] No title element in item {i}")
                     continue
@@ -176,41 +196,42 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
                     continue
 
                 if record_type.lower() == "meeting":
-                    scraped = await scrape_meeting_new_tab(context, page, title_element, locators["properties"])
+                    scraped = await scrape_meeting_new_tab(context, title_element, locators["properties"])
                     if scraped:
                         result.append(scraped)
 
                 elif record_type.lower() == "comment":
-                    await title_element.click()
-                    result.append(
-                        await scrape_popup(page, locators["record_property_wrapper"], locators["properties"])
-                    )
-                    # await close_popup(page, locators["record_property_wrapper"], locators["close_click"])
-                    await close_popup(page)
-                await asyncio.sleep(0.7)
+
+                    try:
+                        await async_safe_click(page, title_locator, timeout=10000, max_attempts=3)
+                    except Exception as e:
+                        logger.warning(f"failed to click {title_locator}: {e}")
+                        continue
+
+                    data = await scrape_popup(page, locators["record_property_wrapper"], locators["properties"])
+                    if data:
+                        result.append(data)
+
+                await asyncio.sleep(0.6)
 
     finally:
         await insert_scraped_data(result, record_type)
         await manager.shutdown()
 
 
-async def scrape_meeting_new_tab(context, page: Page, title_element, properties: dict) -> Dict | None:
+async def scrape_meeting_new_tab(context, title_locator, properties: dict) -> Dict | None:
     """
     Click a meeting row, catch the new tab it opens via window.open(),
     scrape the detail page, then close the tab.
     """
     new_page = None
     try:
-
-        await title_element.scroll_into_view_if_needed()
-        await page.wait_for_timeout(400)
-
-        # bbox = await title_element.bounding_box()
-        # logger.debug(f"Target bbox before click: {bbox}")
-
         # The click opens a new tab via window.open() — catch it at context level
         async with context.expect_page() as new_page_info:
-            await title_element.evaluate("el => el.click()")
+            try:
+                await async_safe_click(target=title_locator, max_attempts=3, timeout=10000)
+            except:
+                return None
 
         new_page = await new_page_info.value
         logger.debug(f"New tab opened, URL: {new_page.url}")
@@ -220,8 +241,14 @@ async def scrape_meeting_new_tab(context, page: Page, title_element, properties:
         await new_page.wait_for_load_state("networkidle", timeout=10000)
         logger.debug(f"New tab fully loaded: {new_page.url}")
 
-        data = await scrape_meeting_page(new_page, properties)
-        return data
+        try:
+            data = await scrape_meeting_page(new_page, properties)
+            return data
+        except PlaywrightTimeoutError as e:
+            logger.warning(f"rate limit hit: {e}")
+            raise
+        except Exception as e:
+            logger.warning(e)
 
     finally:
         # Always close the new tab — never touch the original page
@@ -273,7 +300,7 @@ async def scrape_meeting_page(page: Page, properties: dict) -> Dict:
     time_match = re.search(r'会议时间：\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})', meeting_time_raw_text)
     meeting_time_str = time_match.group(1) if time_match else ""
 
-    meeting_time = None
+    meeting_time: datetime | None = None
     if meeting_time_str:
         try:
             if len(meeting_time_str) == 16:  # Format is "YYYY-MM-DD HH:MM"
@@ -295,7 +322,7 @@ async def scrape_meeting_page(page: Page, properties: dict) -> Dict:
         "host_personnel": host_personnel,
         "guest_speaker": guest_speaker,
         "scraped_at": datetime.now(),
-        "date": date.today(),
+        "date": meeting_time.date() if meeting_time else date.today(),
     }
 
 
@@ -305,39 +332,47 @@ async def scrape_popup(page: Page, dialog_selector: str, properties: dict) -> Di
     Schema fields (from RecordComment table):
         date, author, team, industry, category, comment, title, comment_time, scraped_at
     """
+    try:
+        # Wait for the popup wrapper to be visible
+        await page.wait_for_selector(dialog_selector, state='visible', timeout=8000)
 
-    # Wait for the popup wrapper to be visible
-    await page.wait_for_selector(dialog_selector, state='visible', timeout=8000)
+        # The updated `get_element_content` will now automatically wait for these to render
+        title = await get_element_content(page, f"{dialog_selector} {properties['title']}")
+        logger.info(f"scraping {title}")
+        author = await get_element_content(page, f"{dialog_selector} {properties['author']}")
+        team = await get_element_content(page, f"{dialog_selector} {properties['team']}", required=False)
+        industry = await get_element_content(page, f"{dialog_selector} {properties['industry']}", required=False)
 
-    # The updated `get_element_content` will now automatically wait for these to render
-    title = await get_element_content(page, f"{dialog_selector} {properties['title']}")
-    logger.info(f"scraping {title}")
-    author = await get_element_content(page, f"{dialog_selector} {properties['author']}")
-    team = await get_element_content(page, f"{dialog_selector} {properties['team']}", required=False)
-    industry = await get_element_content(page, f"{dialog_selector} {properties['industry']}", required=False)
+        # Fixed variable assignments to match schema
+        comment = await get_element_content(page, f"{dialog_selector} {properties['comment']}")
+        category = await get_element_content(page, f"{dialog_selector} {properties['category']}", required=False,
+                                             is_multiple=True)
 
-    # Fixed variable assignments to match schema
-    comment = await get_element_content(page, f"{dialog_selector} {properties['comment']}")
-    category = await get_element_content(page, f"{dialog_selector} {properties['category']}", required=False,
-                                         is_multiple=True)
+        time_elapsed_raw = await get_element_content(page, f"{dialog_selector} {properties['time']}")
 
-    time_elapsed_raw = await get_element_content(page, f"{dialog_selector} {properties['time']}")
+        # --- Process the relative time string ---
+        comment_time = parse_relative_time(time_elapsed_raw)
+        # ----------------------------------------
 
-    # --- Process the relative time string ---
-    comment_time = parse_relative_time(time_elapsed_raw)
-    # ----------------------------------------
-
-    return {
-        "date": date.today(),
-        "author": author,
-        "team": team,
-        "comment_time": comment_time,
-        "industry": industry,
-        "category": category,
-        "comment": comment,
-        "title": title,
-        "scraped_at": datetime.now(),
-    }
+        return {
+            "date": comment_time.date(),
+            "author": author,
+            "team": team,
+            "comment_time": comment_time,
+            "industry": industry,
+            "category": category,
+            "comment": comment,
+            "title": title,
+            "scraped_at": datetime.now(),
+        }
+    except PlaywrightTimeoutError as e:
+        logger.warning(f"rate limit hit: {e}")
+        raise
+    except Exception as e:
+        logger.warning(e)
+        return {}
+    finally:
+        await close_popup(page)
 
 
 async def scroll_to_bottom(page: Page, scroll_container_selector: str, bottom_flag: str):
@@ -496,6 +531,6 @@ async def close_popup(page: Page):
     """Close the popup window by clicking the close button"""
     close_button = await page.wait_for_selector('div.right > i.iconfont.icon-guanbi', timeout=5000)
     if close_button:
-        await close_button.click()
+        await async_safe_click(page, 'div.right > i.iconfont.icon-guanbi')
         # Wait for the popup to disappear
         await page.wait_for_selector('.el-dialog__body', state='hidden', timeout=5000)

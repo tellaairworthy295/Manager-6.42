@@ -62,7 +62,7 @@ class AsyncCookiesHandler:
         self.validation_url = config.get("url", self.url)
 
     @staticmethod
-    def normalize_cookies(cookie_list):
+    def normalize_cookies(cookie_list: list) -> list:
         for c in cookie_list:
             domain = c.get("domain", "")
             if domain.startswith("www"):
@@ -70,7 +70,7 @@ class AsyncCookiesHandler:
         return cookie_list
 
     @staticmethod
-    def normalize_local_storage(origins):
+    def normalize_local_storage(origins) -> None:
         if not origins:
             return
         if origins[0].get("origin", "") == "https://alphapai-web.rabyte.cn":
