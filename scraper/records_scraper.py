@@ -14,7 +14,12 @@ from utils.logging_config import get_records_scraper_logger
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 logger = get_records_scraper_logger()
+RATE_LIMIT = 50
 
+class RateLimitException(Exception):
+    def __init__(self, message: str, status_code: int = 429):
+        self.message = message
+        self.status_code = status_code
 
 async def insert_scraped_data(data_list: list, record_type: str):
     """
@@ -42,8 +47,6 @@ async def insert_scraped_data(data_list: list, record_type: str):
 
     logger.info(f"Inserting {len(data_list)} {record_type} records into the database.")
     insert_method(data_list)
-
-RATE_LIMIT = 150
 
 
 async def scrape_history(storage_state: str, url: str, locators: dict, start: date, end: date):
@@ -91,12 +94,13 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
 
         while True:
             try:
+                result = []
                 timeout_err = False
                 hit_limit = False
                 titles = repo_record.get_titles_in_range(start, end)
                 for i, list_item in enumerate(list_items):
                     if i >= RATE_LIMIT:
-                        hit_limit = True
+                        raise RateLimitException("custom rate limit hit, sleep one hour...")
                     title_element = await list_item.query_selector(locators["title_click"])
                     title_locator = f"{locators['record_list_item']}:nth-child({i + 1}) {locators['title_click']}"
                     if not title_element:
@@ -127,12 +131,14 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
                     await asyncio.sleep(0.6)
             except PlaywrightTimeoutError:
                 timeout_err = True
+            except RateLimitException:
+                hit_limit = True
             finally:
                 await insert_scraped_data(result, record_type)
                 if timeout_err:
                     await manager.shutdown()
                 elif hit_limit:
-                    time.sleep(60*60*2)
+                    time.sleep(60*60)
                 else:
                     time.sleep(5)
 
@@ -148,7 +154,9 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
     else:
         raise ValueError(f"Unsupported record_type: {record_type}")
 
-    titles = repo_record.get_all_titles_today()
+    yesterday = date.today() - timedelta(days=1)
+    today = date.today()
+    titles = repo_record.get_titles_in_range(yesterday, today)
     manager = AsyncPlaywrightManager()
     await manager.start()
 
