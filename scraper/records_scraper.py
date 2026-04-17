@@ -97,9 +97,10 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
                 result = []
                 timeout_err = False
                 hit_limit = False
+                count = 0
                 titles = repo_record.get_titles_in_range(start, end)
                 for i, list_item in enumerate(list_items):
-                    if i >= RATE_LIMIT:
+                    if count >= RATE_LIMIT:
                         raise RateLimitException("custom rate limit hit, sleep one hour...")
                     title_element = await list_item.query_selector(locators["title_click"])
                     title_locator = f"{locators['record_list_item']}:nth-child({i + 1}) {locators['title_click']}"
@@ -116,6 +117,7 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
                         scraped = await scrape_meeting_new_tab(context, title_element, locators["properties"])
                         if scraped:
                             result.append(scraped)
+                            count += 1
 
                     elif record_type.lower() == "comment":
 
@@ -127,6 +129,7 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
                         data = await scrape_popup(page, locators["record_property_wrapper"], locators["properties"])
                         if data:
                             result.append(data)
+                            count += 1
 
                     await asyncio.sleep(0.6)
             except PlaywrightTimeoutError:

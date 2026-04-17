@@ -31,6 +31,8 @@ curl.exe -X POST "http://localhost:5000/records/get_historical_records/2026-01-0
 
 dramatiq dramatiq_app --queues news --processes 1 --threads 2
 
+dramatiq dramatiq_app --queues records --processes 1 --threads 1
+
 dramatiq dramatiq_app --queues agents --processes 2 --threads 8
 
 PYTHONUNBUFFERED=1 dramatiq dramatiq_app --queues news --processes 1 --threads 2
