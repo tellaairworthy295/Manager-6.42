@@ -13,17 +13,64 @@ logger = get_stock_logger()
 API_URL = "https://r499p5s59cg8zev7.aistudio-app.com/ocr"
 API_TOKEN = "3a258219dc655d3bafc108d13cb9ec6230a7ff9a"
 
+# --- Add a global variable for lazy-loading the local model ---
+_local_ocr_instance = None
+
+
+def _get_local_ocr():
+    """Lazily initialize the local PaddleOCR model to save memory if API is working."""
+    global _local_ocr_instance
+    if _local_ocr_instance is None:
+        logger.info("Initializing local PaddleOCR model for fallback...")
+        try:
+            from paddleocr import PaddleOCR
+            # lang='ch' supports both English and Chinese. Change to 'en' if English only.
+            _local_ocr_instance = PaddleOCR(use_angle_cls=True, lang="ch", show_log=False)
+            logger.info("Local PaddleOCR model initialized successfully.")
+        except ImportError:
+            logger.error("Failed to import PaddleOCR. Please run: pip install paddlepaddle paddleocr")
+            return None
+    return _local_ocr_instance
+
+
+def _ocr_via_local(file_path: str):
+    """Run OCR using the local PaddleOCR model and format outputs."""
+    ocr = _get_local_ocr()
+    if ocr is None:
+        return [], []
+
+    try:
+        # result format: [[[[x,y],[x,y],[x,y],[x,y]], ('text', confidence)], ...]
+        result = ocr.ocr(file_path, cls=True)
+
+        # If no text found, paddleocr returns [None] or []
+        if not result or not result[0]:
+            return [], []
+
+        boxes = []
+        texts = []
+        for line in result[0]:
+            boxes.append(line[0])  # The 4 polygon points
+            texts.append(line[1][0])  # The text string
+
+        return texts, boxes
+    except Exception as e:
+        logger.error(f"Local OCR failed for {file_path}. Error: {e}")
+        return [], []
+
+
 def _is_tall_image(img, ratio=2.0):
     w, h = img.size
     return h / w >= ratio
 
+
 def _ocr_via_api(
-    file_path: str,
-    file_type: int = 1,
-    use_doc_orientation_classify: bool = False,
-    use_doc_unwarping: bool = False,
-    use_textline_orientation: bool = False,
-    retry: int = 3
+        file_path: str,
+        file_type: int = 1,
+        use_doc_orientation_classify: bool = False,
+        use_doc_unwarping: bool = False,
+        use_textline_orientation: bool = False,
+        retry: int = 3
 ):
     """
     Call PaddleOCR HTTP API on a single image or PDF and return the raw result dict.
@@ -53,12 +100,17 @@ def _ocr_via_api(
         "useDocUnwarping": use_doc_unwarping,
         "useTextlineOrientation": use_textline_orientation,
     }
+
+    response = None
     for i in range(retry):
         try:
-            response = requests.post(API_URL, json=payload, headers=headers, timeout=60)
+            response = requests.post(API_URL, json=payload, headers=headers, timeout=30)
             break
         except Exception as e:
             logger.error(f"HTTP error while calling PaddleOCR API: {e}, retrying...")
+
+    if response is None:
+        return None
 
     try:
         data = response.json()
@@ -72,7 +124,6 @@ def _ocr_via_api(
         return None
 
     return result
-
 
 
 def _sort_ocr_results(texts, boxes, y_tolerance_ratio=0.6, x_tolerance_ratio=12):
@@ -149,10 +200,10 @@ def _sort_ocr_results(texts, boxes, y_tolerance_ratio=0.6, x_tolerance_ratio=12)
 
 
 def ocr_image_safe(
-    img_path,
-    y_tolerance_ratio=0.6,
-    x_tolerance_ratio=12,
-    tall_ratio=1.5
+        img_path,
+        y_tolerance_ratio=0.6,
+        x_tolerance_ratio=12,
+        tall_ratio=1.5
 ):
     img = Image.open(img_path)
     all_sorted_texts = []
@@ -162,17 +213,16 @@ def ocr_image_safe(
     else:
         slices = [img]
     pad_ratio = 0.05
-        
+
     img_dir = os.path.dirname(os.path.abspath(img_path))
     for idx, crop in enumerate(slices):
-        # Accept PIL.Image input directly to OCR without saving temp files
         img = crop
         w, h = img.size
         pad = int(min(w, h) * pad_ratio)
-        # Handle padding for grayscale image
+
         padded_img = Image.new("L", (w + pad * 2, h + pad * 2), 255)
         padded_img.paste(img, (pad, pad))
-        # Save the padded image for debugging/inspection
+
         padded_img_save_path = os.path.join(
             img_dir,
             f"ocr_slice_{idx}_padded.png"
@@ -183,27 +233,42 @@ def ocr_image_safe(
         except Exception as e:
             logger.warning(f"Failed to save padded image: {e}")
 
+        # ---------------------------------------------------------
+        # API CALL WITH LOCAL FALLBACK LOGIC
+        # ---------------------------------------------------------
+        texts, boxes = [], []
+        api_success = False
+
+        # 1. Attempt API
         api_result = _ocr_via_api(
             padded_img_save_path,
             file_type=1,
             use_textline_orientation=True,
         )
-        if not api_result:
-            continue
 
-        ocr_results = api_result.get("ocrResults", [])
-        # The HTTP example documents `prunedResult` as the text field.
-        result = [r.get("prunedResult", "") for r in ocr_results if r.get("prunedResult")]
+        if api_result:
+            ocr_results = api_result.get("ocrResults", [])
+            result = [r.get("prunedResult", "") for r in ocr_results if r.get("prunedResult")]
 
-        if not result or not isinstance(result, list):
-            continue
+            if result and isinstance(result, list):
+                res = result[0]
+                texts = res.get("rec_texts", [])
+                boxes = res.get("rec_polys", [])
 
-        res = result[0]
-        texts = res.get("rec_texts", [])
-        boxes = res.get("rec_polys", [])
+                if texts and boxes:
+                    api_success = True
+                    logger.info("Successfully extracted text via API.")
 
+        # 2. Fallback to Local Model if API failed or returned empty
+        if not api_success:
+            logger.warning("API OCR failed or returned empty. Falling back to local model.")
+            texts, boxes = _ocr_via_local(padded_img_save_path)
+
+        # 3. If both failed/returned nothing, skip this slice
         if not texts or not boxes:
+            logger.warning(f"No text detected by either API or Local model for {padded_img_save_path}")
             continue
+        # ---------------------------------------------------------
 
         sorted_texts = _sort_ocr_results(
             texts,
@@ -213,15 +278,16 @@ def ocr_image_safe(
         )
         all_sorted_texts.extend(sorted_texts)
 
-        img = cv2.imread(padded_img_save_path)
+        # Draw boxes on the image
+        img_cv2 = cv2.imread(padded_img_save_path)
         for box in boxes:
             pts = np.array(box, np.int32)
             pts = pts.reshape((-1, 1, 2))
-            cv2.polylines(img, [pts], isClosed=True, color=(0, 0, 255), thickness=2)
+            cv2.polylines(img_cv2, [pts], isClosed=True, color=(0, 0, 255), thickness=2)
 
-        # Save the drawn image
         root, ext = os.path.splitext(padded_img_save_path)
         drawn_img_path = f"{root}_with_boxes{ext}"
-        cv2.imwrite(drawn_img_path, img)
+        cv2.imwrite(drawn_img_path, img_cv2)
         logger.info(f"Saved image with drawn boxes to: {drawn_img_path}")
+
     return all_sorted_texts

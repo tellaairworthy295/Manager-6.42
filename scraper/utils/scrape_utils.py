@@ -24,9 +24,10 @@ async def scrape_all_records():
     Run record scrapers sequentially.
     scrape_website is async (Playwright), so it stays on the event loop.
     """
+    #"564b3391-510f-4b50-a038-7df413bec15d"
     with open("json/locators.json", "r", encoding="utf-8") as f:
         record_maps = json.load(f)["alphapai_record"]
-    user_id_list = ["1eeeb1dc-34c8-446c-879e-456f69762bf7", "564b3391-510f-4b50-a038-7df413bec15d"]
+    user_id_list = ["1eeeb1dc-34c8-446c-879e-456f69762bf7", "weixue123"]
     random.shuffle(user_id_list)
     for url, locators in record_maps.items():
         for user_id in user_id_list:
