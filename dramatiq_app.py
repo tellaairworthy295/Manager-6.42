@@ -17,6 +17,4 @@ def reset_queue_state() -> None:
 reset_queue_state()
 
 # Register actors after the broker has been configured.
-import tasks.agent_tasks  # noqa: E402,F401
 import tasks.news_tasks  # noqa: E402,F401
-import tasks.records_tasks  # noqa: E402,F401
