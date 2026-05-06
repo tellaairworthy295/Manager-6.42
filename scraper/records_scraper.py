@@ -33,7 +33,7 @@ async def insert_scraped_data(data_list: list, record_type: str):
         logger.debug("No data to insert.")
         return
 
-    db_manager = get_db_manager()
+    db_manager = get_db_manager('innovationdb')
 
     # Select the appropriate repository based on the record type
     if record_type.lower() == "comment":
@@ -51,7 +51,7 @@ async def insert_scraped_data(data_list: list, record_type: str):
 
 async def scrape_history(storage_state: str, url: str, locators: dict, start: date, end: date):
     record_type = locators.get("record_type", "unknown")
-    db_manager = get_db_manager()
+    db_manager = get_db_manager('innovationdb')
 
     if record_type.lower() == "comment":
         repo_record = RecordCommentRepository(db_manager)
@@ -148,7 +148,7 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
 
 async def scrape_website(storage_state: str, url: str, locators: dict):
     record_type = locators.get("record_type", "unknown")
-    db_manager = get_db_manager()
+    db_manager = get_db_manager('innovationdb')
 
     if record_type.lower() == "comment":
         repo_record = RecordCommentRepository(db_manager)

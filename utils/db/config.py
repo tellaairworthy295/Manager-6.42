@@ -18,14 +18,14 @@ def load_database_config() -> dict[str, Any]:
     return load_config().get("DatabaseConfig", {})
 
 
-def build_connection_string() -> str:
+def build_connection_string(db_name: str = None) -> str:
     db_config = load_database_config()
     db_host = db_config.get("DB_HOST")
     db_port = db_config.get("DB_PORT")
     db_user = db_config.get("DB_USER")
     db_password = db_config.get("DB_PASSWORD")
-    db_name = db_config.get("DB_NAME")
-
+    db_name = db_name or db_config.get("DB_NAME")
+    print(f"Building connection string for database: {db_name}")
     return (
         f"mysql+pymysql://{db_user}:{urllib.parse.quote_plus(db_password)}"
         f"@{db_host}:{db_port}/{db_name}?charset=utf8mb4"

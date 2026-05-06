@@ -2,6 +2,7 @@ import json
 import os
 import asyncio
 import re
+import time
 from datetime import datetime
 import aiohttp
 from urllib.parse import urljoin
@@ -207,41 +208,40 @@ async def main_scraper(date: str):
 
             logger.info(f"Scraping stocks from {url}")
 
-            try:
-                async with PlaywrightContext(
-                        manager,
-                        storage_state=storage_state,
-                        ignore_https_errors=True,
-                ) as context:
-                    page = await new_stealth_page(context)
-                    await page.goto(url, wait_until="domcontentloaded", timeout=50_000)
-                    data = await scrape_page(
-                        page=page,
-                        date=date_obj,
-                        selectors=selectors
-                    )
-                    if not data or not data.get("records"):
-                        logger.warning(f"No records scraped from {url}")
-                        return False, {}
+            async with PlaywrightContext(
+                    manager,
+                    storage_state=storage_state,
+                    ignore_https_errors=True,
+            ) as context:
+                page = await new_stealth_page(context)
+                await page.goto(url, wait_until="domcontentloaded", timeout=50_000)
+                
+                time.sleep(10)
+                data = await scrape_page(
+                    page=page,
+                    date=date_obj,
+                    selectors=selectors
+                )
+                if not data or not data.get("records"):
+                    logger.warning(f"No records scraped from {url}")
+                    return False, {}
 
-                    route_scraped_data(
-                        selectors=selectors,
-                        data=data,
-                        action_records=all_action_records,
-                        limit_records=all_limit_records,
-                        market_number_ref=market_number,
-                        section_reason_ref=section_reason,
-                    )
+                route_scraped_data(
+                    selectors=selectors,
+                    data=data,
+                    action_records=all_action_records,
+                    limit_records=all_limit_records,
+                    market_number_ref=market_number,
+                    section_reason_ref=section_reason,
+                )
 
-                    logger.info(
-                        f"Scraped {len(data['records'])} records from {url}"
-                    )
+                logger.info(
+                    f"Scraped {len(data['records'])} records from {url}"
+                )
 
-                    if selectors.get("image"):
-                        await _prepare_image_dir("images")
-                        await _scrape_images_async(page, url)
-            except Exception as e:
-                logger.exception(f"Error scraping {url}: {e}")
+                if selectors.get("image"):
+                    await _prepare_image_dir("images")
+                    await _scrape_images_async(page, url)
 
     finally:
         await manager.shutdown()
@@ -421,15 +421,13 @@ async def _scrape_images_async(page, url: str) -> str | None:
 
     img_selector = "div#QR-code img"
 
-    try:
-        img_el = await page.wait_for_selector(
-            img_selector,
-            state="visible",
-            timeout=30_000,
-        )
-        logger.info("Image area loaded.")
-    except PlaywrightTimeoutError:
-        return None
+    img_el = await page.wait_for_selector(
+        img_selector,
+        state="visible",
+        timeout=30_000,
+    )
+    logger.info("Image area loaded.")
+
 
     # ---- extract src directly from DOM ----
     img_url = await img_el.get_attribute("src")
@@ -440,23 +438,19 @@ async def _scrape_images_async(page, url: str) -> str | None:
     # resolve relative URL if needed
     img_url = urljoin(url, img_url)
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(img_url) as resp:
-                resp.raise_for_status()
-                data = await resp.read()
+    async with aiohttp.ClientSession() as session:
+        async with session.get(img_url) as resp:
+            resp.raise_for_status()
+            data = await resp.read()
 
-        img_path = os.path.join("images", "Image.png")
-        await asyncio.to_thread(
-            lambda: open(img_path, "wb").write(data)
-        )
+    img_path = os.path.join("images", "Image.png")
+    await asyncio.to_thread(
+        lambda: open(img_path, "wb").write(data)
+    )
 
-        logger.info(f"Downloaded image: {img_url}")
-        return img_url
+    logger.info(f"Downloaded image: {img_url}")
+    return img_url
 
-    except Exception as e:
-        logger.warning(f"Failed to download image: {e}")
-        return None
 
 
 async def _prepare_image_dir(path: str):

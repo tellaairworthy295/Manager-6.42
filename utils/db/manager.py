@@ -13,14 +13,15 @@ from .config import build_connection_string
 class DatabaseManager:
     """Manage database connections and scoped SQLAlchemy sessions."""
 
-    def __init__(self):
+    def __init__(self, db_name: str = None):
+        self.db_name = db_name
         self.engine = None
         self.session_factory = None
         self._initialize_connection()
 
     def _initialize_connection(self):
         self.engine = create_engine(
-            build_connection_string(),
+            build_connection_string(self.db_name),
             poolclass=QueuePool,
             pool_size=5,
             max_overflow=3,
@@ -56,12 +57,12 @@ class DatabaseManager:
         self.engine.dispose()
 
 
-_db_manager = None
+_db_manager: dict[str, DatabaseManager] = {}
 
 
-def get_db_manager() -> DatabaseManager:
+def get_db_manager(db_name:str = None) -> DatabaseManager:
     global _db_manager
-    if _db_manager is None:
-        _db_manager = DatabaseManager()
-        _db_manager.create_tables()
-    return _db_manager
+    if db_name not in _db_manager:
+        _db_manager[db_name] = DatabaseManager(db_name)
+    return _db_manager[db_name]
+

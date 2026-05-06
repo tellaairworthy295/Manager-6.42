@@ -18,9 +18,9 @@ async def refresh_cookies():
     return {"status": "done"}
 
 
-@router.get("/scrape_stocks")
-async def scrape_stocks_api():
-    date = datetime.now()
+@router.get("/scrape_stocks/{date}")
+async def scrape_stocks_api(date: str):
+    date = datetime.strptime(date, "%Y-%m-%d")
     await asyncio.get_event_loop().create_task(_scrape_stocks_task(date))
     return JSONResponse(
         {

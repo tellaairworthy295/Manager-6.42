@@ -63,7 +63,7 @@ def get_receiver_emails_from_db(user_id=None):
     else:
         # Return all unique/valid
         return user_repo.get_all_unique_valid_emails()
-
+    
 def send_email_with_attachments(
     sender_email: str,
     sender_password: str,
@@ -73,6 +73,7 @@ def send_email_with_attachments(
     smtp_server: str = "smtp.qq.com",
     smtp_port: int = 465,
     user_id=None,
+    receivers: list[str] | None = None,
 ):
     """
     Send an email with multiple file attachments.
@@ -89,8 +90,9 @@ def send_email_with_attachments(
         smtp_port: SMTP port (465 for TLS)
         user_id: if specified, used to lookup a single user email from DB
     """
-    # Compute recipients if not given
-    receivers = get_receiver_emails_from_db(user_id=user_id)
+
+    receivers = receivers if isinstance(receivers, list) else get_receiver_emails_from_db(user_id=user_id)
+
     if not receivers:
         return
 

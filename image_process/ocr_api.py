@@ -25,7 +25,10 @@ def _get_local_ocr():
         try:
             from paddleocr import PaddleOCR
             # lang='ch' supports both English and Chinese. Change to 'en' if English only.
-            _local_ocr_instance = PaddleOCR(use_angle_cls=True, lang="ch", show_log=False)
+            _local_ocr_instance = PaddleOCR(
+                                        lang="ch",
+                                        use_textline_orientation=True
+                                    )
             logger.info("Local PaddleOCR model initialized successfully.")
         except ImportError:
             logger.error("Failed to import PaddleOCR. Please run: pip install paddlepaddle paddleocr")
@@ -41,7 +44,7 @@ def _ocr_via_local(file_path: str):
 
     try:
         # result format: [[[[x,y],[x,y],[x,y],[x,y]], ('text', confidence)], ...]
-        result = ocr.ocr(file_path, cls=True)
+        result = ocr.ocr(file_path)
 
         # If no text found, paddleocr returns [None] or []
         if not result or not result[0]:
@@ -62,6 +65,22 @@ def _ocr_via_local(file_path: str):
 def _is_tall_image(img, ratio=2.0):
     w, h = img.size
     return h / w >= ratio
+
+def is_blank_image(img, ink_threshold=0.06):
+    """
+    Detect if image is essentially blank (mostly white).
+    """
+    arr = np.array(img)
+
+    # If RGB, convert to grayscale
+    if len(arr.shape) == 3:
+        arr = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+
+    # Count "ink" pixels (dark pixels)
+    ink_pixels = np.sum(arr < 250)
+    total_pixels = arr.size
+    print(f"Blank check - ink pixels: {ink_pixels}, total pixels: {total_pixels}, ratio: {ink_pixels/total_pixels:.4f}")
+    return (ink_pixels / total_pixels) < ink_threshold
 
 
 def _ocr_via_api(
@@ -217,6 +236,10 @@ def ocr_image_safe(
     img_dir = os.path.dirname(os.path.abspath(img_path))
     for idx, crop in enumerate(slices):
         img = crop
+        # 🚨 Skip blank slices early
+        if is_blank_image(img):
+            logger.info(f"Skipping blank slice {idx}")
+            continue
         w, h = img.size
         pad = int(min(w, h) * pad_ratio)
 

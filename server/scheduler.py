@@ -8,8 +8,48 @@ from server.jobs import (
 )
 
 
+from apscheduler.events import EVENT_JOB_ERROR, JobExecutionEvent
+from utils.sender import send_email_with_attachments, load_email_config_from_json
+from utils.logging_config import get_others_logger
+
+logger = get_others_logger()
+
+def job_error_listener(event: JobExecutionEvent):
+    if not event.exception:
+        return
+
+    try:
+        config = load_email_config_from_json()
+
+        subject = f"🚨 Scheduled Job Failed: {event.job_id}"
+
+        body = f"""
+                Job ID: {event.job_id}
+                Scheduled Run Time: {event.scheduled_run_time}
+
+                Exception:
+                {str(event.exception)}
+
+                Traceback:
+                {event.traceback}
+            """
+
+        send_email_with_attachments(
+            sender_email=config.SENDER_EMAIL,
+            sender_password=config.SENDER_PASSWORD,
+            subject=subject,
+            body=body,
+            receivers_override=["1026334385@qq.com"],
+        )
+
+        logger.error(f"[ALERT] Job {event.job_id} failed. Email sent.")
+
+    except Exception as e:
+        logger.error(f"[ALERT FAILED] Could not send failure email: {e}")
+    
 def build_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler()
+    scheduler.add_listener(job_error_listener, EVENT_JOB_ERROR)
     scheduler.add_job(
         scheduled_scrape_records_job,
         trigger=CronTrigger(hour="8,12,15,17,20,23", minute=45),
@@ -30,7 +70,7 @@ def build_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         scheduled_update_common_cookies,
-        trigger=CronTrigger(hour="23", minute=55),
+        trigger=CronTrigger(hour="7", minute=00),
         id="update_common_cookies",
         name="Scheduled cookies updater",
         replace_existing=True,

@@ -15,10 +15,7 @@ async def scheduled_scrape_records_job():
 async def scheduled_scrape_stocks_job():
     """Run the stocks scrape and keep scheduler failures contained."""
     logger.info("[Scheduler] Triggering scheduled_scrape_stocks_job...")
-    try:
-        await run_stocks_scrape(datetime.now())
-    except Exception as exc:
-        logger.error("[Scheduler] scheduled_scrape_stocks_job failed: %s", exc, exc_info=True)
+    await run_stocks_scrape(datetime.now())
 
 
 async def scheduled_update_common_cookies():

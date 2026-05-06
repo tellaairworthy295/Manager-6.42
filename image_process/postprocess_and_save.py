@@ -236,7 +236,7 @@ def _save_stockstats(rec_texts: list[str], market_number: dict, date):
 def _save_chart_data(date: str):
     phoenixc.init("guhao_ind", "kQ4@ks0u", ("10.29.92.42", 9081))
 
-    end_date: date = datetime.strptime(date, "%Y-%m-%d").date()
+    end_date = datetime.strptime(date, "%Y-%m-%d").date()
     start_date = (end_date - timedelta(days=366)).strftime("%Y-%m-%d")
     end_date_str = end_date.strftime("%Y-%m-%d")
 
@@ -378,20 +378,16 @@ def _save_chart_data(date: str):
 def main_flow(market_number: dict, date, flag: bool = False):
     scraped_dir = "images"
     img_path = f"{scraped_dir}/Image.png"
-    if not os.path.isfile(img_path):
-        logger.error(f"Image file does not exist: {img_path}")
-        return None
-    try:
-        path = preprocess_image(img_path)
-        rec_texts = ocr_image_safe(path)
-        if not rec_texts:
-            raise RuntimeError("Failed to parse image")
-        _normalize_text(rec_texts)
-        _save_actionData(rec_texts, "excel", date, flag)
-        _save_stockstats(rec_texts, market_number, date)
-        _save_chart_data(date)
-    except Exception as e:
-        raise RuntimeError(f"Error while processing scraped stocks: {e}")
+
+    path = preprocess_image(img_path)
+    rec_texts = ocr_image_safe(path)
+    if not rec_texts:
+        raise RuntimeError("Failed to parse image, no text recognized.")
+    _normalize_text(rec_texts)
+    _save_actionData(rec_texts, "excel", date, flag)
+    _save_stockstats(rec_texts, market_number, date)
+    _save_chart_data(date)
+
 
 
 if __name__ == "__main__":
