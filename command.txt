@@ -18,6 +18,11 @@ pip download -r requirements.txt -d ./wheelhouse
 py -3.8 -m venv venv
 pip install --no-index --find-links=./wheelhouse -r requirements.txt
 
+xvfb-run -a -s "-screen 0 1920x1080x24" uvicorn app:app --host 0.0.0.0 --port 5000
+nohup xvfb-run -a -s "-screen 0 1920x1080x24" uvicorn app:app --host 0.0.0.0 --port 5000 > app_output.log 2>&1 &
+
+Xephyr :1 -ac -screen 1920x1080 -resizeable &
+DISPLAY=:1 uvicorn app:app --host 0.0.0.0 --port 5000
 
 git ls-tree --name-only -r HEAD
 

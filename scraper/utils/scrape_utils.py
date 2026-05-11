@@ -50,19 +50,17 @@ async def scrape_history_records(start: date, end: date):
     with open("json/locators.json", "r", encoding="utf-8") as f:
         record_maps = json.load(f)["alphapai_record"]
     for url, locators in record_maps.items():
-        if "meeting" in url:
-            continue
         all_cookies = await validate_and_prepare_cookies(
-            "weixue123", ["alphapai"], True
+            "564b3391-510f-4b50-a038-7df413bec15d", ["alphapai"], True
         )
         try:
             await scrape_history(
                 storage_state=all_cookies["alphapai"], url=url, locators=locators, start=start, end=end
             )
-            break
+            
         except Exception as e:
             logger.error(
-                f"[Records] weixue123 Scraper failed for {url}: {e} ")
+                f"[Records] 564b3391-510f-4b50-a038-7df413bec15d Scraper failed for {url}: {e} ")
 
 
 # =====================================================

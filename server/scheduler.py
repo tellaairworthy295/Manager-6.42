@@ -1,7 +1,10 @@
+from datetime import datetime
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from server.jobs import (
+    scheduled_scrape_history_records_job,
     scheduled_scrape_records_job,
     scheduled_scrape_stocks_job,
     scheduled_update_common_cookies,
@@ -11,6 +14,7 @@ from server.jobs import (
 from apscheduler.events import EVENT_JOB_ERROR, JobExecutionEvent
 from utils.sender import send_email_with_attachments, load_email_config_from_json
 from utils.logging_config import get_others_logger
+from scraper.utils.scrape_utils import scrape_history_records
 
 logger = get_others_logger()
 
@@ -39,7 +43,7 @@ def job_error_listener(event: JobExecutionEvent):
             sender_password=config.SENDER_PASSWORD,
             subject=subject,
             body=body,
-            receivers_override=["1026334385@qq.com"],
+            receivers=["1026334385@qq.com"],
         )
 
         logger.error(f"[ALERT] Job {event.job_id} failed. Email sent.")
@@ -50,6 +54,15 @@ def job_error_listener(event: JobExecutionEvent):
 def build_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler()
     scheduler.add_listener(job_error_listener, EVENT_JOB_ERROR)
+    scheduler.add_job(
+        scheduled_scrape_history_records_job,
+        trigger=CronTrigger(hour="9", minute=30),
+        id="scrape_history_records",
+        name="Scheduled Record Scraper",
+        replace_existing=True,
+        misfire_grace_time=60,
+        coalesce=True,
+    )
     scheduler.add_job(
         scheduled_scrape_records_job,
         trigger=CronTrigger(hour="8,12,15,17,20,23", minute=45),

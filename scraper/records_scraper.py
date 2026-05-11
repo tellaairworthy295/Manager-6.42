@@ -14,7 +14,7 @@ from utils.logging_config import get_records_scraper_logger
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 logger = get_records_scraper_logger()
-RATE_LIMIT = 50
+RATE_LIMIT = 210
 
 class RateLimitException(Exception):
     def __init__(self, message: str, status_code: int = 429):
@@ -69,6 +69,7 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
             storage_state=storage_state,
             accept_downloads=True,
             ignore_https_errors=True,
+            viewport={"width": 1920, "height": 1080},
     ) as context:
         page = await new_stealth_page(context)
         await page.goto(url, wait_until="networkidle")
@@ -92,58 +93,58 @@ async def scrape_history(storage_state: str, url: str, locators: dict, start: da
             logger.info(f"[{record_type}] No list items found after scrolling.")
             return result
 
-        while True:
-            try:
-                result = []
-                timeout_err = False
-                hit_limit = False
-                count = 0
-                titles = repo_record.get_titles_in_range(start, end)
-                for i, list_item in enumerate(list_items):
-                    if count >= RATE_LIMIT:
-                        raise RateLimitException("custom rate limit hit, sleep one hour...")
-                    title_element = await list_item.query_selector(locators["title_click"])
-                    title_locator = f"{locators['record_list_item']}:nth-child({i + 1}) {locators['title_click']}"
-                    if not title_element:
-                        logger.warning(f"[{record_type}] No title element in item {i}")
-                        continue
-
-                    title = await title_element.text_content()
-                    if title and title.strip() in titles:
-                        logger.info(f"[{record_type}] Skipping: '{title.strip()}'")
-                        continue
-
-                    if record_type.lower() == "meeting":
-                        scraped = await scrape_meeting_new_tab(context, title_element, locators["properties"])
-                        if scraped:
-                            result.append(scraped)
-                            count += 1
-
-                    elif record_type.lower() == "comment":
-
-                        try:
-                            await async_safe_click(page, title_locator, timeout=10000, max_attempts=3)
-                        except Exception as e:
-                            logger.warning(f"failed to click {title_locator}: {e}")
+        try:
+            for _ in range(3):  # Retry loop to handle potential transient issues``
+                try:
+                    result = []
+                    timeout_err = False
+                    hit_limit = False
+                    count = 0
+                    titles = repo_record.get_titles_in_range(start, end)
+                    for i, list_item in enumerate(list_items):
+                        # if count >= RATE_LIMIT:
+                        #     raise RateLimitException("custom rate limit hit, sleep one hour...")
+                        title_element = await list_item.query_selector(locators["title_click"])
+                        title_locator = f"{locators['record_list_item']}:nth-child({i + 1}) {locators['title_click']}"
+                        if not title_element:
+                            logger.warning(f"[{record_type}] No title element in item {i}")
                             continue
-                        data = await scrape_popup(page, locators["record_property_wrapper"], locators["properties"])
-                        if data:
-                            result.append(data)
-                            count += 1
 
-                    await asyncio.sleep(0.6)
-            except PlaywrightTimeoutError:
-                timeout_err = True
-            except RateLimitException:
-                hit_limit = True
-            finally:
-                await insert_scraped_data(result, record_type)
-                if timeout_err:
-                    await manager.shutdown()
-                elif hit_limit:
-                    time.sleep(60*60)
-                else:
-                    time.sleep(5)
+                        title = await title_element.text_content()
+                        if title and title.strip() in titles:
+                            logger.info(f"[{record_type}] Skipping: '{title.strip()}'")
+                            continue
+
+                        if record_type.lower() == "meeting":
+                            scraped = await scrape_meeting_new_tab(context, title_element, locators["properties"])
+                            if scraped:
+                                result.append(scraped)
+                                count += 1
+
+                        elif record_type.lower() == "comment":
+
+                            try:
+                                await async_safe_click(page, title_locator, timeout=10000, max_attempts=3)
+                            except Exception as e:
+                                logger.warning(f"failed to click {title_locator}: {e}")
+                                continue
+                            data = await scrape_popup(page, locators["record_property_wrapper"], locators["properties"])
+                            if data:
+                                result.append(data)
+                                count += 1
+
+                        await asyncio.sleep(0.6)
+                except PlaywrightTimeoutError:
+                    break  # Exit the retry loop if a timeout error occurred
+                # except RateLimitException:
+                #     hit_limit = True
+                finally:
+                    await insert_scraped_data(result, record_type)
+                    # elif hit_limit:
+                    #     time.sleep(60*60)
+        finally:
+            await manager.shutdown()
+
 
 
 async def scrape_website(storage_state: str, url: str, locators: dict):
@@ -170,6 +171,7 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
                 storage_state=storage_state,
                 accept_downloads=True,
                 ignore_https_errors=True,
+                viewport={"width": 1920, "height": 1080},
         ) as context:
             page = await new_stealth_page(context)
             await page.goto(url, wait_until="networkidle")

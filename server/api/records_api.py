@@ -2,7 +2,7 @@ import asyncio
 
 from fastapi import APIRouter
 
-from scraper.utils.scrape_utils import scrape_all_records
+from scraper.utils.scrape_utils import scrape_all_records, scrape_history_records
 from tasks.records_tasks import scrape_history_records_task
 from utils.logging_config import get_records_scraper_logger
 
@@ -18,9 +18,8 @@ async def scrape_records():
 
 @router.post("/get_historical_records/{start}/{end}")
 async def scrape_historical_records(start, end):
-    message = scrape_history_records_task.send(start, end)
+    await asyncio.get_event_loop().create_task(scrape_history_records(start, end))
+    #message = scrape_history_records_task.send(start, end)
     return {
-        "status": "Job Accepted",
-        "message_id": message.message_id,
-        "note": "Processing will continue in the background for up to a week.",
+        "status": "Job Accepted"
     }

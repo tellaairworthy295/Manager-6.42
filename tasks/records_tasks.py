@@ -7,7 +7,7 @@ from scraper.utils.scrape_utils import scrape_history_records
 
 @dramatiq.actor(
     queue_name="records",
-    max_retries=3,
+    max_retries=2,
     min_backoff=60000,
     max_backoff=3600000,
     # Ensure this is high enough for a week-long job
