@@ -1,5 +1,6 @@
 import base64
 import os
+import time
 
 import cv2
 import numpy as np
@@ -8,7 +9,9 @@ from PIL import Image
 from utils.logging_config import get_stock_logger
 
 from .preprocess import smart_slice_tall_image
-
+# Disable Paddle 3.x PIR executor to avoid oneDNN attribute conversion bugs
+os.environ["FLAGS_enable_pir_api"] = "0"
+os.environ["FLAGS_use_new_executor"] = "0"
 logger = get_stock_logger()
 API_URL = "https://r499p5s59cg8zev7.aistudio-app.com/ocr"
 API_TOKEN = "3a258219dc655d3bafc108d13cb9ec6230a7ff9a"
@@ -24,11 +27,12 @@ def _get_local_ocr():
         logger.info("Initializing local PaddleOCR model for fallback...")
         try:
             from paddleocr import PaddleOCR
-            # lang='ch' supports both English and Chinese. Change to 'en' if English only.
             _local_ocr_instance = PaddleOCR(
-                                        lang="ch",
-                                        use_textline_orientation=True
-                                    )
+                lang="ch",
+                use_textline_orientation=True,
+                use_mkldnn=False,  # 🚨 Critical: Disables oneDNN to prevent PIR crash
+                use_gpu=False      # Set to True if you have CUDA/paddlepaddle-gpu installed
+            )
             logger.info("Local PaddleOCR model initialized successfully.")
         except ImportError:
             logger.error("Failed to import PaddleOCR. Please run: pip install paddlepaddle paddleocr")
@@ -43,18 +47,18 @@ def _ocr_via_local(file_path: str):
         return [], []
 
     try:
-        # result format: [[[[x,y],[x,y],[x,y],[x,y]], ('text', confidence)], ...]
-        result = ocr.ocr(file_path)
+        # Use .predict() instead of deprecated .ocr()
+        result = ocr.predict(file_path)
 
-        # If no text found, paddleocr returns [None] or []
+        # Handle empty results
         if not result or not result[0]:
             return [], []
 
         boxes = []
         texts = []
         for line in result[0]:
-            boxes.append(line[0])  # The 4 polygon points
-            texts.append(line[1][0])  # The text string
+            boxes.append(line[0])      # Polygon points
+            texts.append(line[1][0])   # Text string
 
         return texts, boxes
     except Exception as e:
@@ -66,7 +70,7 @@ def _is_tall_image(img, ratio=2.0):
     w, h = img.size
     return h / w >= ratio
 
-def is_blank_image(img, ink_threshold=0.06):
+def is_blank_image(img, ink_threshold=0.064):
     """
     Detect if image is essentially blank (mostly white).
     """
@@ -127,6 +131,7 @@ def _ocr_via_api(
             break
         except Exception as e:
             logger.error(f"HTTP error while calling PaddleOCR API: {e}, retrying...")
+            time.sleep(10 * (i + 1))  # Exponential backoff
 
     if response is None:
         return None

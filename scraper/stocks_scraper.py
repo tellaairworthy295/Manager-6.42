@@ -6,7 +6,6 @@ import time
 from datetime import datetime
 import aiohttp
 from urllib.parse import urljoin
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from pwright.async_pm import AsyncPlaywrightManager
 from pwright.async_cm import PlaywrightContext
 from pwright.async_pf import new_stealth_page

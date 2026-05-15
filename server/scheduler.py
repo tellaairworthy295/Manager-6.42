@@ -54,18 +54,18 @@ def job_error_listener(event: JobExecutionEvent):
 def build_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler()
     scheduler.add_listener(job_error_listener, EVENT_JOB_ERROR)
-    scheduler.add_job(
-        scheduled_scrape_history_records_job,
-        trigger=CronTrigger(hour="9", minute=30),
-        id="scrape_history_records",
-        name="Scheduled Record Scraper",
-        replace_existing=True,
-        misfire_grace_time=60,
-        coalesce=True,
-    )
+    # scheduler.add_job(
+    #     scheduled_scrape_history_records_job,
+    #     trigger=CronTrigger(hour="9", minute=30),
+    #     id="scrape_history_records",
+    #     name="Scheduled Record Scraper",
+    #     replace_existing=True,
+    #     misfire_grace_time=60,
+    #     coalesce=True,
+    # )
     scheduler.add_job(
         scheduled_scrape_records_job,
-        trigger=CronTrigger(hour="8,12,15,17,20,23", minute=45),
+        trigger=CronTrigger(hour="8,11,16,20,23", minute=30),
         id="scrape_records",
         name="Scheduled Record Scraper",
         replace_existing=True,

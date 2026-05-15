@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from scraper.cookies_getter import update_common_cookies
@@ -19,14 +19,24 @@ async def refresh_cookies():
 
 
 @router.get("/scrape_stocks/{date}")
-async def scrape_stocks_api(date: str):
-    date = datetime.strptime(date, "%Y-%m-%d")
-    await asyncio.get_event_loop().create_task(_scrape_stocks_task(date))
+async def scrape_stocks_api(date: str, background_tasks: BackgroundTasks):
+    try:
+        parsed_date = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        return JSONResponse(
+            status_code=400,
+            content={"status": "error", "msg": "Invalid date format. Use YYYY-MM-DD"}
+        )
+
+    # Add the task to the background queue
+    # This returns the response immediately, then runs the task
+    background_tasks.add_task(_scrape_stocks_task, parsed_date)
+
     return JSONResponse(
         {
             "status": "accepted",
             "msg": "Stock scrape task scheduled",
-            "date": date.strftime("%Y-%m-%d"),
+            "date": parsed_date.strftime("%Y-%m-%d"),
         }
     )
 
