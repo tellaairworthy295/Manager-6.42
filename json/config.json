@@ -2,7 +2,7 @@
   "TranslationConfig": {
     "ENABLE_TRANSLATION": true,
     "USE_WEB_SCRAPING": true,
-    "NMT_ENABLED": true,
+    "NMT_ENABLED":true,
     "MAX_CHUNK_SIZE": 2000,
     "REQUEST_DELAY": 1.0,
     "TIMEOUT_SECONDS": 20
@@ -11,10 +11,10 @@
     "ENABLED": true,
     "API_BASE_URL": "https://openrouter.ai/api/v1",
     "API_KEY_ENV": "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",
-    "MODEL_NAME": "openai/gpt-oss-120b:free",
+    "MODEL_NAME": "openai/gpt-oss-20b:free",
     "TEMPERATURE": 0.1,
     "MAX_TOKENS": 20480,
-    "TIMEOUT": 40
+    "TIMEOUT": 30
   },
   "EmailConfig": {
         "SMTP_SERVER": "smtp.qq.com",
@@ -26,11 +26,11 @@
         "ATTACHMENTS": []
   },
   "DatabaseConfig": {
-    "DB_HOST": "10.29.88.63",
-    "DB_PORT": 3306,
-    "DB_USER": "lmh",
-    "DB_PASSWORD": "lmh@123456",
-    "DB_NAME": "selfdev_test"
+    "DB_HOST": "localhost",
+    "DB_PORT": 35300,
+    "DB_USER": "root",
+    "DB_PASSWORD": "112358@gh",
+    "DB_NAME": "dify_data"
   },
   "DatabaseConfig1": {
     "DB_HOST": "localhost",

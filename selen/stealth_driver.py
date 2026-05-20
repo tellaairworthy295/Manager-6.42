@@ -3,14 +3,7 @@ import undetected_chromedriver as uc
 import random
 import os
 
-_WINDOW_SIZES = [
-    (1920, 1080),
-    (1600, 900),
-    (1536, 864),
-    (1366, 768),
-]
-
-_AVAILABLE_VERSIONS = [141, 142, 143, 144, 145]
+_AVAILABLE_VERSIONS = [141, 142, 143, 144, 145, 146]
 
 # Realistic plugin counts to spoof
 _PLUGIN_COUNTS = [3, 4, 5, 6, 7]
@@ -24,16 +17,7 @@ _WEBGL_RENDERERS = [
     "ANGLE (AMD, AMD Radeon RX 580 Direct3D11 vs_5_0 ps_5_0, D3D11)",
 ]
 
-# Realistic screen resolutions (matching window sizes)
-_SCREEN_CONFIGS = [
-    {"width": 1920, "height": 1080, "window": "1920,1080"},
-    {"width": 1600, "height": 900,  "window": "1600,900"},
-    {"width": 1536, "height": 864,  "window": "1536,864"},
-    {"width": 1366, "height": 768,  "window": "1366,768"},
-]
-
-
-def _build_stealth_script(screen: dict, renderer: str, plugin_count: int) -> str:
+def _build_stealth_script(renderer: str, plugin_count: int) -> str:
     """
     Build a targeted CDP injection script.
     Only patches properties UC does NOT already handle,
@@ -56,13 +40,6 @@ def _build_stealth_script(screen: dict, renderer: str, plugin_count: int) -> str
         Object.defineProperty(navigator, 'languages', {{
             get: () => ['en-US', 'en'],
         }});
-
-        // ── screen resolution ───────────────────────────────────────────
-        // Must match the --window-size flag to avoid mismatch detection
-        Object.defineProperty(screen, 'width',       {{ get: () => {screen['width']}  }});
-        Object.defineProperty(screen, 'height',      {{ get: () => {screen['height']} }});
-        Object.defineProperty(screen, 'availWidth',  {{ get: () => {screen['width']}  }});
-        Object.defineProperty(screen, 'availHeight', {{ get: () => {screen['height']} }});
 
         // ── WebGL renderer ──────────────────────────────────────────────
         // Randomise so repeated sessions don't share an identical fingerprint
@@ -99,12 +76,10 @@ def get_chrome_driver(
         base_chromedriver_dir: str = "chromedriver"
 ):
     selected_version = random.choice(_AVAILABLE_VERSIONS)
-    selected_screen  = random.choice(_SCREEN_CONFIGS)
     selected_renderer = random.choice(_WEBGL_RENDERERS)
     selected_plugins  = random.choice(_PLUGIN_COUNTS)
 
     print(f"[INFO] Chrome version : {selected_version}")
-    print(f"[INFO] Window size    : {selected_screen['window']}")
 
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -134,21 +109,20 @@ def get_chrome_driver(
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--disable-background-networking")
     chrome_options.add_argument("--disable-default-apps")
     chrome_options.add_argument("--disable-notifications")
     chrome_options.add_argument("--disable-software-rasterizer")
-    chrome_options.add_argument("--no-first-run")
     chrome_options.add_argument("--no-default-browser-check")
     chrome_options.add_argument("--password-store=basic")
-    chrome_options.add_argument(f"--window-size={selected_screen['window']}")
     chrome_options.add_argument("--lang=en-US,en;q=0.9")
-    chrome_options.add_argument("--disable-features=IsolateOrigins,site-per-process")
-    chrome_options.add_argument("--disable-site-isolation-trials")
+    # chrome_options.add_argument("--disable-background-networking")
+    # chrome_options.add_argument("--disable-features=IsolateOrigins,site-per-process")
+    # chrome_options.add_argument("--disable-site-isolation-trials")
 
     # ── Extension ───────────────────────────────────────────────────────
     if base_bypass_ext_path and os.path.exists(base_bypass_ext_path):
         chrome_options.add_argument(f"--load-extension={base_bypass_ext_path}")
+        print(f'[INFO] extension loaded: {base_bypass_ext_path}')
 
     # ── Launch driver ───────────────────────────────────────────────────
     try:
@@ -157,18 +131,10 @@ def get_chrome_driver(
             browser_executable_path=browser_executable_path,
             options=chrome_options,
             version_main=selected_version,
-            headless=False          # Bloomberg detects headless reliably
+            headless=False
         )
     except Exception as e:
         raise RuntimeError(f"Failed to launch Chrome driver: {e}")
 
-    # ── Targeted CDP patches (no selenium_stealth) ──────────────────────
-    try:
-        driver.execute_cdp_cmd(
-            "Page.addScriptToEvaluateOnNewDocument",
-            {"source": _build_stealth_script(selected_screen, selected_renderer, selected_plugins)}
-        )
-    except Exception as e:
-        print(f"[WARNING] CDP stealth injection failed: {e}")
 
     return driver

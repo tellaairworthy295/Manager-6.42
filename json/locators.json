@@ -134,47 +134,5 @@
             "value": "//div[contains(@class,'toast') and contains(text(),'登录失败')]"
           }
         }
-      },
-    "alphapai_record": {
-        "https://alphapai-web.rabyte.cn/reading/home/meeting": {
-          "record_type": "meeting",
-          "filter_click": "div.library-date-filter-tabs span.tab:has-text('今天')",
-          "scroll_container": "div.table-list .scroll-box",
-          "bottom_flag": "div.table-list .scroll-box .table-body .no-more",
-          "record_list_item": "div.table-list .scroll-box .table-body .table-row",
-          "title_click": "span.normal.title span.el-tooltip",
-          "close_click": null,
-          "record_property_wrapper": null,
-          "properties": {
-            "title": "div.article-title .title",
-            "summary": "#summaryDetailAIContent > div.topic-bullets-render",
-            "q_a_section": "#summaryDetailAIContent > div.qa-list-render",
-            "institution": ".normal-info-box .desc .institution",
-            "sector": ".normal-info-box .desc .normal-tag",
-            "stock_name": ".normal-info-box .desc .stock-name",
-            "meeting_time_raw": ".normal-info-box .msg .time",
-            "personnel_list": ".normal-info-box .msg .msg-limit"
-          }
-        },
-        "https://alphapai-web.rabyte.cn/reading/home/comment": {
-          "record_type": "comment",
-          "filter_click": "span.tab:has-text(\"今天\")",
-          "scroll_container": "#app > div > div.app-layout-container > div.app-layout-body > div.app-right-content > div > div.comment-body > div.comment-left",
-          "bottom_flag": "div.all-comment-container > div.no-more",
-          "record_list_item": "div.comment-list-item .list-item",
-          "title_click": "div.comment-title .title",
-          "close_click": "div.right > i.iconfont.icon-guanbi",
-          "record_property_wrapper": "div.comment-list-detail-dialog-body:visible",
-          "properties": {
-            "title": ".header .title",
-            "author": ".line-two .left .name",
-            "time": ".line-two .left .time",
-            "team": ".line-two .left .team",
-            "industry": ".comment-stock-theme .industry",
-            "comment": ".comment-context .content",
-            "category": ".comment-stock-theme .sector-item-container .name"
-          }
-        }
-    }
-
+      }
 }

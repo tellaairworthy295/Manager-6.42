@@ -1,23 +1,24 @@
-import requests
+﻿import requests
 import threading
 import socket
-
+import sys
+from datetime import datetime
+import random
 # --- Configuration ---
-API_URL = "http://127.0.0.1:49829"
+API_URL = "http://127.0.0.1:50064"
 SECRET = "f590af10-6229-4526-9a3c-9159cb508491"
 HEADERS = {"Authorization": f"Bearer {SECRET}"}
 
 REGION_INTERVALS = {
-    "Hong Kong": 15 * 60, "HK": 15 * 60,
-    "Taiwan": 60 * 60,    "TW": 30 * 60,
-    "USA": 20 * 60,       "US": 20 * 60,
-    "Japan": 30 * 60,     "JP": 60 * 60,
-    "KR": 30 * 60,
-    "UK": 30 * 60,
-    "Singapore": 30 * 60, "SG": 30 * 60,
-    "Malaysia": 30 * 60,
-    "Turkey": 45 * 60,
-    "Argentina": 45 * 60
+    "HK": 15 * 60,
+    "TW": 25 * 60,
+    "US": 20 * 60,
+    "JP": 20 * 60,
+    "KR": 20 * 60,
+    "UK": 20 * 60,
+    "SG": 25 * 60,
+    "DE": 20 * 60,
+    "FR": 20 * 60
 }
 DEFAULT_INTERVAL = 20 * 60
 
@@ -86,8 +87,8 @@ def find_global_proxies(proxies_data):
 
         if item_type in ['Selector', 'URLTest', 'Fallback', 'LoadBalance', 'Direct', 'Reject', 'Pass']:
             continue
-        if item_name in ['DIRECT', 'REJECT', 'Proxy', 'Domestic', 'AsianTV', 'GlobalTV', 'Others'] \
-                or item_name.startswith('[SS]') or item_name.startswith('IPV6') or item_name.startswith('直连'):
+        if item_name in ['DIRECT', 'REJECT', 'Proxy', 'Domestic', 'AsianTV', 'GlobalTV', 'Others', '故障转移', 'TaiShan Net'] or 'HK 0' in item_name  or 'HK 1' in item_name or 'KR' in item_name or 'JP 21' in item_name or 'JP 22' in item_name or "境外用户专用" in item_name \
+                or "剩余" in item_name or "套餐到期" in item_name or item_name.startswith('[SS]') or item_name.startswith('IPV6') or item_name.startswith('直连') or item_name.startswith('*官网'):
             continue
 
         valid_proxies.append(item_name)
@@ -101,7 +102,7 @@ def switch_proxy(proxy_name):
         payload = {"name": proxy_name}
         response = requests.put(url, json=payload, headers=HEADERS)
         response.raise_for_status()
-        print(f"✅ Successfully changed Global IP to: {proxy_name}")
+        print(f"✅ [{datetime.now()}] Successfully changed Global IP to: {proxy_name}")
     except Exception as e:
         print(f"❌ Failed to switch proxy: {e}")
 
@@ -109,7 +110,7 @@ def switch_proxy(proxy_name):
 def get_wait_time(proxy_name):
     for region, wait_time in REGION_INTERVALS.items():
         if region in proxy_name:
-            return wait_time
+            return random.randint(int(wait_time * 0.8), int(wait_time * 1.2))
     return DEFAULT_INTERVAL
 
 
@@ -146,7 +147,7 @@ def main():
 
     print(f"🎯 Target Group: {group_name}")
     print(f"🌐 Found {len(proxy_list)} proxies. Starting rotation...\n")
-
+    print(proxy_list)
     threading.Thread(target=ipc_server_listener, daemon=True).start()
 
     # ✅ Rotation loop runs in background thread

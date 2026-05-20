@@ -208,6 +208,7 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
             if strategy['name'] == "sitemap_search":
                 if driver is None:
                     driver = get_chrome_driver()
+                    time.sleep(4)
                 sitemap_urls = fetch_and_parse_sitemap(driver)
                 if sitemap_urls:
                     raw_links = sitemap_urls
@@ -223,7 +224,7 @@ def fetch_urls_from_page(query: str, site: str, rate_limit: int):
                 for attempt in range(max_attempts):
                     if driver is None:
                         driver = get_chrome_driver()
-
+                        time.sleep(4)
                     try:
                         driver.get(strategy['url'])
                         # Check for CAPTCHA first to "Fast-Fail" instead of waiting 30 seconds
@@ -346,6 +347,7 @@ def _handle_cookies_notification(driver):
             selectors = [
                 'button.sp_choice_type_11',
                 'button[title="Yes, I Accept"]',
+				'button[title="Accept"]',
                 'button[jsname="b3VHJd"][aria-label="Accept all"]'  # Selector for the new button
             ]
 
@@ -591,7 +593,7 @@ def scrape_news(url: str, source: str):
 
         # Create driver with fresh fingerprint
         driver = get_chrome_driver()
-
+        time.sleep(4)
         # Now navigate to URL
         driver.get(url)
 
