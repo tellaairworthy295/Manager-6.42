@@ -9,9 +9,12 @@ from PIL import Image
 from utils.logging_config import get_stock_logger
 
 from .preprocess import smart_slice_tall_image
-# Disable Paddle 3.x PIR executor to avoid oneDNN attribute conversion bugs
+# Your existing ones:
 os.environ["FLAGS_enable_pir_api"] = "0"
 os.environ["FLAGS_use_new_executor"] = "0"
+os.environ['NO_PROXY'] = '*'
+# Add this to prevent aggressive memory hoarding by Paddle
+os.environ["FLAGS_allocator_strategy"] = "naive_best_fit"
 logger = get_stock_logger()
 API_URL = "https://r499p5s59cg8zev7.aistudio-app.com/ocr"
 API_TOKEN = "3a258219dc655d3bafc108d13cb9ec6230a7ff9a"
@@ -29,16 +32,25 @@ def _get_local_ocr():
             from paddleocr import PaddleOCR
             _local_ocr_instance = PaddleOCR(
                 lang="ch",
-                use_textline_orientation=True,
-                use_mkldnn=False,  # 🚨 Critical: Disables oneDNN to prevent PIR crash
-                use_gpu=False      # Set to True if you have CUDA/paddlepaddle-gpu installed
+                # 🚨 use_textline_orientation=True triggers the massive UVDoc pipeline in 3.x. 
+                # Use use_angle_cls=True instead for lightweight 180-degree rotation fixing.
+                use_angle_cls=True,       
+                
+                # 🚨 Force lightweight mobile models instead of the heavy v5 server models
+                ocr_version="PP-OCRv4",   
+                
+                enable_mkldnn=False,
+                device="cpu",
+                
+                # 🚨 Limit CPU threads to prevent memory spikes
+                cpu_threads=2,            
+                show_log=False
             )
             logger.info("Local PaddleOCR model initialized successfully.")
         except ImportError:
             logger.error("Failed to import PaddleOCR. Please run: pip install paddlepaddle paddleocr")
             return None
     return _local_ocr_instance
-
 
 def _ocr_via_local(file_path: str):
     """Run OCR using the local PaddleOCR model and format outputs."""
@@ -47,18 +59,31 @@ def _ocr_via_local(file_path: str):
         return [], []
 
     try:
-        # Use .predict() instead of deprecated .ocr()
-        result = ocr.predict(file_path)
+        # PaddleOCR 3.x predict() returns a generator, so we must cast it to a list
+        result = list(ocr.predict(file_path))
 
-        # Handle empty results
-        if not result or not result[0]:
+        if not result:
             return [], []
 
-        boxes = []
+        page_res = result[0]
         texts = []
-        for line in result[0]:
-            boxes.append(line[0])      # Polygon points
-            texts.append(line[1][0])   # Text string
+        boxes = []
+
+        # PaddleOCR 3.x (PaddleX) Dictionary format
+        if isinstance(page_res, dict) or hasattr(page_res, "get"):
+            texts_raw = page_res.get("rec_texts", [])
+            boxes_raw = page_res.get("rec_polys", [])
+            
+            if texts_raw and boxes_raw:
+                texts = texts_raw
+                # Convert NumPy arrays to standard Python lists
+                boxes = [box.tolist() if hasattr(box, "tolist") else box for box in boxes_raw]
+        else:
+            # Fallback just in case you downgrade to PaddleOCR 2.x
+            if page_res:
+                for line in page_res:
+                    boxes.append(line[0])      # Polygon points
+                    texts.append(line[1][0])   # Text string
 
         return texts, boxes
     except Exception as e:
@@ -127,7 +152,12 @@ def _ocr_via_api(
     response = None
     for i in range(retry):
         try:
-            response = requests.post(API_URL, json=payload, headers=headers, timeout=30)
+            response = requests.post(
+                            API_URL, 
+                            json=payload, 
+                            headers=headers, 
+                            timeout=30
+                        )
             break
         except Exception as e:
             logger.error(f"HTTP error while calling PaddleOCR API: {e}, retrying...")
