@@ -215,7 +215,7 @@ async def main_scraper(date: str):
                 page = await new_stealth_page(context)
                 await page.goto(url, wait_until="domcontentloaded", timeout=50_000)
                 
-                time.sleep(10)
+                time.sleep(30)
                 data = await scrape_page(
                     page=page,
                     date=date_obj,

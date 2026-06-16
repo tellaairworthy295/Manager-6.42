@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        os.environ['NO_PROXY'] = '*'
         scheduler = build_scheduler()
         async with mcp_app.lifespan(app):
             await create_aioredis()

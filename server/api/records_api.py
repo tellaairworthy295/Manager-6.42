@@ -1,8 +1,5 @@
-import asyncio
 from datetime import datetime
-
 from fastapi import APIRouter, BackgroundTasks
-
 from scraper.utils.scrape_utils import scrape_all_records, scrape_history_records
 #from tasks.records_tasks import scrape_history_records_task
 from utils.logging_config import get_records_scraper_logger
