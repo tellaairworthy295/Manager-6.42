@@ -138,6 +138,7 @@
     "alphapai_record": {
         "https://alphapai-web.rabyte.cn/reading/home/meeting": {
           "record_type": "meeting",
+          "popup_click": "button.ppt-guide-dialog__btn.ppt-guide-dialog__btn--secondary:has-text('以后再做')",
           "filter_click": "div.library-date-filter-tabs span.tab:has-text('今天')",
           "scroll_container": "div.table-list .scroll-box",
           "bottom_flag": "div.table-list .scroll-box .table-body .no-more",
@@ -159,6 +160,7 @@
         "https://alphapai-web.rabyte.cn/reading/home/comment": {
           "record_type": "comment",
           "filter_click": "span.tab:has-text(\"今天\")",
+          "popup_click": "button.ppt-guide-dialog__btn.ppt-guide-dialog__btn--secondary:has-text(\"以后再做\")",
           "scroll_container": "#app > div > div.app-layout-container > div.app-layout-body > div.app-right-content > div > div.comment-body > div.comment-left",
           "bottom_flag": "div.all-comment-container > div.no-more",
           "record_list_item": "div.comment-list-item .list-item",

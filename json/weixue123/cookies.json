@@ -2,18 +2,28 @@
   "alphapai": {
     "cookies": [
       {
-        "name": "sensorsdata2015jssdkcross",
-        "value": "%7B%22distinct_id%22%3A%22846476046856355840%22%2C%22first_id%22%3A%2219d8b63680d8f7-0d9c9eba1e3345-26061c51-921600-19d8b63680e932%22%2C%22props%22%3A%7B%22%24latest_traffic_source_type%22%3A%22%E7%9B%B4%E6%8E%A5%E6%B5%81%E9%87%8F%22%2C%22%24latest_search_keyword%22%3A%22%E6%9C%AA%E5%8F%96%E5%88%B0%E5%80%BC_%E7%9B%B4%E6%8E%A5%E6%89%93%E5%BC%80%22%2C%22%24latest_referrer%22%3A%22%22%7D%2C%22identities%22%3A%22eyIkaWRlbnRpdHlfY29va2llX2lkIjoiMTlkOGI2MzY4MGQ4ZjctMGQ5YzllYmExZTMzNDUtMjYwNjFjNTEtOTIxNjAwLTE5ZDhiNjM2ODBlOTMyIiwiJGlkZW50aXR5X2xvZ2luX2lkIjoiODQ2NDc2MDQ2ODU2MzU1ODQwIn0%3D%22%2C%22history_login_id%22%3A%7B%22name%22%3A%22%24identity_login_id%22%2C%22value%22%3A%22846476046856355840%22%7D%2C%22%24device_id%22%3A%2219d8b63680d8f7-0d9c9eba1e3345-26061c51-921600-19d8b63680e932%22%7D",
+        "name": "sajssdk_2015_cross_new_user",
+        "value": "1",
         "domain": ".rabyte.cn",
         "path": "/",
-        "expires": 1815449863.396155,
+        "expires": 1782489599,
+        "httpOnly": false,
+        "secure": false,
+        "sameSite": "Lax"
+      },
+      {
+        "name": "sensorsdata2015jssdkcross",
+        "value": "%7B%22distinct_id%22%3A%22846476046856355840%22%2C%22first_id%22%3A%2219f029a674333f-02e7d6fbdb32a36-1e462c6e-921600-19f029a6744ab0%22%2C%22props%22%3A%7B%22%24latest_traffic_source_type%22%3A%22%E7%9B%B4%E6%8E%A5%E6%B5%81%E9%87%8F%22%2C%22%24latest_search_keyword%22%3A%22%E6%9C%AA%E5%8F%96%E5%88%B0%E5%80%BC_%E7%9B%B4%E6%8E%A5%E6%89%93%E5%BC%80%22%2C%22%24latest_referrer%22%3A%22%22%7D%2C%22identities%22%3A%22eyIkaWRlbnRpdHlfY29va2llX2lkIjoiMTlmMDI5YTY3NDMzM2YtMDJlN2Q2ZmJkYjMyYTM2LTFlNDYyYzZlLTkyMTYwMC0xOWYwMjlhNjc0NGFiMCIsIiRpZGVudGl0eV9sb2dpbl9pZCI6Ijg0NjQ3NjA0Njg1NjM1NTg0MCJ9%22%2C%22history_login_id%22%3A%7B%22name%22%3A%22%24identity_login_id%22%2C%22value%22%3A%22846476046856355840%22%7D%2C%22%24device_id%22%3A%2219f029a674333f-02e7d6fbdb32a36-1e462c6e-921600-19f029a6744ab0%22%7D",
+        "domain": ".rabyte.cn",
+        "path": "/",
+        "expires": 1817015104.584488,
         "httpOnly": false,
         "secure": false,
         "sameSite": "Lax"
       },
       {
         "name": "SERVERCORSID",
-        "value": "83c69ca2e74451dac463be6615bb34f3|1780889865|1780889402",
+        "value": "83c69ca2e74451dac463be6615bb34f3|1782455106|1782455101",
         "domain": "rabytetech.datasink.sensorsdata.cn",
         "path": "/",
         "expires": -1,
@@ -27,11 +37,43 @@
         "origin": "https://alphapai-web.rabyte.cn",
         "localStorage": [
           {
-            "name": "extension-download-guide",
+            "name": "USER_AUTH_TOKEN",
+            "value": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4NDY0NzYwNDY4NTYzNTU4NDAiLCJzdWIiOiJ7XCJpbnRlcm5hbFwiOmZhbHNlLFwibG9naW5UaW1lXCI6XCIyMDI2LTA2LTI2VDE0OjI1OjAzLjg4OVwiLFwibG9naW5UeXBlXCI6MyxcInBsYXRmb3JtXCI6XCJ3ZWJcIixcInVpZFwiOlwiODQ2NDc2MDQ2ODU2MzU1ODQwXCJ9IiwiaXNzIjoicmFieXRlIiwiaWF0IjoxNzgyNDU1MTAzLCJleHAiOjE3ODUwNDcxMDN9.8GZ5JzGM627YLAQpRMsJ85aEBS76HqZdtOl5rqYVOp4"
+          },
+          {
+            "name": "pc-admin-side-adv-modal-storage",
+            "value": "{\"dateOflastTime\":\"2026-06-26\",\"flag\":\"18301710170\"}"
+          },
+          {
+            "name": "vt_token",
+            "value": "540f699161de957050f0a43ecc8aa12d"
+          },
+          {
+            "name": "MODE",
+            "value": "undefined"
+          },
+          {
+            "name": "search-to-paipai-guide",
             "value": "true"
           },
           {
-            "name": "hasShowPaipaiRecoderGuide",
+            "name": "paipai-agent-fastsheet-us-guide",
+            "value": "true"
+          },
+          {
+            "name": "search-to-paipai-guide-date",
+            "value": "1773307748695"
+          },
+          {
+            "name": "version-market-tip",
+            "value": "1"
+          },
+          {
+            "name": "hasShowpaipaiAnswerRangeGuide",
+            "value": "true"
+          },
+          {
+            "name": "version-social-sub-tip",
             "value": "1"
           },
           {
@@ -43,27 +85,7 @@
             "value": "true"
           },
           {
-            "name": "points_modal_show-flag-2026-04-13",
-            "value": "1"
-          },
-          {
-            "name": "paipai-reference-range-guide-flag",
-            "value": "true"
-          },
-          {
-            "name": "summary-mine-ins-guide",
-            "value": "true"
-          },
-          {
-            "name": "summaryDetailMarginalTabsGuide",
-            "value": "true"
-          },
-          {
-            "name": "alpha-saas-admin-plate-manage-guide-flag_13651677354",
-            "value": "1"
-          },
-          {
-            "name": "search-to-paipai-guide",
+            "name": "extension-download-guide",
             "value": "true"
           },
           {
@@ -71,44 +93,36 @@
             "value": "1"
           },
           {
-            "name": "USER_AUTH_TOKEN",
-            "value": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4NDY0NzYwNDY4NTYzNTU4NDAiLCJzdWIiOiJ7XCJpbnRlcm5hbFwiOmZhbHNlLFwibG9naW5UaW1lXCI6XCIyMDI2LTA2LTA4VDExOjMwOjA5LjY0NFwiLFwibG9naW5UeXBlXCI6MyxcInBsYXRmb3JtXCI6XCJ3ZWJcIixcInVpZFwiOlwiODQ2NDc2MDQ2ODU2MzU1ODQwXCJ9IiwiaXNzIjoicmFieXRlIiwiaWF0IjoxNzgwODg5NDA5LCJleHAiOjE3ODM0ODE0MDl9.LVSU_HxTXQ0o2n1Odk4xHTs0Tm2hlxRyeKWS1HIG4Zc"
-          },
-          {
-            "name": "pc-admin-side-adv-modal-storage",
-            "value": "{\"dateOflastTime\":\"2026-06-08\",\"flag\":\"18301710170\"}"
-          },
-          {
-            "name": "vt_token",
-            "value": "540f699161de957050f0a43ecc8aa12d"
-          },
-          {
-            "name": "version-market-tip",
+            "name": "hasShowPaipaiRecoderGuide",
             "value": "1"
-          },
-          {
-            "name": "version-social-sub-tip",
-            "value": "1"
-          },
-          {
-            "name": "points_modal_show-flag-20260212",
-            "value": "1"
-          },
-          {
-            "name": "hasShowpaipaiAnswerRangeGuide",
-            "value": "true"
-          },
-          {
-            "name": "search-to-paipai-guide-date",
-            "value": "1773307748695"
           },
           {
             "name": "version-ticnote-guide-tip",
             "value": "1"
           },
           {
-            "name": "MODE",
-            "value": "undefined"
+            "name": "summary-mine-ins-guide",
+            "value": "true"
+          },
+          {
+            "name": "points_modal_show-flag-20260212",
+            "value": "1"
+          },
+          {
+            "name": "alpha-saas-admin-plate-manage-guide-flag_13651677354",
+            "value": "1"
+          },
+          {
+            "name": "summaryDetailMarginalTabsGuide",
+            "value": "true"
+          },
+          {
+            "name": "ai-workbench-readme-auto-opened",
+            "value": "1"
+          },
+          {
+            "name": "ai-workbench-home-guide-v2:1163481096134852608",
+            "value": "1"
           }
         ]
       }

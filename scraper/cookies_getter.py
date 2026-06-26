@@ -91,7 +91,10 @@ class AsyncCookiesHandler:
                 {"name": "summary-mine-ins-guide", "value": "true"},
                 {"name": "points_modal_show-flag-20260212", "value": "1"},
                 {"name": "alpha-saas-admin-plate-manage-guide-flag_13651677354", "value": "1"},
-                {"name": "summaryDetailMarginalTabsGuide", "value": "true"}
+                {"name": "summaryDetailMarginalTabsGuide", "value": "true"},
+                {"name": "ai-workbench-readme-auto-opened", "value": "1"},
+                #{"name": "rabyter-ai-workbench-work-editor-tabs-v1", "value": '{"files":[{"source":"work","id":"L3RyZWUv5b-r6YCf5YWl6ZeoLzEwMV9QYWlXb3Jr5piv5LuA5LmILm1k","fileId":116242822,"path":"/tree/快速入门/101_PaiWork是什么.md","name":"101_PaiWork是什么.md","type":null,"userCreate":false,"category":"file","childrenCount":0,"updateTime":"2026-06-26 14:16:51","extraInfo":{"userCreate":false,"tag":"readme","treeDirectoryType":"README","order":1735689599980,"isFavorite":false},"description":null,"fileType":"document","createTime":null,"isTiptap":"0","label":null,"ttFileId":null,"isPinned":null,"parentChain":[{"id":"L3RyZWUv5b-r6YCf5YWl6Zeo","name":"快速入门","category":"folder","type":"custom","extraInfo":{"userCreate":false,"tag":"readme","treeDirectoryType":"README","order":1735689600000,"isFavorite":false}}],"finalFileType":"document","isReadme":true,"isPublic":true,"fromShare":false,"isMedia":false,"isTXT":false,"isCode":false,"isLazy":false}],"uid":"1163481096134852608","activeTab":"L3RyZWUv5b-r6YCf5YWl6ZeoLzEwMV9QYWlXb3Jr5piv5LuA5LmILm1k"}'},
+                {"name": "ai-workbench-home-guide-v2:1163481096134852608", "value": "1"},
             ]
             if "localStorage" not in origins[0] or not isinstance(origins[0]["localStorage"], list):
                 origins[0]["localStorage"] = []

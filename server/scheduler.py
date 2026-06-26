@@ -14,7 +14,6 @@ from server.jobs import (
 from apscheduler.events import EVENT_JOB_ERROR, JobExecutionEvent
 from utils.sender import send_email_with_attachments, load_email_config_from_json
 from utils.logging_config import get_others_logger
-from scraper.utils.scrape_utils import scrape_history_records
 
 logger = get_others_logger()
 
@@ -72,22 +71,22 @@ def build_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=60,
         coalesce=True,
     )
-    scheduler.add_job(
-        scheduled_scrape_stocks_job,
-        trigger=CronTrigger(hour="12,15", minute=40),
-        id="scrape_stocks",
-        name="Scheduled Stocks Scraper",
-        replace_existing=True,
-        misfire_grace_time=60,
-        coalesce=True,
-    )
-    scheduler.add_job(
-        scheduled_update_common_cookies,
-        trigger=CronTrigger(hour="7", minute=00),
-        id="update_common_cookies",
-        name="Scheduled cookies updater",
-        replace_existing=True,
-        misfire_grace_time=60,
-        coalesce=True,
-    )
+    # scheduler.add_job(
+    #     scheduled_scrape_stocks_job,
+    #     trigger=CronTrigger(hour="12,15", minute=40),
+    #     id="scrape_stocks",
+    #     name="Scheduled Stocks Scraper",
+    #     replace_existing=True,
+    #     misfire_grace_time=60,
+    #     coalesce=True,
+    # )
+    # scheduler.add_job(
+    #     scheduled_update_common_cookies,
+    #     trigger=CronTrigger(hour="7", minute=00),
+    #     id="update_common_cookies",
+    #     name="Scheduled cookies updater",
+    #     replace_existing=True,
+    #     misfire_grace_time=60,
+    #     coalesce=True,
+    # )
     return scheduler

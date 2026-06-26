@@ -175,6 +175,11 @@ async def scrape_website(storage_state: str, url: str, locators: dict):
         ) as context:
             page = await new_stealth_page(context)
             await page.goto(url, wait_until="networkidle")
+            time.sleep(5)
+            try:
+                await async_safe_click(page, locators["popup_click"])
+            except:
+                pass
             await page.click(locators["filter_click"])
             await scroll_to_bottom(page, locators["scroll_container"], locators["bottom_flag"])
 

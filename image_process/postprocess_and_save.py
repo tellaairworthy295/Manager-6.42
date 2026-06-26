@@ -201,10 +201,10 @@ def _get_trendings(rec_texts: list[str]):
             break
 
     return {
-        "up": results["limit_up"],
-        "down": results["limit_down"],
-        "even": results["even_board"],
-        "break_rate": results["breaking_rate"]
+        "up": results.get('limit_up', 0),
+        "down": results.get('limit_down', 0),
+        "even": results.get('even_board', 0),
+        "break_rate": results.get('break_rate', 0)
     }
 
 

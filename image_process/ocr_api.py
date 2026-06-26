@@ -9,12 +9,14 @@ from PIL import Image
 from utils.logging_config import get_stock_logger
 
 from .preprocess import smart_slice_tall_image
-# Your existing ones:
+
+# Your existing environment variables...
 os.environ["FLAGS_enable_pir_api"] = "0"
 os.environ["FLAGS_use_new_executor"] = "0"
-os.environ['NO_PROXY'] = '*'
-# Add this to prevent aggressive memory hoarding by Paddle
 os.environ["FLAGS_allocator_strategy"] = "naive_best_fit"
+os.environ['NO_PROXY'] = '*'
+# 🚨 ADD THIS: Bypasses the slow "Checking connectivity to the model hosters" hang
+os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 logger = get_stock_logger()
 API_URL = "https://r499p5s59cg8zev7.aistudio-app.com/ocr"
 API_TOKEN = "3a258219dc655d3bafc108d13cb9ec6230a7ff9a"
@@ -32,19 +34,19 @@ def _get_local_ocr():
             from paddleocr import PaddleOCR
             _local_ocr_instance = PaddleOCR(
                 lang="ch",
-                # 🚨 use_textline_orientation=True triggers the massive UVDoc pipeline in 3.x. 
-                # Use use_angle_cls=True instead for lightweight 180-degree rotation fixing.
-                use_angle_cls=True,       
                 
-                # 🚨 Force lightweight mobile models instead of the heavy v5 server models
+                # 🚨 Force lightweight mobile models instead of the heavy server models
                 ocr_version="PP-OCRv4",   
+                
+                # 🚨 Disabled orientation parameters entirely to prevent the DeprecationWarning 
+                # AND to prevent the massive 'UVDoc' model from loading and crashing your RAM.
+                # (Stock market screenshots are usually perfectly horizontal anyway).
                 
                 enable_mkldnn=False,
                 device="cpu",
+                cpu_threads=2
                 
-                # 🚨 Limit CPU threads to prevent memory spikes
-                cpu_threads=2,            
-                show_log=False
+                # 🚨 Removed `show_log=False` which was causing the ValueError
             )
             logger.info("Local PaddleOCR model initialized successfully.")
         except ImportError:
